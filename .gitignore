@@ -21,3 +21,6 @@ Thumbs.db
 *.log
 
 snowy-patch/
+
+# --- local session notes ---
+SESSION_SUMMARY.md

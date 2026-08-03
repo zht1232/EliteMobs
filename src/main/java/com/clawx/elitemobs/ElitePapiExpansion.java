@@ -9,8 +9,7 @@ import org.bukkit.OfflinePlayer;
  * <p>可用占位符（标识符 elitemobs）：</p>
  * <ul>
  *   <li>{@code %elitemobs_elite_count%}       当前服务器在线精英怪数量</li>
- *   <li>{@code %elitemobs_drop_mode%}         当前掉落模式 (snowygems/custom/disabled)</li>
- *   <li>{@code %elitemobs_gem_hook%}          SnowyGems 挂钩状态 (connected/loading/unavailable)</li>
+ *   <li>{@code %elitemobs_drop_mode%}         当前掉落模式 (custom/disabled)</li>
  *   <li>{@code %elitemobs_player_combo%}      玩家当前连杀数</li>
  *   <li>{@code %elitemobs_player_money%}      玩家金币余额 (Vault)</li>
  *   <li>{@code %elitemobs_player_points%}     玩家点券余额 (PlayerPoints)</li>
@@ -57,10 +56,6 @@ public class ElitePapiExpansion extends PlaceholderExpansion {
                 return String.valueOf(plugin.getMobManager().getEliteCount());
             case "drop_mode":
                 return plugin.getEliteConfig().getGemDropMode();
-            case "gem_hook":
-                if (SnowyGemsHook.isAvailable()) return "connected";
-                if (SnowyGemsHook.isPluginLoaded()) return "loading";
-                return "unavailable";
             case "player_combo":
                 if (player != null) return String.valueOf(plugin.getCombatListener().getPlayerCombo(player.getUniqueId()));
                 return "0";

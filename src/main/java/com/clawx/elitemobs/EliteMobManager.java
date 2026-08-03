@@ -32,6 +32,9 @@ public class EliteMobManager {
     private final Random random = new Random();
     private static final Map<Particle, MethodHandle> PARTICLE_HANDLES = new ConcurrentHashMap<>();
 
+    /** 精英护甲淬炼等级键：写入玩家可穿戴的护甲 PDC，用于套装加成判定 */
+    public static final NamespacedKey ARMOR_LV_KEY = new NamespacedKey("elitemobs", "armor_lv");
+
     // Performance: capability-based tracking sets for AI iteration
     private final Set<UUID> wallClimbers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> blockBreakers = ConcurrentHashMap.newKeySet();
@@ -150,8 +153,8 @@ public class EliteMobManager {
         double legChance = Math.min(config.getLeggingsChance() + level * 0.04, 1.0);
         double bootChance = Math.min(config.getBootsChance() + level * 0.04, 1.0);
 
+        // Lv.9+ 及 Boss 级(>=15) 保证全甲
         if (level >= 9) { chestChance = 1.0; legChance = 1.0; bootChance = 1.0; }
-        if (level >= 15) { chestChance = 1.0; legChance = 1.0; bootChance = 1.0; } // Boss级保证全甲
 
         if (random.nextDouble() < chestChance) eq.setChestplate(createArmorPiece(config, level, "CHESTPLATE"));
         if (random.nextDouble() < legChance) eq.setLeggings(createArmorPiece(config, level, "LEGGINGS"));
@@ -213,6 +216,9 @@ public class EliteMobManager {
 
     private ItemStack createEnchantedItem(Material mat, int level, EliteConfig config, String slot) {
         ItemStack stack = new ItemStack(mat);
+        // 写入淬炼等级键：套装加成（减伤/加速/回血）依赖它判定
+        stack.editMeta(meta -> meta.getPersistentDataContainer().set(
+                ARMOR_LV_KEY, PersistentDataType.INTEGER, Math.max(1, level)));
         if (!config.isArmorEnchantEnabled()) return stack;
 
         double enchantChance = Math.min(config.getArmorEnchantChance() + level * 0.03, 1.0);

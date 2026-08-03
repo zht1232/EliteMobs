@@ -9,7 +9,6 @@ import org.bukkit.entity.*;
 import org.bukkit.attribute.Attribute;
 import com.clawx.elitemobs.EliteMobsPlugin;
 import com.clawx.elitemobs.EliteMobManager;
-import com.clawx.elitemobs.SnowyGemsHook;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -31,7 +30,6 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             case "test" -> testSpawn(sender, args);
             case "wave" -> spawnWave(sender, args);
             case "clear" -> clearElites(sender);
-            case "gem" -> getGemForTest(sender, args);
             case "stealtest" -> stealTest(sender);
             case "stat" -> statCheck(sender, args);
             case "boss" -> bossSpawn(sender, args);
@@ -58,9 +56,6 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,ChatColor.YELLOW+"/em wave [\u79cd\u7c7b\u6570]"+ChatColor.GRAY+" \u2014 \u751f\u6210\u6df7\u5408\u7cbe\u82f1\u6ce2\uff08\u9ed8\u8ba43\u79cd\u00d7Lv.1/5/10\uff09");
         msg(s,ChatColor.YELLOW+"/em clear"+ChatColor.GRAY+" \u2014 \u6e05\u9664\u9644\u8fd1\u6240\u6709\u7cbe\u82f1\u602a");
         msg(s,ChatColor.YELLOW+"/em stat [\u7c7b\u578b] [\u7b49\u7ea7]"+ChatColor.GRAY+" \u2014 \u9884\u89c8\u7cbe\u82f1\u5c5e\u6027\uff08HP/\u653b/\u901f\uff09");
-        msg(s,ChatColor.YELLOW+"/em gem <\u7c7b\u578b> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u83b7\u53d6 SnowyGems \u5b9d\u77f3");
-        msg(s,ChatColor.GRAY+"  \u7c7b\u578b: attack, defense, speed, health, sharpness, protection");
-        msg(s,ChatColor.GRAY+"  \u9576\u5d4c\u8bf7\u4f7f\u7528: /sgem embed");
         msg(s,ChatColor.YELLOW+"/em stealtest"+ChatColor.GRAY+" \u2014 \u751f\u6210\u5077\u7269\u54c1\u6d4b\u8bd5\u7cbe\u82f1");
         msg(s,ChatColor.YELLOW+"/em boss <\u7c7b\u578b> [\u7b49\u7ea7]"+ChatColor.GRAY+" \u2014 \u76f4\u63a5\u751f\u6210Boss\uff08\u9ed8\u8ba4Lv.15\uff09");
         msg(s,ChatColor.YELLOW+"/em particle <\u804c\u4e1a>"+ChatColor.GRAY+" \u2014 \u6d4b\u8bd5\u804c\u4e1a\u7c92\u5b50\u7279\u6548\uff08tank/assassin/mage/summoner/boss\uff09");
@@ -231,80 +226,6 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
 
     private boolean has(CommandSender s,String p){if(!s.hasPermission(p)){msg(s,ChatColor.RED+"\u274c \u6743\u9650\u4e0d\u8db3\u3002");return false;}return true;}
 
-    // ---- 宝石指令 ----
-    private void getGemForTest(CommandSender s, String[] args) {
-        if (!has(s,"elitemobs.admin")) return;
-        if (args.length < 2) {
-            msg(s,ChatColor.RED+"/em gem list | give <\u5b9d\u77f3ID> [\u6570\u91cf] | <\u522b\u540d> [\u6570\u91cf]");
-            msg(s,ChatColor.GRAY+"\u522b\u540d: attack, defense, speed, health, sharpness, protection, unbreaking, efficiency");
-            msg(s,ChatColor.GRAY+"\u9700\u8981\u5b89\u88c5 SnowyGems \u624d\u80fd\u53d1\u653e\u771f\u5b9e\u5b9d\u77f3; \u672a\u5b89\u88c5\u65f6\u53ef\u7528 /em gem list \u67e5\u770b\u72b6\u6001");
-            return;
-        }
-        String sub = args[1].toLowerCase();
-
-        // 列出 SnowyGems 已加载的所有宝石 ID
-        if (sub.equals("list")) {
-            if (!SnowyGemsHook.isAvailable()) {
-                msg(s,ChatColor.RED+"\u274c \u672a\u68c0\u6d4b\u5230 SnowyGems \u63d2\u4ef6\u3002");
-                msg(s,ChatColor.GRAY+"gem-drops.mode \u82e5\u4e3a custom \u8bf7\u76f4\u63a5\u914d\u7f6e\u81ea\u5b9a\u4e49\u6389\u843d\u7269\u3002");
-                return;
-            }
-            Set<String> ids = SnowyGemsHook.getGemIds();
-            msg(s,ChatColor.GOLD+"SnowyGems \u5df2\u52a0\u8f7d\u5b9d\u77f3 (" + ids.size() + " \u4e2a):");
-            if (ids.isEmpty()) { msg(s,ChatColor.GRAY+"\uff08\u65e0\u5b9d\u77f3\uff0c\u8bf7\u68c0\u67e5 SnowyGems \u7684 gems \u914d\u7f6e\uff09"); return; }
-            StringBuilder sb = new StringBuilder();
-            for (String id : ids) sb.append(ChatColor.GREEN).append(id).append(ChatColor.GRAY).append(", ");
-            msg(s, sb.toString());
-            msg(s,ChatColor.GRAY+"\u53ef\u7528 /em gem give <\u5b9d\u77f3ID> \u53d1\u653e");
-            return;
-        }
-
-        if (!(s instanceof Player p)) { msg(s,ChatColor.RED+"\u274c \u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"); return; }
-        if (!SnowyGemsHook.isAvailable()) {
-            msg(s,ChatColor.RED+"\u274c \u672a\u68c0\u6d4b\u5230 SnowyGems \u63d2\u4ef6\uff0c\u65e0\u6cd5\u53d1\u653e\u771f\u5b9e\u5b9d\u77f3\u3002");
-            msg(s,ChatColor.GRAY+"\u53ef\u5c06 gem-drops.mode \u5207\u6362\u4e3a custom \u4f7f\u7528\u81ea\u5b9a\u4e49\u6389\u843d\u7269\u3002");
-            return;
-        }
-
-        // /em gem give <ID> [数量] - 按真实宝石 ID 发放
-        if (sub.equals("give")) {
-            if (args.length < 3) { msg(s,ChatColor.RED+"/em gem give <\u5b9d\u77f3ID> [\u6570\u91cf]"); return; }
-            String id = args[2];
-            int count = args.length >= 4 ? Math.max(1, Math.min(64, parseIntSafe(args[3], 1))) : 1;
-            if (SnowyGemsHook.give(p, id, count)) {
-                msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+count+" \u4e2a\u771f\u5b9e\u5b9d\u77f3: "+id);
-                msg(s,ChatColor.GRAY+"\u4f7f\u7528 /sgem embed \u8fdb\u884c\u9576\u5d4c");
-            } else {
-                msg(s,ChatColor.RED+"\u274c \u5b9d\u77f3 ID \u4e0d\u5b58\u5728: "+id+" (\u53ef\u7528 /em gem list \u67e5\u770b\u5168\u90e8)");
-            }
-            return;
-        }
-
-        // 向后兼容的别名 → 真实宝石 ID
-        String id = switch (sub) {
-            case "attack" -> "\u653b\u51fb\u4f24\u5bb3\u5b9d\u77f3";
-            case "defense" -> "\u62a4\u7532\u5b9d\u77f3";
-            case "speed" -> "\u901f\u5ea6\u5b9d\u77f3";
-            case "health" -> "\u751f\u547d\u5b9d\u77f3";
-            case "sharpness" -> "\u950b\u5229\u5b9d\u77f3";
-            case "protection" -> "\u4fdd\u62a4\u5b9d\u77f3";
-            case "unbreaking" -> "\u8010\u4e45\u5b9d\u77f3";
-            case "efficiency" -> "\u6548\u7387\u5b9d\u77f3";
-            default -> null;
-        };
-        if (id == null) {
-            msg(s,ChatColor.RED+"\u274c \u672a\u77e5\u5b9d\u77f3\u7c7b\u578b: "+sub+" (\u53ef\u7528: attack/defense/speed/health/sharpness/protection/unbreaking/efficiency)");
-            return;
-        }
-        int count = args.length >= 3 ? Math.max(1, Math.min(64, parseIntSafe(args[2], 1))) : 1;
-        if (SnowyGemsHook.give(p, id, count)) {
-            msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+count+" \u4e2a\u771f\u5b9e\u5b9d\u77f3: "+id);
-            msg(s,ChatColor.GRAY+"\u4f7f\u7528 /sgem embed \u8fdb\u884c\u9576\u5d4c");
-        } else {
-            msg(s,ChatColor.RED+"\u274c \u5b9d\u77f3 ID \u4e0d\u5b58\u5728: "+id);
-        }
-    }
-
     private int parseIntSafe(String s, int def) {
         try { return Integer.parseInt(s); } catch (NumberFormatException e) { return def; }
     }
@@ -395,21 +316,13 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender s,Command c,String l,String[] a){
-        if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","gem","stealtest","boss","particle").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
+        if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","stealtest","boss","particle").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
         if(a.length==2&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")||a[0].equalsIgnoreCase("boss")))
             return plugin.getEliteConfig().getEnabledMobTypes().stream().map(x->x.name().toLowerCase()).filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
-        if(a.length==2&&a[0].equalsIgnoreCase("gem"))
-            return Arrays.asList("list","give","attack","defense","speed","health","sharpness","protection","unbreaking","efficiency").stream()
-                .filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
         if(a.length==2&&a[0].equalsIgnoreCase("particle"))
             return Arrays.asList("tank","assassin","mage","summoner","boss","pillar");
         if(a.length==3&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")))
             return Arrays.asList("1","3","5","7","10","15","20");
-        if(a.length==3&&a[0].equalsIgnoreCase("gem")) {
-            if (a[1].equalsIgnoreCase("give"))
-                return SnowyGemsHook.getGemIds().stream().filter(x->x.startsWith(a[2])).collect(Collectors.toList());
-            return Arrays.asList("1","3","5","10","20");
-        }
         if(a.length==4&&(a[0].equalsIgnoreCase("test")))
             return Arrays.asList("1","3","5","10","20");
         return Collections.emptyList();

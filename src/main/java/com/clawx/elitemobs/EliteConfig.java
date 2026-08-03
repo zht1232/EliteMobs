@@ -75,9 +75,12 @@ public class EliteConfig {
     private String gemDropMode;
     // 宝石掉落总开关
     private boolean gemDropsEnabled;
-    // snowygems 模式: 各等级段宝石池 + 数量
-    private final Map<String, List<String>> snowyGemPools = new LinkedHashMap<>();
-    private int snowyAmountMin, snowyAmountMax;
+    // 宝石掉落概率（按等级段）
+    private double gemDropChanceLow, gemDropChanceMid, gemDropChanceHigh, gemDropChanceMax;
+    private int gemAmountMin = 1, gemAmountMax = 1;
+    // 战利品袋
+    private boolean lootBagEnabled;
+    private double lootBagChance, lootBagBossChance;
     // custom 模式: 自定义掉落物
     private List<CustomDrop> customDrops = new ArrayList<>();
     // 击杀奖励 (Vault 金币 + PlayerPoints 点券)
@@ -202,19 +205,27 @@ public class EliteConfig {
         spawnAnnounceRange = config.getInt("general.spawn-announce.announce-range", -1);
 
         // 宝石掉落模式
-        gemDropMode = config.getString("gem-drops.mode", "snowygems");
+        gemDropMode = config.getString("gem-drops.mode", "custom");
         // 宝石掉落总开关 (向后兼容: 未配置时回退到旧的 essence-drops 开关)
         gemDropsEnabled = config.getBoolean("gem-drops.drops.enabled",
                 config.getBoolean("loot.essence-drops.enabled", true));
 
-        // snowygems 宝石池
-        snowyGemPools.clear();
-        String[] brackets = {"level-1-3", "level-4-6", "level-7-9", "level-10"};
-        for (String br : brackets) {
-            snowyGemPools.put(br, new ArrayList<>(config.getStringList("gem-drops.snowygems." + br)));
-        }
-        snowyAmountMin = Math.max(1, config.getInt("gem-drops.snowygems.amount-min", 1));
-        snowyAmountMax = Math.max(snowyAmountMin, config.getInt("gem-drops.snowygems.amount-max", 1));
+        // 宝石掉落概率（按等级段）
+        gemDropChanceLow = config.getDouble("gem-drops.gems.level-1-3",
+                config.getDouble("loot.essence-drops.level-1-3", 0.15));
+        gemDropChanceMid = config.getDouble("gem-drops.gems.level-4-6",
+                config.getDouble("loot.essence-drops.level-4-6", 0.35));
+        gemDropChanceHigh = config.getDouble("gem-drops.gems.level-7-9",
+                config.getDouble("loot.essence-drops.level-7-9", 0.55));
+        gemDropChanceMax = config.getDouble("gem-drops.gems.level-10",
+                config.getDouble("loot.essence-drops.level-10", 0.85));
+        gemAmountMin = Math.max(1, config.getInt("gem-drops.gems.amount-min", 1));
+        gemAmountMax = Math.max(gemAmountMin, config.getInt("gem-drops.gems.amount-max", 1));
+
+        // 战利品袋
+        lootBagEnabled = config.getBoolean("gem-drops.lootbag.enabled", true);
+        lootBagChance = config.getDouble("gem-drops.lootbag.chance", 0.10);
+        lootBagBossChance = config.getDouble("gem-drops.lootbag.boss-chance", 0.50);
 
         // custom 自定义掉落物
         customDrops = new ArrayList<>();
@@ -474,27 +485,22 @@ public class EliteConfig {
     // ========== 宝石掉落 (gem-drops) ==========
     public boolean isGemDropsEnabled() { return gemDropsEnabled; }
 
-    /** snowygems 模式: 指定等级段 (1-3/4-6/7-9/10+) 的宝石池 */
-    public List<String> getSnowyGemPool(int level) {
-        if (level >= 10) return snowyGemPools.get("level-10");
-        if (level >= 7) return snowyGemPools.get("level-7-9");
-        if (level >= 4) return snowyGemPools.get("level-4-6");
-        return snowyGemPools.get("level-1-3");
-    }
-
-    public int getSnowyAmountMin() { return snowyAmountMin; }
-    public int getSnowyAmountMax() { return snowyAmountMax; }
-
-    /** snowygems 模式: 该等级段是否允许掉落 (普通精英用 drops.level-X-Y, Boss 用 drops.boss-level-X-Y) */
+    /** 宝石掉落概率（按等级段） */
     public double getGemDropChance(int level, boolean boss) {
-        String key = boss ? "gem-drops.drops.boss-level-" : "gem-drops.drops.level-";
-        if (level >= 10) key += "10";
-        else if (level >= 7) key += "7-9";
-        else if (level >= 4) key += "4-6";
-        else key += "1-3";
-        return Math.max(0.0, Math.min(1.0, config.getDouble(key,
-                boss ? 1.0 : config.getDouble("loot.essence-drops.level-1-3", 0.15))));
+        double base;
+        if (level >= 10) base = gemDropChanceMax;
+        else if (level >= 7) base = gemDropChanceHigh;
+        else if (level >= 4) base = gemDropChanceMid;
+        else base = gemDropChanceLow;
+        return Math.max(0.0, Math.min(1.0, boss ? Math.min(base * 1.5, 1.0) : base));
     }
+
+    public int getGemAmountMin() { return gemAmountMin; }
+    public int getGemAmountMax() { return gemAmountMax; }
+
+    public boolean isLootBagEnabled() { return lootBagEnabled; }
+    public double getLootBagChance() { return lootBagChance; }
+    public double getLootBagBossChance() { return lootBagBossChance; }
 
     /** custom 模式: 自定义掉落物列表 */
     public List<CustomDrop> getCustomDrops() { return customDrops; }
@@ -556,7 +562,7 @@ public class EliteConfig {
 
     /**
      * 自定义掉落物 (gem-drops.custom 列表条目)。
-     * 无需 SnowyGems, 服主可在配置中完全自主定义精英怪掉落物。
+     * 服主可在配置中完全自主定义精英怪掉落物。
      */
     public static class CustomDrop {
         public String id;

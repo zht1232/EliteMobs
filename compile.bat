@@ -15,5 +15,6 @@ rmdir /s /q "%OUT%" 2>nul
 mkdir "%OUT%"
 set FILES=
 for /r "%SRC%" %%f in (*.java) do set FILES=!FILES! "%%f"
-"%JAVA25%\javac.exe" -encoding UTF-8 -cp "%CP%" -d "%OUT%" %FILES%
+REM Target Java 25: matches paper-api 26.2 (class version 69). Do NOT downgrade below 21.
+"%JAVA25%\javac.exe" -encoding UTF-8 --release 25 -cp "%CP%" -d "%OUT%" %FILES%
 if %errorlevel% equ 0 (echo BUILD SUCCESSFUL) else (echo BUILD FAILED)

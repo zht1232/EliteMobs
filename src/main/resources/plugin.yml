@@ -1,11 +1,10 @@
 name: EliteMobs
-version: '27.0.0'
+version: '28.0.0'
 main: com.clawx.elitemobs.EliteMobsPlugin
 api-version: '1.21'
 author: ClawX
 description: Highly customizable elite mob plugin with smart AI, wall-climbing, item stealing, block breaking, and scaling difficulty
 prefix: EliteMobs
-folia-supported: true
 load: POSTWORLD
 
 softdepend:
@@ -21,7 +20,6 @@ softdepend:
   - MythicMobs
   - PlaceholderAPI
   - LuckPerms
-  - SnowyGems
 
 permissions:
   elitemobs.use:

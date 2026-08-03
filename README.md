@@ -216,7 +216,7 @@ loot:
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-27.0.0-fixed.jar`
+1. 下载 `EliteMobs-28.0.0.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`
@@ -226,9 +226,18 @@ loot:
 
 ## 📝 更新日志
 
+### v28.0.0
+- ✅ **内置宝石系统**：移除 SnowyGems 依赖，宝石外观/value 样式与 SnowyGems 完全一致
+  - 配置在 `plugins/EliteMobs/gems/*.yml`，支持属性/附魔/药水/战利品等宝石
+  - **铁砧淬炼**：装备+宝石 → 成功率预览 → 点击淬炼
+  - 淬炼成功：烟花粒子 + 庆祝音效
+- ✅ 修复：精英护甲套装加成（armor_lv）实际生效
+- ✅ 掉落增强：宝石按等级段掉落 + 战利品袋（右键开袋）
+- ✅ 保留：custom 自定义掉落 / Vault 金币 / PlayerPoints 点券 / PlaceholderAPI
+
 ### v27.0.0
 - ✅ 精英词缀系统（8 种词缀，可配置权重）
-- ✅ 掉落系统：`custom` 自定义掉落（头颅纹理/药水/按生物限定）+ SnowyGems 真实宝石挂钩
+- ✅ 掉落系统：`custom` 自定义掉落（头颅纹理/药水/按生物限定）
 - ✅ 经济奖励：Vault 金币 + PlayerPoints 点券 + 连杀系统 + LuckPerms 倍数
 - ✅ PlaceholderAPI 占位符扩展
 - ✅ 职业系统、Boss 系统、AI 行为、套装效果、粒子特效

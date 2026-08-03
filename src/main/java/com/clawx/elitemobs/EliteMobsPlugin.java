@@ -13,6 +13,9 @@ import com.clawx.elitemobs.ai.EliteBossManager;
 import com.clawx.elitemobs.ai.EliteAffixHandler;
 import com.clawx.elitemobs.combat.DamageScaler;
 import com.clawx.elitemobs.combat.WeaponEnhancer;
+import com.clawx.elitemobs.gem.GemManager;
+import com.clawx.elitemobs.gem.GemAnvilListener;
+import com.clawx.elitemobs.gem.GemUseListener;
 import com.clawx.elitemobs.spawn.EliteSpawnHandler;
 import com.clawx.elitemobs.commands.EliteMobsCommand;
 import java.io.File;
@@ -31,6 +34,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private EliteBossManager bossManager;
     private EliteAffixHandler affixHandler;
     private EliteCombatListener combatListener;
+    private GemManager gemManager;
     private org.bukkit.configuration.file.FileConfiguration messages;
 
     @Override public void onEnable() {
@@ -39,7 +43,6 @@ public final class EliteMobsPlugin extends JavaPlugin {
         saveDefaultConfig();
         reloadConfig();
         loadMessages();
-        SnowyGemsHook.init();
         EconomyHook.init();
         eliteConfig = new EliteConfig(this);
         mobManager = new EliteMobManager(this);
@@ -51,6 +54,9 @@ public final class EliteMobsPlugin extends JavaPlugin {
         eliteClassAI = new EliteClassAI(this);
         bossManager = new EliteBossManager(this);
         affixHandler = new EliteAffixHandler(this);
+        gemManager = new GemManager(this);
+        getServer().getPluginManager().registerEvents(new GemAnvilListener(this, gemManager), this);
+        getServer().getPluginManager().registerEvents(new GemUseListener(this, gemManager), this);
         getServer().getPluginManager().registerEvents(affixHandler, this);
         getServer().getPluginManager().registerEvents(new EliteSpawnHandler(this), this);
         combatListener = new EliteCombatListener(this);
@@ -72,13 +78,10 @@ public final class EliteMobsPlugin extends JavaPlugin {
                 + " | 破块: " + yn(eliteConfig.isBlockBreakEnabled())
                 + " | 偷窃: " + yn(eliteConfig.isItemStealEnabled())
                 + " | 伤害成长: " + yn(eliteConfig.isDamageScalingEnabled()));
-        getLogger().info("  兼容: WorldGuard/GriefPrevention/Towny/Factions/MythicMobs/Essentials/PlaceholderAPI/LuckPerms/SnowyGems");
+        getLogger().info("  兼容: WorldGuard/GriefPrevention/Towny/Factions/MythicMobs/Essentials/PlaceholderAPI/LuckPerms");
         if (eliteConfig.isLuckPermsEnabled())
             getLogger().info("  LuckPerms: " + eliteConfig.getLuckPermsGroups().size() + " 个组");
-        String sg = SnowyGemsHook.isAvailable() ? ChatColor.GREEN + "已连接"
-                : SnowyGemsHook.isPluginLoaded() ? ChatColor.YELLOW + "已加载但宝石未就绪(版本不兼容?)"
-                : ChatColor.RED + "未安装";
-        getLogger().info("  SnowyGems 挂钩: " + sg + ChatColor.RESET + " | 掉落模式: " + eliteConfig.getGemDropMode());
+        getLogger().info("  掉落模式: " + eliteConfig.getGemDropMode());
         getLogger().info("  经济: Vault " + (EconomyHook.isVaultReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装")
                 + ChatColor.RESET + " | PlayerPoints " + (EconomyHook.isPlayerPointsReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装"));
         getLogger().info("  作者: ClawX | Paper 1.21+ | JDK 21");
@@ -94,7 +97,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
         }, 20L, eliteConfig.getAITickInterval());
     }
 
-    public void reload() { reloadConfig(); loadMessages(); SnowyGemsHook.init(); EconomyHook.init(); eliteConfig = new EliteConfig(this); damageScaler.reload(); weaponEnhancer.reload(); }
+    public void reload() { reloadConfig(); loadMessages(); EconomyHook.init(); eliteConfig = new EliteConfig(this); damageScaler.reload(); weaponEnhancer.reload(); if (gemManager != null) gemManager.getRegistry().reload(); }
 
     private void loadMessages() {
         saveResource("messages.yml", true);
@@ -116,6 +119,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
     public EliteBossManager getBossManager() { return bossManager; }
     public EliteAffixHandler getAffixHandler() { return affixHandler; }
     public EliteCombatListener getCombatListener() { return combatListener; }
+    public GemManager getGemManager() { return gemManager; }
 
     /** 注册 PlaceholderAPI 占位符（软依赖，未装 PAPI 时静默跳过） */
     private void registerPapi() {

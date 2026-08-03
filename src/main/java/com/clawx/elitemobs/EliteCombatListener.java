@@ -21,6 +21,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import com.clawx.elitemobs.gem.GemConfig;
+import com.clawx.elitemobs.gem.GemRegistry;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -53,9 +55,8 @@ public class EliteCombatListener implements Listener {
         for (ItemStack armor : new ItemStack[]{inv.getHelmet(), inv.getChestplate(), inv.getLeggings(), inv.getBoots()}) {
             if (armor == null || !armor.hasItemMeta()) continue;
             var pdc = armor.getItemMeta().getPersistentDataContainer();
-            var lvlKey = new org.bukkit.NamespacedKey(plugin, "armor_lv");
-            if (pdc.has(lvlKey, org.bukkit.persistence.PersistentDataType.INTEGER)) {
-                total += pdc.get(lvlKey, org.bukkit.persistence.PersistentDataType.INTEGER);
+            if (pdc.has(EliteMobManager.ARMOR_LV_KEY, org.bukkit.persistence.PersistentDataType.INTEGER)) {
+                total += pdc.get(EliteMobManager.ARMOR_LV_KEY, org.bukkit.persistence.PersistentDataType.INTEGER);
             }
         }
         return total;
@@ -395,10 +396,14 @@ public class EliteCombatListener implements Listener {
     }
 
     /**
-     * 处理精英/Boss 的宝石与自定义掉落物（统一入口）。
+     * 处理精英/Boss 的掉落物（统一入口）。
      *
-     * <p>snowygems 模式: 通过 {@link SnowyGemsHook} 调用 SnowyGems 真实 API，
-     * 构建可镶嵌的真实宝石掉落。custom 模式: 按配置中的自定义掉落物逐条判定。</p>
+     * <p>包含三类掉落：</p>
+     * <ul>
+     *   <li>custom 模式: 服主配置的自定义掉落物（gem-drops.custom）</li>
+     *   <li>宝石掉落: SnowyGems 风格宝石（按等级段概率，gem-drops.gems）</li>
+     *   <li>战利品袋: 随机开出宝石的奖励袋（gem-drops.lootbag）</li>
+     * </ul>
      *
      * @param event 死亡事件（向其 Drops 添加物品）
      * @param level 精英等级
@@ -406,29 +411,11 @@ public class EliteCombatListener implements Listener {
      */
     private void rollGemDrops(EntityDeathEvent event, int level, boolean boss) {
         EliteConfig cfg = plugin.getEliteConfig();
-        String mode = cfg.getGemDropMode();
-        if ("disabled".equals(mode)) return;
         if (!cfg.isGemDropsEnabled()) return;
+        String mode = cfg.getGemDropMode();
 
-        if ("snowygems".equals(mode)) {
-            if (!SnowyGemsHook.isAvailable()) {
-                if (SnowyGemsHook.isPluginLoaded())
-                    plugin.getLogger().warning("gem-drops.mode 为 snowygems 但 SnowyGems 宝石未就绪（可能 MC 版本不兼容），已跳过宝石掉落。可改用 custom 模式或等 SnowyGems 适配。");
-                else
-                    plugin.getLogger().warning("gem-drops.mode 为 snowygems 但未检测到 SnowyGems 插件，已跳过宝石掉落。可改用 custom 模式。");
-                return;
-            }
-            // 按等级段判定是否掉落（Boss 用 boss 概率）
-            if (rng.nextDouble() >= cfg.getGemDropChance(level, boss)) return;
-            int amount = randomInt(cfg.getSnowyAmountMin(), cfg.getSnowyAmountMax());
-            for (int i = 0; i < amount; i++) {
-                String gemId = SnowyGemsHook.randomGemId(rng, cfg.getSnowyGemPool(level));
-                if (gemId == null) continue;
-                ItemStack gem = SnowyGemsHook.buildGem(gemId, 1);
-                if (gem != null) event.getDrops().add(gem);
-            }
-        } else if ("custom".equals(mode)) {
-            // 由服主配置的每条掉落物独立判定
+        // 1. 自定义掉落物（custom / 默认都生效）
+        if (!"disabled".equals(mode)) {
             for (EliteConfig.CustomDrop drop : cfg.getCustomDrops()) {
                 if (!drop.allows(event.getEntityType())) continue; // 按生物类型过滤
                 double c = drop.getChance(level);
@@ -439,6 +426,62 @@ public class EliteCombatListener implements Listener {
                 event.getDrops().add(item);
             }
         }
+
+        // 2. 宝石掉落（SnowyGems 风格，按等级段）
+        rollGemDropsByLevel(event, level, boss);
+
+        // 3. 战利品袋
+        rollLootBag(event, level, boss);
+    }
+
+    /**
+     * 宝石掉落：从已加载宝石中按等级段概率随机掉落。
+     * 概率沿用 gem-drops.drops.level-X-Y / boss-level-X-Y，数量 gem-drops.gems.amount-min/max。
+     */
+    private void rollGemDropsByLevel(EntityDeathEvent event, int level, boolean boss) {
+        if (plugin.getGemManager() == null) return;
+        GemRegistry registry = plugin.getGemManager().getRegistry();
+        if (registry.size() == 0) return;
+        EliteConfig cfg = plugin.getEliteConfig();
+        double chance = cfg.getGemDropChance(level, boss);
+        if (chance <= 0.0) return;
+        if (rng.nextDouble() >= chance) return;
+
+        int amount = randomInt(cfg.getGemAmountMin(), cfg.getGemAmountMax());
+        for (int i = 0; i < amount; i++) {
+            GemConfig gem = pickGemForLevel(registry, level);
+            if (gem == null) continue;
+            ItemStack gemItem = plugin.getGemManager().getFactory().build(gem, 1);
+            if (gemItem != null) event.getDrops().add(gemItem);
+        }
+    }
+
+    /**
+     * 战利品袋：精英有概率掉一个"奖励袋"，开袋随机获得宝石。
+     */
+    private void rollLootBag(EntityDeathEvent event, int level, boolean boss) {
+        EliteConfig cfg = plugin.getEliteConfig();
+        if (!cfg.isLootBagEnabled()) return;
+        double chance = boss ? cfg.getLootBagBossChance() : cfg.getLootBagChance();
+        if (chance <= 0.0) return;
+        if (rng.nextDouble() >= chance) return;
+        ItemStack bag = plugin.getGemManager().getFactory().buildLootBag(level, boss);
+        if (bag != null) event.getDrops().add(bag);
+    }
+
+    /** 按等级段从宝石池随机选一颗宝石（低等级偏向普通宝石）。 */
+    private GemConfig pickGemForLevel(GemRegistry registry, int level) {
+        List<GemConfig> pool = new ArrayList<>(registry.all());
+        if (pool.isEmpty()) return null;
+        // 按等级过滤：等级越高，越倾向"真/神"进阶宝石（名称含 · 的进阶宝石）
+        java.util.List<GemConfig> advanced = new ArrayList<>();
+        for (GemConfig g : pool) {
+            if (g.id.contains("真") || g.id.contains("神")) advanced.add(g);
+        }
+        double r = rng.nextDouble();
+        if (level >= 15 && !advanced.isEmpty() && r < 0.35) return advanced.get(rng.nextInt(advanced.size()));
+        if (level >= 10 && !advanced.isEmpty() && r < 0.25) return advanced.get(rng.nextInt(advanced.size()));
+        return pool.get(rng.nextInt(pool.size()));
     }
 
     private int randomInt(int min, int max) {

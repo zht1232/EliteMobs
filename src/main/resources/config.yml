@@ -1,5 +1,5 @@
 # ============================================
-#  EliteMobs v27.0.0 - 配置文件
+#  EliteMobs v28.0.0 - 配置文件
 #  适用 Paper 1.21+ / Paper 26.x
 #  作者: zht
 # ============================================
@@ -485,33 +485,18 @@ luckperms:
       xp-multiplier: 1.3
 
 # ============================================
-#  宝石/掉落物配置
+#  掉落物配置
 # ============================================
 # 掉落模式说明:
-#   snowygems - 调用 SnowyGems 真实 API 掉落可镶嵌的宝石（需要安装并启用 SnowyGems）
 #   custom    - 使用下方 custom 列表自定义掉落物（无需任何额外插件）
-#   disabled  - 精英怪不掉落宝石/自定义掉落物
+#   disabled  - 精英怪不掉落自定义掉落物
 #
-# 注意: 如果模式选择 snowygems 但服务端未安装 SnowyGems,
-#       插件会自动降级为不产生宝石掉落, 并在日志中提示。
+# 精华掉落（武器/护甲精华 + 铁砧淬炼）由 loot.essence-drops 单独控制，与
+# gem-drops.mode 无关：即使 mode 为 disabled，精华仍可按其自身开关掉落。
 gem-drops:
-  mode: snowygems
+  mode: custom
 
-  # --- snowygems 模式配置 ---
-  # 真实掉落 SnowyGems 宝石。宝石 ID = SnowyGems 的 gems/*.yml 中的顶层键,
-  # 例如 "生命宝石" / "攻击伤害宝石" / "速度宝石" 等 (用 /em gem list 可查看全部)。
-  # 各等级段可指定不同的宝石池; 留空 [] 表示该等级段从全部已加载宝石中随机。
-  # 若池里写了不存在的 ID 会自动忽略, 池为空时回退为全量随机。
-  snowygems:
-    level-1-3: []
-    level-4-6: []
-    level-7-9: []
-    level-10: []
-    # 单次掉落数量范围
-    amount-min: 1
-    amount-max: 1
-
-  # --- custom 模式配置 (无需 SnowyGems) ---
+  # --- custom 模式配置 ---
   # 服主自主配置精英怪掉落物。每个条目代表一种掉落物。
   # 支持字段:
   #   id/material/name/lore/enchants/glow     基础字段
@@ -584,14 +569,27 @@ gem-drops:
   # --- 掉落总开关 (两种模式共用) ---
   drops:
     enabled: true
-    # snowygems 模式: 各等级精英怪掉落宝石的判定概率 (0.0-1.0)
     # custom 模式: 该开关关闭则完全不掉落 (开启后由各条目的 chance 独立判定)
     level-1-3: 0.15
     level-4-6: 0.35
     level-7-9: 0.55
     level-10: 0.85
-    # Boss (等级 >= 15 的精英) 判定概率, 通常更高
-    boss-level-1-3: 1.0
-    boss-level-4-6: 1.0
-    boss-level-7-9: 1.0
-    boss-level-10: 1.0
+
+  # --- 宝石掉落 (SnowyGems 风格宝石) ---
+  # 从 gems/*.yml 加载的宝石按等级段概率掉落。
+  # 概率沿用上方 drops.level-X-Y；这里可单独覆盖。Boss 自动 1.5 倍。
+  gems:
+    level-1-3: 0.15
+    level-4-6: 0.35
+    level-7-9: 0.55
+    level-10: 0.85
+    # 单次掉落数量范围
+    amount-min: 1
+    amount-max: 1
+
+  # --- 战利品袋 ---
+  # 精英有概率掉落"战利品袋"，右键打开随机获得一颗宝石。
+  lootbag:
+    enabled: true
+    chance: 0.10        # 普通精英掉落概率
+    boss-chance: 0.50   # Boss 掉落概率
