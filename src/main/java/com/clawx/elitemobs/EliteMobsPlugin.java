@@ -1,0 +1,132 @@
+package com.clawx.elitemobs;
+
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.EntityType;
+import org.bukkit.plugin.java.JavaPlugin;
+import com.clawx.elitemobs.ai.WallClimbAI;
+import com.clawx.elitemobs.ai.BlockBreakAI;
+import com.clawx.elitemobs.ai.ItemStealAI;
+import com.clawx.elitemobs.ai.EliteClassAI;
+import com.clawx.elitemobs.ai.EliteBossManager;
+import com.clawx.elitemobs.ai.EliteAffixHandler;
+import com.clawx.elitemobs.combat.DamageScaler;
+import com.clawx.elitemobs.combat.WeaponEnhancer;
+import com.clawx.elitemobs.spawn.EliteSpawnHandler;
+import com.clawx.elitemobs.commands.EliteMobsCommand;
+import java.io.File;
+import java.util.Objects;
+
+public final class EliteMobsPlugin extends JavaPlugin {
+    private static EliteMobsPlugin instance;
+    private EliteConfig eliteConfig;
+    private EliteMobManager mobManager;
+    private DamageScaler damageScaler;
+    private WeaponEnhancer weaponEnhancer;
+    private WallClimbAI wallClimbAI;
+    private BlockBreakAI blockBreakAI;
+    private ItemStealAI itemStealAI;
+    private EliteClassAI eliteClassAI;
+    private EliteBossManager bossManager;
+    private EliteAffixHandler affixHandler;
+    private EliteCombatListener combatListener;
+    private org.bukkit.configuration.file.FileConfiguration messages;
+
+    @Override public void onEnable() {
+        instance = this;
+        long start = System.currentTimeMillis();
+        saveDefaultConfig();
+        reloadConfig();
+        loadMessages();
+        SnowyGemsHook.init();
+        EconomyHook.init();
+        eliteConfig = new EliteConfig(this);
+        mobManager = new EliteMobManager(this);
+        damageScaler = new DamageScaler(this);
+        weaponEnhancer = new WeaponEnhancer(this);
+        wallClimbAI = new WallClimbAI(this);
+        blockBreakAI = new BlockBreakAI(this);
+        itemStealAI = new ItemStealAI(this);
+        eliteClassAI = new EliteClassAI(this);
+        bossManager = new EliteBossManager(this);
+        affixHandler = new EliteAffixHandler(this);
+        getServer().getPluginManager().registerEvents(affixHandler, this);
+        getServer().getPluginManager().registerEvents(new EliteSpawnHandler(this), this);
+        combatListener = new EliteCombatListener(this);
+        getServer().getPluginManager().registerEvents(combatListener, this);
+        combatListener.startSetBonusTask();
+        getServer().getPluginManager().registerEvents(wallClimbAI, this);
+        getServer().getPluginManager().registerEvents(blockBreakAI, this);
+        getServer().getPluginManager().registerEvents(itemStealAI, this);
+        getServer().getPluginManager().registerEvents(eliteClassAI, this);
+        getServer().getPluginManager().registerEvents(damageScaler, this);
+        Objects.requireNonNull(getCommand("elitemobs")).setExecutor(new EliteMobsCommand(this));
+        startAITask();
+        registerPapi();
+        long elapsed = System.currentTimeMillis() - start;
+        getLogger().info("========== EliteMobs v" + getDescription().getVersion() + " ==========");
+        getLogger().info("  状态: 已启用 | 耗时: " + elapsed + "ms");
+        getLogger().info("  精英种类: " + eliteConfig.getEnabledMobTypes().size() + " 个 | 生成概率: " + String.format("%.1f%%", eliteConfig.getEliteSpawnChance()*100));
+        getLogger().info("  爬墙: " + yn(eliteConfig.isWallClimbEnabled())
+                + " | 破块: " + yn(eliteConfig.isBlockBreakEnabled())
+                + " | 偷窃: " + yn(eliteConfig.isItemStealEnabled())
+                + " | 伤害成长: " + yn(eliteConfig.isDamageScalingEnabled()));
+        getLogger().info("  兼容: WorldGuard/GriefPrevention/Towny/Factions/MythicMobs/Essentials/PlaceholderAPI/LuckPerms/SnowyGems");
+        if (eliteConfig.isLuckPermsEnabled())
+            getLogger().info("  LuckPerms: " + eliteConfig.getLuckPermsGroups().size() + " 个组");
+        String sg = SnowyGemsHook.isAvailable() ? ChatColor.GREEN + "已连接"
+                : SnowyGemsHook.isPluginLoaded() ? ChatColor.YELLOW + "已加载但宝石未就绪(版本不兼容?)"
+                : ChatColor.RED + "未安装";
+        getLogger().info("  SnowyGems 挂钩: " + sg + ChatColor.RESET + " | 掉落模式: " + eliteConfig.getGemDropMode());
+        getLogger().info("  经济: Vault " + (EconomyHook.isVaultReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装")
+                + ChatColor.RESET + " | PlayerPoints " + (EconomyHook.isPlayerPointsReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装"));
+        getLogger().info("  作者: ClawX | Paper 1.21+ | JDK 21");
+        getLogger().info("==================================================");
+    }
+
+    @Override public void onDisable() { getLogger().info("EliteMobs 已停用。"); }
+
+    private void startAITask() {
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            if (!eliteConfig.isEnabled()) return;
+            mobManager.tickAllEliteMobs();
+        }, 20L, eliteConfig.getAITickInterval());
+    }
+
+    public void reload() { reloadConfig(); loadMessages(); SnowyGemsHook.init(); EconomyHook.init(); eliteConfig = new EliteConfig(this); damageScaler.reload(); weaponEnhancer.reload(); }
+
+    private void loadMessages() {
+        saveResource("messages.yml", true);
+        File file = new File(getDataFolder(), "messages.yml");
+        messages = YamlConfiguration.loadConfiguration(file);
+    }
+
+    public org.bukkit.configuration.file.FileConfiguration getMessages() { return messages; }
+
+    public static EliteMobsPlugin getInstance() { return instance; }
+    public EliteConfig getEliteConfig() { return eliteConfig; }
+    public EliteMobManager getMobManager() { return mobManager; }
+    public DamageScaler getDamageScaler() { return damageScaler; }
+    public WeaponEnhancer getWeaponEnhancer() { return weaponEnhancer; }
+    public WallClimbAI getWallClimbAI() { return wallClimbAI; }
+    public BlockBreakAI getBlockBreakAI() { return blockBreakAI; }
+    public ItemStealAI getItemStealAI() { return itemStealAI; }
+    public EliteClassAI getEliteClassAI() { return eliteClassAI; }
+    public EliteBossManager getBossManager() { return bossManager; }
+    public EliteAffixHandler getAffixHandler() { return affixHandler; }
+    public EliteCombatListener getCombatListener() { return combatListener; }
+
+    /** 注册 PlaceholderAPI 占位符（软依赖，未装 PAPI 时静默跳过） */
+    private void registerPapi() {
+        if (!Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) return;
+        try {
+            new ElitePapiExpansion(this).register();
+            getLogger().info("  PlaceholderAPI 占位符已注册 (%elitemobs_*)");
+        } catch (Throwable t) {
+            getLogger().warning("PlaceholderAPI 注册失败: " + t.getMessage());
+        }
+    }
+
+    private static String yn(boolean b) { return b ? ChatColor.GREEN + "ON" + ChatColor.RESET : ChatColor.RED + "OFF" + ChatColor.RESET; }
+}

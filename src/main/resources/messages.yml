@@ -1,0 +1,103 @@
+# ============================================
+#  EliteMobs v27.0.0 - Messages / Language File
+#  Color codes: &0-9 &a-f &k-o &r
+#  Symbols: \u2726 \u2694 \u2620 \u26a0 \u2705 \u274c
+# ============================================
+
+prefix: "&8[&6\u2694 EliteMobs&8] &r"
+
+messages:
+  reload: "&a\u2705 &f\u914d\u7f6e\u5df2\u91cd\u65b0\u52a0\u8f7d\uff01"
+  reload-fail: "&c\u274c &f\u914d\u7f6e\u6587\u4ef6\u8bfb\u53d6\u5931\u8d25\uff01"
+  no-permission: "&c\u274c &f\u6743\u9650\u4e0d\u8db3\u3002"
+  player-only: "&c\u274c &f\u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"
+  invalid-usage: "&c\u274c &f\u7528\u6cd5: /elitemobs <reload|spawn|stats>"
+
+  spawn:
+    success: "&a\u2705 &f\u5df2\u751f\u6210\u7cbe\u82f1 &e{type}&f [&4Lv.{level}&f]&r"
+    invalid-type: "&c\u274c &f\u672a\u77e5\u751f\u7269\u7c7b\u578b: &e{type}"
+
+  stats:
+    header: "&6\u2501\u2501\u2501\u2501\u2501\u2501 &e\u2694 EliteMobs &7\u7edf\u8ba1 &6\u2501\u2501\u2501\u2501\u2501\u2501"
+    total-active: "&7\u2022 \u6d3b\u8dc3\u7cbe\u82f1: &e{count} &7\u53ea"
+    total-spawned: "&7\u2022 \u603b\u751f\u6210: &e{total}"
+    total-killed: "&7\u2022 \u603b\u51fb\u6740: &e{killed}"
+    footer: "&6\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+
+  announce-spawn: "&c\u26a0 &e{elite_name}&c \u5728 &7{world}&c \u51fa\u73b0\u4e86\uff01"
+
+  elite-death: "&a\u2694 &f\u51fb\u6740\u4e86\u7cbe\u82f1 &e{elite_name}&f\uff01\u83b7\u5f97 &e{exp} &a\u7ecf\u9a8c\uff01"
+
+  command-help:
+    - "&6\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+    - "&6\u2694 &eEliteMobs &7\u6307\u4ee4\u5e2e\u52a9"
+    - "&6\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+    - "&e/elitemobs reload &7- \u91cd\u65b0\u52a0\u8f7d\u914d\u7f6e"
+    - "&e/elitemobs spawn <type> &7- \u624b\u52a8\u751f\u6210\u7cbe\u82f1"
+    - "&e/elitemobs stats &7- \u67e5\u770b\u7edf\u8ba1"
+    - "&e/elitemobs version &7- \u67e5\u770b\u7248\u672c"
+    - "&6\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+
+# ============================================
+#  Essence Upgrade System
+# ============================================
+essence:
+  name: "&5&l\u6b66\u5668\u7cbe\u534e"
+  lore:
+    name: "\u6b66\u5668\u7cbe\u534e Lv.{level}"
+    success-rate: "\u6210\u529f\u7387: {rate}%"
+    usage: "\u94c1\u7827\u5347\u7ea7\u6b66\u5668\u7528"
+
+armor-essence:
+  name: "&9&l\u62a4\u7532\u7cbe\u534e"
+  lore:
+    name: "\u62a4\u7532\u7cbe\u534e Lv.{level}"
+    success-rate: "\u6210\u529f\u7387: {rate}%"
+    usage: "\u94c1\u7827\u5347\u7ea7\u62a4\u7532\u7528"
+
+protection-charm:
+  name: "&e&l\u6dec\u70bc\u4fdd\u62a4\u7b26"
+  lore:
+    - "&7\u653e\u5728\u80cc\u5305\u4e2d\u5373\u53ef\u751f\u6548"
+    - "&7\u6dec\u70bc\u5931\u8d25\u65f6&c\u514d\u53d7\u964d\u7ea7"
+    - "&4\u4e00\u6b21\u6027\u6d88\u8017\u54c1"
+
+essence-upgrade:
+  destroyed: "&c&l\u2718 \u6b66\u5668\u5df2\u6467\u6bc1\uff01"
+  protected: "&e&l\u2726 \u4fdd\u62a4\u7b26\u751f\u6548\uff01\u6b66\u5668\u672a\u964d\u7ea7"
+  lore:
+    title: "&6&l\u2726 \u3010&e&lLv.{lvl}&r&6&l\u3011\u7cbe\u82f1\u6b66\u5668 \u2726"
+    separator: "&8&m\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+    base-stats: "&b\u2756 \u57fa\u7840\u5c5e\u6027\uff1a"
+    attack: "   &7\u653b\u51fb\u529b&8\uff1a&c+{total} &4\u2764"
+    effect-title: "&e\u2726 \u643a\u5e26\u6548\u679c&7\uff1a"
+    effect-desc: "   &7\u5171\u63d0\u5347 &c+{bonus} &7\u70b9\u653b\u51fb\u4f24\u5bb3"
+  success:
+    title: "  &6&l\u2726 &e&l\u6dec\u70bc\u6210\u529f\uff01 &6&l\u2726"
+    desc: "  &7\u4f60\u7684 &f{name} &7\u5df2\u70bc\u81f3 &a&l{lvl} &7\u7ea7\uff01"
+    stats: "  &7\u25b6 &f\u603b\u653b\u51fb\u529b &7: &c{total} &7(\u2191 &a+{bonus}&7)"
+    footer: "  &8&m------------------------------------&r"
+  fail:
+    title: "  &c&l\u2716 &4&l\u6dec\u70bc\u5931\u8d25\uff01 &c&l\u2716"
+    desc: "  &7\u4f60\u7684 &f{name} &7\u964d\u81f3 &c&l{lvl}"
+    footer: "  &8&m------------------------------------&r"
+
+armor-upgrade:
+  protected: "&e&l\u2726 \u4fdd\u62a4\u7b26\u751f\u6548\uff01\u62a4\u7532\u672a\u964d\u7ea7"
+  destroyed: "&c&l\u2718 \u62a4\u7532\u5df2\u6467\u6bc1\uff01"
+  lore:
+    title: "&9&l\u2726 \u3010&e&lLv.{lvl}&r&9&l\u3011\u7cbe\u82f1\u62a4\u7532 \u2726"
+    separator: "&8&m\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+    defense: "   &7\u51cf\u4f24&8\uff1a&b{reduction}%"
+  success:
+    title: "  &9&l\u2726 &b&l\u62a4\u7532\u6dec\u70bc\u6210\u529f\uff01 &9&l\u2726"
+    desc: "  &7\u4f60\u7684 &f{name} &7\u5df2\u70bc\u81f3 &a&l{lvl} &7\u7ea7\uff01"
+    stats: "  &7\u25b6 &f\u51cf\u4f24 &7: &b{reduction}%"
+    footer: "  &8&m------------------------------------&r"
+  fail:
+    title: "  &c&l\u2716 &4&l\u62a4\u7532\u6dec\u70bc\u5931\u8d25\uff01 &c&l\u2716"
+    desc: "  &7\u4f60\u7684 &f{name} &7\u964d\u81f3 &c&l{lvl}"
+    footer: "  &8&m------------------------------------&r"
+
+steal:
+  notify: "&c&l\u26a0 &e{mob} &c\u5077\u8d70\u4e86\u4f60\u7684 &f{item}&c\uff01"

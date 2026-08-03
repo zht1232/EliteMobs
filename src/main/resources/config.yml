@@ -1,0 +1,597 @@
+# ============================================
+#  EliteMobs v27.0.0 - 配置文件
+#  适用 Paper 1.21+ / Paper 26.x
+#  作者: zht
+# ============================================
+
+# --- 基本设置 ---
+general:
+  enabled: true
+  ai-tick-interval: 10
+  elite-spawn-chance: 0.01
+  min-spawn-y: 0
+  max-elites-per-chunk: 2
+  enabled-mob-types: []
+
+  # 高等级精英生成时全服广播提示
+  spawn-announce:
+    enabled: false
+    min-level: 10          # >= 此等级才广播
+    announce-range: 100   # -1=全服广播, >0=只通知该范围内(格)的玩家
+
+# --- 怪物档案 ---
+mob-profiles:
+  ZOMBIE:
+    health-multiplier: 1.5
+    damage-multiplier: 1.2
+    speed-multiplier: 1.05
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: true
+    priority: 5
+  SKELETON:
+    health-multiplier: 1.2
+    damage-multiplier: 1.4
+    speed-multiplier: 1.1
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: true
+    priority: 5
+  CREEPER:
+    health-multiplier: 1.0
+    damage-multiplier: 2.0
+    speed-multiplier: 1.2
+    can-climb-walls: false
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 5
+  SPIDER:
+    health-multiplier: 1.3
+    damage-multiplier: 1.1
+    speed-multiplier: 1.2
+    can-climb-walls: true
+    can-break-blocks: true
+    can-steal-items: true
+    priority: 5
+
+  # --- 蜘蛛类 (爬墙) ---
+  CAVE_SPIDER:
+    health-multiplier: 1.2
+    damage-multiplier: 1.3
+    speed-multiplier: 1.15
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: true
+    priority: 5
+
+  # --- 骷髅类 (爬墙+远程) ---
+  STRAY:
+    health-multiplier: 1.2
+    damage-multiplier: 1.4
+    speed-multiplier: 1.1
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: true
+    priority: 5
+  WITHER_SKELETON:
+    health-multiplier: 1.6
+    damage-multiplier: 1.5
+    speed-multiplier: 1.05
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: true
+    priority: 6
+
+  # --- 僵尸类 (破块+偷窃) ---
+  HUSK:
+    health-multiplier: 1.5
+    damage-multiplier: 1.2
+    speed-multiplier: 1.05
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: true
+    priority: 5
+  DROWNED:
+    health-multiplier: 1.4
+    damage-multiplier: 1.3
+    speed-multiplier: 1.05
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: true
+    priority: 5
+  ZOMBIFIED_PIGLIN:
+    health-multiplier: 1.6
+    damage-multiplier: 1.3
+    speed-multiplier: 1.05
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: false
+    priority: 5
+
+  # --- 猪灵类 (破块) ---
+  PIGLIN:
+    health-multiplier: 1.3
+    damage-multiplier: 1.2
+    speed-multiplier: 1.1
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: true
+    priority: 5
+  PIGLIN_BRUTE:
+    health-multiplier: 1.8
+    damage-multiplier: 1.5
+    speed-multiplier: 1.05
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: false
+    priority: 6
+
+  # --- 灾厄村民类 ---
+  PILLAGER:
+    health-multiplier: 1.2
+    damage-multiplier: 1.4
+    speed-multiplier: 1.1
+    can-climb-walls: false
+    can-break-blocks: false
+    can-steal-items: true
+    priority: 5
+  VINDICATOR:
+    health-multiplier: 1.5
+    damage-multiplier: 1.5
+    speed-multiplier: 1.1
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: false
+    priority: 6
+  EVOKER:
+    health-multiplier: 1.3
+    damage-multiplier: 1.6
+    speed-multiplier: 1.05
+    can-climb-walls: false
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 7
+  RAVAGER:
+    health-multiplier: 2.0
+    damage-multiplier: 1.8
+    speed-multiplier: 1.0
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: false
+    priority: 7
+
+  # --- 飞行/传送类 (爬墙) ---
+  ENDERMAN:
+    health-multiplier: 1.4
+    damage-multiplier: 1.3
+    speed-multiplier: 1.15
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: true
+    priority: 6
+  BLAZE:
+    health-multiplier: 1.3
+    damage-multiplier: 1.4
+    speed-multiplier: 1.2
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 5
+  GHAST:
+    health-multiplier: 1.0
+    damage-multiplier: 2.0
+    speed-multiplier: 1.1
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 6
+  PHANTOM:
+    health-multiplier: 1.2
+    damage-multiplier: 1.3
+    speed-multiplier: 1.25
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 5
+
+  # --- 史莱姆类 (弹跳=爬墙) ---
+  MAGMA_CUBE:
+    health-multiplier: 1.5
+    damage-multiplier: 1.3
+    speed-multiplier: 1.1
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 5
+  SLIME:
+    health-multiplier: 1.3
+    damage-multiplier: 1.2
+    speed-multiplier: 1.15
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 4
+
+  # --- 水生/特殊类 ---
+  GUARDIAN:
+    health-multiplier: 1.4
+    damage-multiplier: 1.3
+    speed-multiplier: 1.1
+    can-climb-walls: false
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 5
+  ELDER_GUARDIAN:
+    health-multiplier: 2.0
+    damage-multiplier: 1.5
+    speed-multiplier: 1.0
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: false
+    priority: 8
+  WITCH:
+    health-multiplier: 1.3
+    damage-multiplier: 1.4
+    speed-multiplier: 1.1
+    can-climb-walls: false
+    can-break-blocks: false
+    can-steal-items: true
+    priority: 5
+  HOGLIN:
+    health-multiplier: 1.8
+    damage-multiplier: 1.6
+    speed-multiplier: 1.05
+    can-climb-walls: false
+    can-break-blocks: true
+    can-steal-items: false
+    priority: 6
+  SHULKER:
+    health-multiplier: 1.5
+    damage-multiplier: 1.2
+    speed-multiplier: 1.0
+    can-climb-walls: false
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 5
+  SILVERFISH:
+    health-multiplier: 1.0
+    damage-multiplier: 1.0
+    speed-multiplier: 1.3
+    can-climb-walls: true
+    can-break-blocks: true
+    can-steal-items: false
+    priority: 3
+  ENDERMITE:
+    health-multiplier: 1.0
+    damage-multiplier: 1.0
+    speed-multiplier: 1.2
+    can-climb-walls: true
+    can-break-blocks: false
+    can-steal-items: false
+    priority: 3
+
+# --- 功能系统 ---
+features:
+  creeper-explosion:
+    enabled: true
+    base-radius: 3.0
+    radius-per-level: 0.3
+    max-radius: 6.0
+    negative-effect:
+      enabled: true
+
+  # 夜间增强AI
+  # 夜间精英怪获得额外速度/伤害/生成率加成
+  night-enhancement:
+    enabled: true
+    speed-bonus: 0.12        # 夜间额外速度
+    damage-multiplier: 1.2   # 夜间伤害倍率
+    spawn-multiplier: 1.5    # 夜间生成倍率
+
+  wall-climb:
+    enabled: true
+    speed: 0.18
+    max-height: 20
+
+  block-break:
+    enabled: true
+    cooldown-ticks: 60
+    restore-blocks: true
+    restore-ticks: 200
+    breakable-blocks: []
+
+  item-steal:
+    enabled: true
+    steal-chance: 0.25
+    cooldown-ticks: 80
+    return-on-death: true
+    max-stolen-items: 3
+
+  damage-scaling:
+    enabled: true
+    damage-per-minute: 0.003
+    damage-per-block: 0.00005
+    max-multiplier: 2.0
+    base-multiplier: 1.0
+
+  weapon-enhancement:
+    enabled: true
+    enchant-chance: 0.40
+    max-enchant-level: 4
+    allow-netherite: false
+
+# --- 精英属性 ---
+elite-stats:
+  health-multiplier-min: 1.2
+  health-multiplier-max: 2.0
+  damage-multiplier-min: 1.0
+  damage-multiplier-max: 1.5
+  speed-multiplier-min: 1.02
+  speed-multiplier-max: 1.15
+
+# --- 精英词缀系统 ---
+# 精英怪随机获得词缀，改变战斗行为与外观（名字后缀 + 专属粒子）
+elite-affixes:
+  enabled: true
+  chance: 0.8            # 精英获得词缀的概率 (0.0-1.0)
+  min-affixes: 1         # 最少词缀数
+  max-affixes: 2         # 最多词缀数
+  # 词缀权重（越大越常见），可把不想要的词缀权重设 0 移除
+  weights:
+    FIRE_AURA: 10    # 火焰: 周期性点燃附近玩家
+    FROST: 10        # 冰霜: 攻击附带减速
+    THORNS: 8        # 荆棘: 近战反伤
+    LIFESTEAL: 6     # 吸血: 攻击时回血
+    BERSERK: 8       # 狂暴: 血量低于30%时攻击提升
+    SPLIT: 5         # 分裂: 死亡时分裂出小精英
+    BLINK: 6         # 瞬移: 周期闪现到玩家身后
+    CHAIN: 8         # 雷链: 周期电击附近玩家
+
+# --- 视觉效果 ---
+visuals:
+  glow:
+    enabled: true
+    min-level: 15          # >= 此等级发高亮光效（改小让更多怪发光）
+  lightning:
+    enabled: true
+    min-level: 10          # >= 此等级生成时产生闪电效果
+  name-tag:
+    enabled: true
+    format: "&c\u2620 &6{type} &7[&4Lv.{level}&7] &e{stars}"
+    visible-range: 32
+  particles:
+    enabled: true
+
+# --- 装备生成 ---
+equipment:
+  weapon-drop-chance: 0.90
+  armor-drop-chance: 1.0
+
+  # 调试
+  debug-enchant: false
+
+  # 护甲生成规则
+  armor-generation:
+    random-materials: true
+    helmet-chance: 1.0
+    chestplate-chance: 0.8
+    leggings-chance: 0.7
+    boots-chance: 0.6
+
+    # 等级缩放公式
+    # 决定各等级护甲材质分布概率
+    # 可选 exponential(0.15) 或 linear
+    #   Lv.1: 皮30% 金11% 锁13% 铁26% 钻15% 下界4%
+    #   Lv.5: 皮10% 金10% 锁17% 铁34% 钻22% 下界7%
+    #   Lv.10: 皮2% 金2% 锁9% 铁19% 钻38% 下界30%
+    # 数值越高越倾向高级 base-multiplier(约0.25)
+    level-scaling:
+      enabled: true
+      formula: "exponential"    # linear 或 exponential
+      base-multiplier: 0.15
+
+    # 材质池权重: 用于随机选择
+    # 格式: LEATHER(皮革) 或 IRON_HELMET/DIAMOND_HELMET 等
+    material-pool:
+      LEATHER: 30
+      GOLDEN_HELMET: 10
+      CHAINMAIL_HELMET: 10
+      IRON_HELMET: 20
+      DIAMOND_HELMET: 10
+      NETHERITE_HELMET: 2
+
+  # 武器附魔池
+  weapon-enchant:
+    enabled: true
+    chance: 0.8
+    enchant-pool:
+      SHARPNESS: 5-40
+      FIRE_ASPECT: 2-20
+      KNOCKBACK: 2-15
+      LOOTING: 3-10
+      UNBREAKING: 3-25
+
+  # 护甲附魔池
+  armor-enchant:
+    enabled: true
+    chance: 0.8
+    min-level: 1
+    max-level: 4
+    enchant-pool:
+      PROTECTION: 4-50
+      UNBREAKING: 3-30
+      THORNS: 3-20
+      BLAST_PROTECTION: 4-15
+      PROJECTILE_PROTECTION: 4-15
+      FEATHER_FALLING: 4-10
+
+# --- 区域保护 ---
+protection:
+  respect-worldguard: true
+  respect-griefprevention: true
+  respect-towny: true
+  respect-factions: true
+  disabled-worlds: []
+  only-enabled-worlds: []
+
+# --- 掉落设置 ---
+loot:
+  enabled: true
+  drop-chance: 0.35
+  xp-bonus-min: 5
+  xp-bonus-max: 30
+  # 精华掉落
+  essence-drops:
+    enabled: true
+    # 各等级段掉落率 (0.0-1.0)
+    level-1-3: 0.15
+    level-4-6: 0.35
+    level-7-9: 0.55
+    level-10: 0.85
+    # 每次掉落数量范围
+    min-amount: 1
+    max-amount: 2
+
+  # 击杀奖励（Vault 金币 + PlayerPoints 点券，均为软依赖，未装自动跳过）
+  rewards:
+    # 金币（需要 Vault + 一个经济插件，如 EssentialsX/CoreProtect 等）
+    money:
+      enabled: true
+      base: 0.0             # 固定基础金币
+      per-level: 5.0        # 每级追加金币（奖励 = base + per-level × 精英等级）
+      boss-multiplier: 3.0  # Boss 再乘以的倍数
+    # 点券（需要 PlayerPoints 插件）
+    points:
+      enabled: true
+      base: 0               # 固定基础点券
+      per-level: 1          # 每级追加点券
+      boss-multiplier: 3.0  # Boss 再乘以的倍数
+    # 连杀加成（连续击杀精英怪不死亡，金币/点券奖励逐渐提升）
+    combo:
+      enabled: true
+      max-multiplier: 3.0   # 最高加成倍数
+      per-kill: 0.1         # 每连杀 1 只提升 0.1 倍
+      reset-on-death: true  # 玩家死亡后连杀清零
+
+# --- LuckPerms 权限组加成 ---
+luckperms:
+  enabled: false
+  groups:
+    - group: "vip"
+      loot-multiplier: 1.2
+      xp-multiplier: 1.1
+    - group: "mvp"
+      loot-multiplier: 1.5
+      xp-multiplier: 1.3
+
+# ============================================
+#  宝石/掉落物配置
+# ============================================
+# 掉落模式说明:
+#   snowygems - 调用 SnowyGems 真实 API 掉落可镶嵌的宝石（需要安装并启用 SnowyGems）
+#   custom    - 使用下方 custom 列表自定义掉落物（无需任何额外插件）
+#   disabled  - 精英怪不掉落宝石/自定义掉落物
+#
+# 注意: 如果模式选择 snowygems 但服务端未安装 SnowyGems,
+#       插件会自动降级为不产生宝石掉落, 并在日志中提示。
+gem-drops:
+  mode: snowygems
+
+  # --- snowygems 模式配置 ---
+  # 真实掉落 SnowyGems 宝石。宝石 ID = SnowyGems 的 gems/*.yml 中的顶层键,
+  # 例如 "生命宝石" / "攻击伤害宝石" / "速度宝石" 等 (用 /em gem list 可查看全部)。
+  # 各等级段可指定不同的宝石池; 留空 [] 表示该等级段从全部已加载宝石中随机。
+  # 若池里写了不存在的 ID 会自动忽略, 池为空时回退为全量随机。
+  snowygems:
+    level-1-3: []
+    level-4-6: []
+    level-7-9: []
+    level-10: []
+    # 单次掉落数量范围
+    amount-min: 1
+    amount-max: 1
+
+  # --- custom 模式配置 (无需 SnowyGems) ---
+  # 服主自主配置精英怪掉落物。每个条目代表一种掉落物。
+  # 支持字段:
+  #   id/material/name/lore/enchants/glow     基础字段
+  #   texture         头颅材质 base64 (material 设为 PLAYER_HEAD 时生效)
+  #   potion-type     药水效果类型 (如 SPEED/STRENGTH/REGENERATION...)
+  #   potion-amplifier 药水等级 (0=一级)
+  #   potion-duration  药水时长 (秒)
+  #   mob-types       限定哪些生物掉落 (如 [ZOMBIE, SKELETON]); 留空 = 所有精英
+  #   chance          各等级段概率 / amount-min / amount-max
+  custom:
+    - id: attack_gem               # 唯一标识 (仅用于日志)
+      material: EMERALD            # 物品材质 (Bukkit Material 名称, 如 DIAMOND / IRON_INGOT)
+      name: "&c攻击宝石"
+      lore:
+        - "&7攻击力 +2"
+        - "&7品质: &f普通"
+      enchants:                    # 附魔: 名称: 等级 (如 SHARPNESS: 2)
+        SHARPNESS: 2
+      glow: true                   # 是否附魔光效
+      # 各等级段掉落概率 (0.0-1.0), 精英怪按自身等级段判定
+      chance:
+        level-1-3: 0.15
+        level-4-6: 0.35
+        level-7-9: 0.55
+        level-10: 0.85
+      amount-min: 1
+      amount-max: 1
+    - id: defense_gem
+      material: DIAMOND
+      name: "&b防御宝石"
+      lore:
+        - "&7护甲值 +2"
+      enchants: {}
+      glow: true
+      chance:
+        level-1-3: 0.10
+        level-4-6: 0.25
+        level-7-9: 0.45
+        level-10: 0.75
+      amount-min: 1
+      amount-max: 1
+    # 头颅纹理示例: 用自定义皮肤头颅做稀有掉落
+    - id: rare_skull
+      material: PLAYER_HEAD
+      texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDFlODQ4ZmU2NTA2MDRkOTY5M2JjODc1YjM3YjU3MGIwNzZhZDM2YzBiZWI0NjE3YzY5ZDUyMGI2Y2I1MjZmMCJ9fX0="
+      name: "&6稀有战利品"
+      lore:
+        - "&7击杀稀有精英获得"
+      mob-types: [ZOMBIE, SKELETON]
+      chance:
+        level-7-9: 0.20
+        level-10: 0.35
+      amount-min: 1
+      amount-max: 1
+    # 药水示例: 掉落速度药水
+    - id: speed_potion
+      material: POTION
+      name: "&a迅捷药水"
+      potion-type: SPEED
+      potion-amplifier: 1
+      potion-duration: 300
+      chance:
+        level-1-3: 0.08
+        level-4-6: 0.12
+        level-7-9: 0.18
+        level-10: 0.25
+      amount-min: 1
+      amount-max: 2
+
+  # --- 掉落总开关 (两种模式共用) ---
+  drops:
+    enabled: true
+    # snowygems 模式: 各等级精英怪掉落宝石的判定概率 (0.0-1.0)
+    # custom 模式: 该开关关闭则完全不掉落 (开启后由各条目的 chance 独立判定)
+    level-1-3: 0.15
+    level-4-6: 0.35
+    level-7-9: 0.55
+    level-10: 0.85
+    # Boss (等级 >= 15 的精英) 判定概率, 通常更高
+    boss-level-1-3: 1.0
+    boss-level-4-6: 1.0
+    boss-level-7-9: 1.0
+    boss-level-10: 1.0

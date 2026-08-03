@@ -1,0 +1,23 @@
+# --- 编译产物 / 打包结果 ---
+classes/
+jar-temp/
+*.jar
+
+# --- IDE / 工具 ---
+.idea/
+.vscode/
+*.iml
+.qwen/
+
+# --- 第三方反编译/依赖 (不要上传) ---
+snowy-temp/
+SnowyGems-0.0.1.jar
+
+# --- 系统文件 ---
+Thumbs.db
+.DS_Store
+
+# --- 运行数据 ---
+*.log
+
+snowy-patch/

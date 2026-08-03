@@ -1,0 +1,48 @@
+name: EliteMobs
+version: '27.0.0'
+main: com.clawx.elitemobs.EliteMobsPlugin
+api-version: '1.21'
+author: ClawX
+description: Highly customizable elite mob plugin with smart AI, wall-climbing, item stealing, block breaking, and scaling difficulty
+prefix: EliteMobs
+folia-supported: true
+load: POSTWORLD
+
+softdepend:
+  - WorldGuard
+  - Multiverse-Core
+  - GriefPrevention
+  - Towny
+  - Lands
+  - Residence
+  - Vault
+  - PlayerPoints
+  - mcMMO
+  - MythicMobs
+  - PlaceholderAPI
+  - LuckPerms
+  - SnowyGems
+
+permissions:
+  elitemobs.use:
+    description: Allows use of /elitemobs base command
+    default: true
+  elitemobs.reload:
+    description: Allows /em reload
+    default: op
+  elitemobs.admin:
+    description: Allows /em info, list, toggle
+    default: op
+  elitemobs.spawn:
+    description: Allows /em spawn
+    default: op
+  elitemobs.bypass:
+    description: Elite mobs won't target you
+    default: false
+
+commands:
+  elitemobs:
+    description: EliteMobs main command
+    usage: /<command> <reload|info|spawn|list|toggle>
+    aliases: [em, emobs]
+    permission: elitemobs.use
