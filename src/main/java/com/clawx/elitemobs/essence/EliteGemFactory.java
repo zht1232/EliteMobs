@@ -163,6 +163,17 @@ public final class EliteGemFactory {
         return lv == null ? 1 : Math.max(1, Math.min(10, lv));
     }
 
+    /** 测试宝石成功率覆盖 PDC 键（0.0=必失败 / 1.0=必成功；无 = 按等级计算）。 */
+    public static final NamespacedKey KEY_GEM_SUCCESS_RATE = new NamespacedKey("elitemobs", "gem_success_rate");
+
+    /** 获取宝石的成功率覆盖值（-1 = 无覆盖按等级计算；0~1 = 强制成功率）。 */
+    public static double getGemSuccessRate(ItemStack item) {
+        if (!isGem(item)) return -1;
+        Double d = item.getItemMeta().getPersistentDataContainer().get(
+                KEY_GEM_SUCCESS_RATE, PersistentDataType.DOUBLE);
+        return d == null ? -1 : d;
+    }
+
     // ==================== 效果计算（按宝石等级，原算法） ====================
 
     /** 攻击宝石：攻击力 = 等级² × 0.5。 */
@@ -176,5 +187,8 @@ public final class EliteGemFactory {
 
     /** 雷电宝石：召唤闪电概率 = 等级越高概率越高（8% + 每级 7%，上限 85%）。 */
     public static double thunderChance(int level) { return Math.min(0.08 + level * 0.07, 0.85); }
+
+    /** 磁力宝石：自动拾取距离 = 3 + 等级（上限 12 格，等级越高吸得越远）。 */
+    public static int magnetRadius(int level) { return Math.min(3 + level, 12); }
 }
 

@@ -52,18 +52,25 @@ public final class EliteRuneFactory {
      *  每个符文标注适用装备：WEAPON=仅武器 / ARMOR=仅护甲。 */
     public static final Map<String, RuneType> TYPES = new LinkedHashMap<>();
     static {
+        // 符文统一为头颅外观，纹理来自 SnowyGems 对应主题宝石（迅捷宝石已改为移速符文）
         TYPES.put("HEALTH", new RuneType("HEALTH", "生命符文", "&c生命符文",
-                Material.REDSTONE, "装备最大生命值 &c+4", "\u2665", "生命值 &c+4", "ARMOR"));
+                Material.REDSTONE, "装备最大生命值 &c+4", "\u2665", "生命值 &c+4", "ARMOR",
+                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDFhNmE0MTFiODAyYjIyZTUzMjQ3OTVjZTM0ZTNjYWU0YTgzNzk2YTE4ZDkyMzMyNjY2Y2JmMjE0ODhjMCJ9fX0="));
         TYPES.put("SPEED", new RuneType("SPEED", "移速符文", "&b移速符文",
-                Material.SUGAR, "装备移动速度 &b+5%", "\u26a1", "移速 &b+5%", "ARMOR"));
+                Material.SUGAR, "装备移动速度 &b+5%", "\u26a1", "移速 &b+5%", "ARMOR",
+                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzA1OGQwODBiZDYyMTU2ZTVmNmU1ZThkZmZhYTI4OTI2YmQ4MzM5MWRjMjZmZTc4MDY3M2VmNTJmMjZlYjA4YiJ9fX0="));
         TYPES.put("STRENGTH", new RuneType("STRENGTH", "力量符文", "&4力量符文",
-                Material.BLAZE_POWDER, "穿戴时获得 &c力量 I &7效果", "\u2694", "力量 &cI", "WEAPON"));
+                Material.BLAZE_POWDER, "穿戴时获得 &c力量 I &7效果", "\u2694", "力量 &cI", "WEAPON",
+                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNTIwNzE2MjAzZGEwMzljYWZjYTI0YmJkOWYzZTliZDVjNjk4NWMzYzI1NTI3YmNkNTA2ZDM4OGU5OWJiN2FmZSJ9fX0="));
         TYPES.put("REGEN", new RuneType("REGEN", "再生符文", "&d再生符文",
-                Material.GHAST_TEAR, "穿戴时获得 &d再生 I &7效果", "\u2668", "再生 &dI", "ARMOR"));
+                Material.GHAST_TEAR, "穿戴时获得 &d再生 I &7效果", "\u2668", "再生 &dI", "ARMOR",
+                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTFlN2ViMmU0NjFlOTZlNjMxY2JhMGMwY2RhYTU0NDg4MDYzMDJlZGFlOTFiNjFkYWZjMjgxYWU1ODRkOCJ9fX0="));
         TYPES.put("RESIST", new RuneType("RESIST", "抗性符文", "&7抗性符文",
-                Material.IRON_INGOT, "穿戴时获得 &7抗性提升 I &7效果", "\u26e8", "抗性 &7I", "ARMOR"));
+                Material.IRON_INGOT, "穿戴时获得 &7抗性提升 I &7效果", "\u26e8", "抗性 &7I", "ARMOR",
+                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOWRhNGU3OWVlZDEzODY1NjcwOGJjMzI1YzQ0MjE5Mjc1MTdjMWMwOGNjOTM5YTc2MDNiOGQxNWE5ZjI0ODU0ZCJ9fX0="));
         TYPES.put("FIRE", new RuneType("FIRE", "火焰符文", "&6火焰符文",
-                Material.FIRE_CHARGE, "穿戴时获得 &6抗火 &7效果", "\u2600", "抗火 &6", "ARMOR"));
+                Material.FIRE_CHARGE, "穿戴时获得 &6抗火 &7效果", "\u2600", "抗火 &6", "ARMOR",
+                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYTRiOTNmNDE1MzJmYzI3ZWY3ZGY5MzNjMTgxYWMzMTY2ZDU2MDM3ZDVjNWZmNzVkMmU4NWFmZTM3Y2EyNTdkMyJ9fX0="));
     }
 
     private EliteRuneFactory() {}
@@ -80,11 +87,13 @@ public final class EliteRuneFactory {
         public final String effect;
         /** 适用装备：WEAPON=仅武器 / ARMOR=仅护甲 */
         public final String target;
+        /** 头颅纹理（符文统一为 PLAYER_HEAD 头颅外观） */
+        public final String texture;
         RuneType(String id, String displayName, String coloredName, Material material, String desc,
-                 String icon, String effect, String target) {
+                 String icon, String effect, String target, String texture) {
             this.id = id; this.displayName = displayName; this.coloredName = coloredName;
             this.material = material; this.desc = desc; this.icon = icon; this.effect = effect;
-            this.target = target;
+            this.target = target; this.texture = texture;
         }
         /** 是否为武器符文 */
         public boolean isWeapon() { return "WEAPON".equals(target); }
@@ -117,9 +126,14 @@ public final class EliteRuneFactory {
         RuneType t = TYPES.get(typeId.toUpperCase());
         if (t == null) t = TYPES.get("HEALTH");
         level = Math.max(1, Math.min(10, level));
-        ItemStack stack = new ItemStack(t.material);
+        // 符文统一为头颅外观（各符文主题纹理）
+        ItemStack stack = new ItemStack(Material.PLAYER_HEAD);
         ItemMeta meta = stack.getItemMeta();
         if (meta == null) return stack;
+        if (meta instanceof org.bukkit.inventory.meta.SkullMeta skull
+                && t.texture != null && !t.texture.isEmpty()) {
+            com.clawx.elitemobs.essence.EliteEssenceFactory.applyTexture(skull, t.texture);
+        }
 
         String name = msg(msgs, "rune.name", t.coloredName);
         meta.setDisplayName(ChatColor.translateAlternateColorCodes('&',

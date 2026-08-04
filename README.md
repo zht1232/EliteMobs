@@ -2,9 +2,9 @@
 
 # ⚔️ EliteMobs
 
-**高度可定制的精英怪插件 · Paper 1.21+ / Paper 26.x**
+**高度可定制的精英怪插件 · Paper 1.21+ / Paper 26.x · Java 25**
 
-为生存服务器打造的精英怪系统：随机词缀、职业 AI、Boss、自定义掉落、经济奖励与占位符支持。
+为生存服务器打造的精英怪系统：等级 / 职业 / Boss / 词缀 AI、铁砧宝石淬炼、符文镶嵌、掉落与经济闭环。
 
 </div>
 
@@ -13,56 +13,68 @@
 ## ✨ 功能总览
 
 ### 🎯 精英怪核心
-- **等级系统**：精英怪 1–20 级，随等级成长
-  - 85% → 1–10 级 · 12% → 11–14 级 · 3% → 15–20 级（可晋升 Boss）
-- **职业系统**：4 种职业，各有专属 AI 与特效
-  - 🛡️ 坦克：血量加成、击退免疫、护盾环
+- **等级系统**：精英怪 1–20 级（85% → 1-10 / 12% → 11-14 / 3% → 15-20，可晋升 Boss）
+- **职业系统**：4 种职业，各有专属 AI 与粒子特效
+  - 🛡️ 坦克：血量加成、击退免疫、减伤光环
   - 🗡️ 刺客：速度加成、隐身、暴击、残影
   - 🔮 法师：抗性、远程火球/药水、脚下六芒星法阵
-  - 👹 召唤师：血量加成、召唤护卫、黑暗漩涡
-- **Boss 系统**：15 级以上精英可晋升 Boss
-  - 3 倍血量 + 抗性/速度、专属血条（80 格内可见）
+  - 👹 召唤师：召唤护卫、暗能漩涡
+- **Boss 系统**：Lv.15+ 精英可晋升 Boss
+  - 3 倍血量、专属血条（80 格内可见）
+  - **生成全服广播（含坐标）**
+  - **第二阶段**：血量低于阈值（默认 50%）时全服广播 + 狂暴强化（力量/速度/抗性）+ 血条变紫 + 闪电特效
   - 技能：冲击波 / 治愈 / 召唤护卫
-- **AI 行为**：爬墙（蜘蛛类）、破块（僵尸类）、偷窃（偷玩家装备）
-- **套装效果**：2 件加速、4 件生命恢复 + 减伤
+- **AI 行为**：爬墙、破块、偷窃（偷玩家装备，死亡可掉落返还）
+- **强制索敌**：精英每 1 秒主动锁定范围内最近玩家（`general.target-range`），
+  玩家拥有 `elitemobs.bypass` 权限或跑出索敌范围则自动换目标——可应对"玩家免疫追击"类插件的干扰
+- **套装加成**：按 4 件护甲 `armor_lv` 之和判定（减伤/速度/再生，阈值与强度可配置）
+- **精英词缀**：8 种词缀（火焰/冰霜/荆棘/吸血/狂暴/分裂/瞬移/雷链），权重可配置
 
-### 🔥 精英词缀系统
-精英怪生成时随机获得 **1–2 个词缀**，改变外观（名字后缀 `[火焰]`）与战斗方式：
+### 💠 宝石系统（铁砧淬炼）
 
-| 词缀 | 效果 |
+**6 种宝石**（`plugins/EliteMobs/gems/*.yml`，头颅外观，Lv.1-10）：
+
+| 宝石 | 效果 | 适用 |
+|------|------|------|
+| 🗡 攻击宝石 `attack_gem` | 攻击力 + 等级² × 0.5 | 武器 |
+| 🛡 防御宝石 `defense_gem` | 护甲减伤 + 等级 × 1.5（上限 15） | 护甲 |
+| ⚡ 雷电宝石 `thunder_gem` | 攻击概率召雷（8% + 7%/级，上限 85%） | 武器 |
+| 💨 击退宝石 `knockback_gem` | 稳定击退（力量 0.4 + 等级×0.12） | 武器 |
+| 🧲 磁力宝石 `magnet_gem` | 自动拾取掉落物（距离 3 + 等级，上限 12 格） | 武器/护甲 |
+| 💎 稀有战利品 `rare_skull` | 无加成（收藏） | 武器 |
+
+**淬炼机制**（仿原版 EliteEssenceUpgrade）：
+- **槽位解锁**：宝石槽 1/2/3/4 于宝石等级和 0+/3+/6+/10+；符文槽 0/1/2/3/4 于 0/1+/4+/8+/12+
+- **成功率** = `35% + (宝石等级-1) × 4.5%`，封顶 95%，**由宝石自身等级决定**
+- 成功：该宝石 +1 级（新宝石从 Lv.1 起）；失败：宝石消耗 + 降级（1-3降1/4-6降2/7-9降3/10+降4）
+- **首次淬炼失败会摧毁装备**；淬炼总等级归零还原成原版后，再失败也会摧毁
+- **淬炼保护符**：失败防降级/防摧毁（符 + 宝石仍消耗）
+- **宝石拆卸器**：铁砧一次拆下全部宝石与符文——宝石按 Lv.X 返还 X 颗 Lv.X-1，符文按自身等级返还
+- **测试宝石**：`/em gem test <0|100> [宝石] [数量]` 发放必失败/必成功宝石，方便测试降级与销毁
+
+### 🎴 符文系统（6 种，头颅外观）
+符文"几级装几级、不可合并"，槽位由宝石等级之和解锁，镶嵌消耗金币 + 点券 + 经验（可配置）。
+
+| 符文 | 效果 |
 |------|------|
-| 🔥 火焰 | 周期性点燃周围玩家 |
-| ❄️ 冰霜 | 攻击附带减速 |
-| 🌿 荆棘 | 近战反伤 |
-| 🩸 吸血 | 攻击时回复生命 |
-| 💢 狂暴 | 低血时攻击力提升 |
-| 👻 分裂 | 死亡时分裂小精英 |
-| ✨ 瞬移 | 周期闪现到玩家身后 |
-| ⚡ 雷链 | 周期电击周围玩家 |
-
-> 词缀权重可在 `config.yml` 中调整，不想要的词缀权重设 `0` 即可移除。
+| ❤ 生命 `HEALTH` | 最大生命 +4 × Lv |
+| ⚡ 移速 `SPEED` | 移速 +5% × Lv |
+| ⚔ 力量 `STRENGTH` | 力量 I~IV |
+| 💚 再生 `REGEN` | 再生 I~IV |
+| 🛡 抗性 `RESIST` | 抗性 I~IV |
+| 🔥 火焰 `FIRE` | 抗火 |
 
 ### 💎 掉落系统
-`gem-drops.mode` 支持两种模式：
-- **`custom`**（默认）：服主完全自主配置精英怪掉落物，支持材质 / 名称 / Lore / 附魔 / 光效 / **自定义头颅纹理** / **药水效果** / **按生物类型限定** / 各等级段概率 / 数量
-- **`disabled`**：不掉落
-
-### 💠 内置宝石系统（铁砧淬炼）
-- **宝石来源**：精英怪按等级段掉落宝石 + 战利品袋（右键开出），或管理员用 `/em gem give` 发放
-- **宝石配置**：`plugins/EliteMobs/gems/*.yml`（分 weapon / armor / enchant / special 四类）
-- **淬炼玩法**：将「装备 + 宝石」放入铁砧 → 结果槽显示成功率预览 → 点击淬炼
-  - 成功：宝石生效（武器攻击 / 护甲套装减伤 / 附魔 / 无限耐久等）+ 烟花庆祝
-  - 失败：宝石消失，装备可能降级（携带「淬炼保护符」可避免）
+掉落优先级 **宝石 > 保护符 >>> 符文**：
+- **宝石**：按精英等级段概率（15% / 35% / 55% / 85%，Boss ×1.5），成功掉 **1-2 颗（Boss 2-4 颗）**，每颗从 `gems/*.yml` 按各自权重随机
+- **保护符**：`gem-drops.charm-drop-chance`（默认 8%，Boss ×1.5）
+- **符文**：`rune.drops.chance`（默认 2%，Boss ×2），符文等级 = `base + 精英等级/divisor`（可配置）
 
 ### 💰 经济奖励
-击杀精英怪发放奖励（Vault + PlayerPoints，均为软依赖）：
-- **金币**（Vault）：`base + per-level × 等级`，Boss × 倍数
-- **点券**（PlayerPoints）：同上
-- **连杀系统**：连续击杀精英，奖励逐步提升（可配置最高倍数、死亡清零）
-- **LuckPerms**：`loot-multiplier` 同时作用于金币/点券/掉落/经验
+击杀精英发放奖励（Vault + PlayerPoints，软依赖）：金币 / 点券 / **连杀加成** / **LuckPerms 组倍率**（掉落、经验、奖励）。
 
 ### 🔌 PlaceholderAPI
-安装 PlaceholderAPI 后自动注册 `%elitemobs_*` 占位符（见下方列表）。
+安装后自动注册 `%elitemobs_*` 占位符（见下方列表）。
 
 ---
 
@@ -70,21 +82,25 @@
 
 | 指令 | 权限 | 说明 |
 |------|------|------|
-| `/em spawn <类型> [等级]` | `elitemobs.spawn` | 手动生成精英怪 |
-| `/em boss <类型> [等级]` | `elitemobs.admin` | 在脚下生成 Boss |
-| `/em gem list` | `elitemobs.admin` | 列出所有宝石 |
-| `/em gem give <ID> [数量]` | `elitemobs.admin` | 发放宝石（Tab 补全 ID） |
-| `/em gem bag [数量]` | `elitemobs.admin` | 发放战利品袋 |
-| `/em particle <职业>` | `elitemobs.admin` | 测试职业粒子特效 |
+| `/em reload` | `elitemobs.reload` | 重载配置 |
+| `/em info` | `elitemobs.admin` | 查看插件状态 |
+| `/em spawn <类型> [等级]` | `elitemobs.spawn` | 手动生成精英 |
+| `/em list` | `elitemobs.admin` | 活跃精英数量 |
+| `/em toggle` | `elitemobs.admin` | 开关精英生成 |
 | `/em test [类型] [等级] [数量]` | `elitemobs.admin` | 批量生成测试 |
 | `/em wave [种类数]` | `elitemobs.admin` | 生成精英波 |
-| `/em clear` | `elitemobs.admin` | 清除附近精英怪 |
+| `/em clear` | `elitemobs.admin` | 清除附近精英 |
 | `/em stat [类型] [等级]` | `elitemobs.admin` | 预览精英属性 |
 | `/em stealtest` | `elitemobs.admin` | 偷窃行为测试 |
-| `/em reload` | `elitemobs.reload` | 重载配置 |
-| `/em list` | `elitemobs.admin` | 查看活跃精英数量 |
-| `/em toggle` | `elitemobs.admin` | 开关精英生成 |
-| `/em info` | `elitemobs.admin` | 查看插件状态 |
+| `/em boss <类型> [等级]` | `elitemobs.admin` | 生成 Boss |
+| `/em particle <职业>` | `elitemobs.admin` | 测试职业粒子 |
+| `/em gem list` | `elitemobs.admin` | 列出所有宝石 |
+| `/em gem give <id> [等级] [数量]` | `elitemobs.admin` | 发放宝石（Tab 补全） |
+| `/em gem charm [数量]` | `elitemobs.admin` | 发放淬炼保护符 |
+| `/em gem remover [数量]` | `elitemobs.admin` | 发放宝石拆卸器 |
+| `/em gem test <0\|100> [id] [数量]` | `elitemobs.admin` | 发放指定成功率测试宝石 |
+| `/em rune list` | `elitemobs.admin` | 列出符文类型 |
+| `/em rune give <类型> [等级] [数量]` | `elitemobs.admin` | 发放符文 |
 
 ---
 
@@ -96,7 +112,7 @@
 | `elitemobs.reload` | op | 重载配置 |
 | `elitemobs.admin` | op | 管理/测试指令 |
 | `elitemobs.spawn` | op | 手动生成 |
-| `elitemobs.bypass` | ❌ false | 精英怪不攻击该玩家 |
+| `elitemobs.bypass` | ❌ false | 精英怪不锁定该玩家 |
 
 ---
 
@@ -106,7 +122,7 @@
 - **Paper 1.21+ / Paper 26.x**
 - **Java 25**
 
-### 可选（均为软依赖，未装自动跳过）
+### 可选（软依赖，未装自动跳过）
 | 插件 | 用途 |
 |------|------|
 | Vault + 经济插件 | 击杀金币奖励 |
@@ -122,117 +138,92 @@
 
 配置文件：`plugins/EliteMobs/config.yml`
 
-### 基础
+### 基础与索敌
 ```yaml
 general:
   enabled: true
   elite-spawn-chance: 0.01      # 精英生成概率
   max-elites-per-chunk: 2
   enabled-mob-types: []          # 空 = 使用默认生物列表
+  target-range: 16              # 精英主动索敌范围（格），应对免疫追击插件
 ```
 
-### 精英词缀
+### 护甲套装加成
 ```yaml
-elite-affixes:
+armor-set-bonus:                # 判定: 4 件护甲 armor_lv 之和
   enabled: true
-  chance: 0.8                   # 获得词缀概率
-  min-affixes: 1
-  max-affixes: 2
-  weights:
-    FIRE_AURA: 10               # 权重设为 0 可移除该词缀
-    FROST: 10
-    THORNS: 8
-    LIFESTEAL: 6
-    BERSERK: 8
-    SPLIT: 5
-    BLINK: 6
-    CHAIN: 8
+  reduction-per-level: 2.0      # 每点套装等级减伤 %
+  max-reduction: 20.0           # 减伤封顶 %
+  speed-level: 6                # 套装等级达此值获得速度 I
+  regen-level: 10               # 套装等级达此值获得再生 I + 粒子
 ```
 
-### 掉落模式
+### Boss 第二阶段
+```yaml
+boss-phase2:
+  enabled: true
+  hp-ratio: 0.5                 # 血量低于 50% 触发第二阶段（广播+狂暴+血条变紫）
+```
+
+### 掉落（宝石 > 保护符 >>> 符文）
 ```yaml
 gem-drops:
   mode: custom                  # custom / disabled
-  custom:
-    - id: attack_gem
-      material: EMERALD
-      name: "&c攻击宝石"
-      lore:
-        - "&7攻击力 +2"
-      enchants:
-        SHARPNESS: 2
-      glow: true
-      chance:                   # 各等级段掉落概率
-        level-1-3: 0.15
-        level-4-6: 0.35
-        level-7-9: 0.55
-        level-10: 0.85
-      amount-min: 1
-      amount-max: 1
-    # 自定义头颅纹理
-    - id: rare_skull
-      material: PLAYER_HEAD
-      texture: "eyJ0ZXh0dXJlcyI6..."
-      name: "&6稀有战利品"
-      mob-types: [ZOMBIE, SKELETON]   # 限定生物
-    # 药水掉落
-    - id: speed_potion
-      material: POTION
-      potion-type: SPEED
-      potion-amplifier: 1
-      potion-duration: 300
-  # 内置宝石掉落（铁砧淬炼宝石）
-  gems:
-    level-1-3: 0.15
+  drops:
+    level-1-3: 0.15             # 各等级段宝石掉落概率
     level-4-6: 0.35
     level-7-9: 0.55
     level-10: 0.85
-    amount-min: 1
-    amount-max: 1
-  # 战利品袋（右键开出宝石）
-  lootbag:
+  gems:
+    amount-min: 1               # 普通精英掉落颗数
+    amount-max: 2
+    boss-min: 2                 # Boss 掉落颗数
+    boss-max: 4
+  charm-drop-chance: 0.08       # 保护符掉落概率（8%）
+rune:
+  install-cost:
+    money: 1000.0               # 符文镶嵌消耗
+    points: 50
+    xp-levels: 30
+  drops:
     enabled: true
-    chance: 0.10
-    boss-chance: 0.50
+    chance: 0.02                # 符文掉落概率（2%，Boss ×2）
+    level-base: 1               # 符文掉落等级公式: base + 精英等级/divisor
+    level-divisor: 3
+    max-level: 10
+```
+
+### 淬炼成功率
+```yaml
+essence-upgrade:
+  base-rate: 0.35               # 基础成功率（Lv.1 宝石）
+  per-level: 0.045              # 每级宝石额外成功率
+  max-rate: 0.95                # 成功率上限
+  weapon-damage-multiplier: 0.5 # 武器淬炼攻击力系数（等级²×系数）
+  armor-bonus-per-level: 1.5    # 护甲每级减伤
+  armor-max-bonus: 15.0         # 护甲减伤上限
 ```
 
 ### 宝石配置（gems/*.yml）
-宝石配置分 4 个文件：`weapon-gems.yml` / `armor-gems.yml` / `enchant-gems.yml` / `special-gems.yml`。每颗宝石格式：
-```yaml
-攻击宝石:
-  Name: 攻击宝石
-  Require: [WEAPON]            # 可淬炼的装备类别
-  Display: "&8&l&k||&c&l攻击宝石&8&l&k||"   # 边框样式
-  Tips:                        # lore
-    - "&7将装备与此宝石放入 &b铁砧&7 淬炼"
-    - "&7武器攻击力&c+1 &7(上限20)"
-  Texture: "eyJ0ZXh0dXJlcyI6..."   # 头颅纹理 base64
-  Success: 100                 # 成功率 1-100
-  SuccessTip: "&f淬炼成功！武器攻击力+1"
-  Rewards:
-    - Attribute{name=damage;operation=0;slot=auto;var=v+1;limit=20}
-```
-可用 Rewards：`Attribute{...}` / `Enchant{...}` / `LoreAdd{...}` / `Name{...}` / `Unbreakable` / `Durability{...}`。
+每个文件 = 一颗宝石，复制改名即可新增。字段：`id / material / name / lore / effect / max-level / texture / glow / chance / amount-min / amount-max / mob-types / enchants / potion-type / potion-amplifier / potion-duration`
 
-### 经济奖励
 ```yaml
-loot:
-  rewards:
-    money:
-      enabled: true
-      base: 0.0
-      per-level: 5.0
-      boss-multiplier: 3.0
-    points:
-      enabled: true
-      base: 0
-      per-level: 1
-      boss-multiplier: 3.0
-    combo:                       # 连杀加成
-      enabled: true
-      max-multiplier: 3.0
-      per-kill: 0.1
-      reset-on-death: true
+id: attack_gem
+material: PLAYER_HEAD
+texture: "eyJ0ZXh0dXJlcyI6..."
+name: "&c&l攻击宝石"
+effect: attack                 # attack / defense / thunder / knockback / magnet / rare
+max-level: 10
+lore:
+  - "&7攻击力 = 等级² × 0.5"
+glow: true
+chance:
+  level-1-3: 0.15
+  level-4-6: 0.35
+  level-7-9: 0.55
+  level-10: 0.85
+amount-min: 1
+amount-max: 1
 ```
 
 ---
@@ -254,7 +245,7 @@ loot:
 1. 下载 `EliteMobs-29.0.0.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
-4. 首次启动自动生成 `config.yml`
+4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
 5. 按需修改配置后执行 `/em reload`
 
 ---
@@ -262,43 +253,21 @@ loot:
 ## 📝 更新日志
 
 ### v29.0.0
-- ✅ **宝石统一淬炼系统重构**
+- ✅ **宝石统一淬炼系统重构**（6 种宝石：攻击/防御/雷电/击退/磁力/稀有）
   - 多宝石槽 + 独立等级，宝石/符文槽数量按宝石等级之和解锁
-  - 淬炼成功率基于宝石自身等级，成功等级 +1（新宝石从 Lv.1 开始）
-  - 宝石改为头颅外观，Lore 显示品质 / 等级 / 成功率
-- ✅ 修复：多次淬炼覆盖原生伤害 / 失败降级名字·Lore 错乱 / 移速数值与 Lore 不符 / 伤害显示口径
-- ✅ 符文改为通用：任意符文可镶嵌任意已淬炼装备
-- ✅ 新增**宝石拆卸器**：铁砧拆卸所有宝石，返还宝石（等级流失）
-- ✅ 指令精简（统一 `/em gem give`）与中文修正
+  - 淬炼成功率基于宝石自身等级，成功 +1 级；失败降级；首次淬炼失败摧毁装备
+  - 宝石均为头颅外观，Lore 显示品质 / 等级 / 成功率
+- ✅ **符文改头颅**：6 种符文（生命/移速/力量/再生/抗性/火焰），主题纹理，"几级装几级、不可合并"
+- ✅ **新增磁力宝石**：自动拾取，距离随等级提升（上限 12 格）
+- ✅ **新增宝石拆卸器**：一次拆卸全部宝石 + 符文并返还；修复拆卸/还原后属性残留
+- ✅ **新增测试宝石指令** `/em gem test <0|100>`
+- ✅ **Boss 第二阶段** + 生成广播含坐标
+- ✅ **护甲套装加成可配置**（`armor-set-bonus`），默认阈值调高
+- ✅ **强制索敌**（`general.target-range`）：应对"玩家免疫追击"插件；目标跑远自动换目标
+- ✅ **掉落重做**：宝石 > 保护符 >>> 符文；多颗宝石按权重随机；修复掉落概率配置读取
+- ✅ 修复：淬炼覆盖原生伤害 / 名字·Lore 错乱 / 攻击显示与工具条不一致（含自定义武器）/ 槽位 Lore 显示锁定宝石
 
 ### v28.0.0
-- ✅ **内置宝石系统**：移除 SnowyGems 依赖，自研宝石 + 铁砧淬炼玩法
-  - 配置在 `plugins/EliteMobs/gems/*.yml`，支持属性/附魔/药水/战利品等宝石
-  - **铁砧淬炼**：装备+宝石 → 成功率预览 → 点击淬炼
-  - 淬炼成功：烟花粒子 + 庆祝音效
-- ✅ 修复：精英护甲套装加成（armor_lv）实际生效
-- ✅ 掉落增强：宝石按等级段掉落 + 战利品袋（右键开袋）
-- ✅ 保留：custom 自定义掉落 / Vault 金币 / PlayerPoints 点券 / PlaceholderAPI
-
-### v27.0.0
-- ✅ 精英词缀系统（8 种词缀，可配置权重）
-- ✅ 掉落系统：`custom` 自定义掉落（头颅纹理/药水/按生物限定）
-- ✅ 经济奖励：Vault 金币 + PlayerPoints 点券 + 连杀系统 + LuckPerms 倍数
-- ✅ PlaceholderAPI 占位符扩展
-- ✅ 职业系统、Boss 系统、AI 行为、套装效果、粒子特效
-- ✅ 修复 Paper 26.x 兼容性（粒子 API 等）
-
----
-
-## 🐛 反馈
-
-遇到问题请提供：
-1. 服务器版本（Paper 版本号）
-2. 相关日志片段（`logs/latest.log`）
-3. 复现步骤
-
----
-
-**作者**：ClawX  
-**适用**：Paper 1.21+ / Paper 26.x · Java 21+  
-**许可**：保留所有权利
+- ✅ 内置宝石系统（自研铁砧淬炼，移除 SnowyGems 依赖）
+- ✅ 修复精英护甲套装加成实际生效
+- ✅ 掉落增强：宝石按等级段掉落

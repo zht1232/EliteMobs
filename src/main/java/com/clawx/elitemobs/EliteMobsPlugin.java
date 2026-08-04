@@ -64,6 +64,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
         combatListener = new EliteCombatListener(this);
         getServer().getPluginManager().registerEvents(combatListener, this);
         combatListener.startSetBonusTask();
+        combatListener.startMagnetTask();
+        combatListener.startTargetTask();
         getServer().getPluginManager().registerEvents(wallClimbAI, this);
         getServer().getPluginManager().registerEvents(blockBreakAI, this);
         getServer().getPluginManager().registerEvents(itemStealAI, this);
@@ -111,7 +113,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private void saveDefaultGems() {
         File dir = new File(getDataFolder(), "gems");
         if (!dir.isDirectory() && !dir.mkdirs()) return;
-        for (String name : new String[]{"attack_gem.yml", "defense_gem.yml", "rare_skull.yml", "speed_potion.yml", "thunder_gem.yml", "knockback_gem.yml"}) {
+        for (String name : new String[]{"attack_gem.yml", "defense_gem.yml", "rare_skull.yml", "magnet_gem.yml", "thunder_gem.yml", "knockback_gem.yml"}) {
             File f = new File(dir, name);
             if (!f.exists()) saveResource("gems/" + name, false);
         }

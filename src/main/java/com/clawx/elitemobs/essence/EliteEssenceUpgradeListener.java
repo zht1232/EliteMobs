@@ -208,9 +208,12 @@ public class EliteEssenceUpgradeListener implements Listener {
             return;
         }
 
-        // 成功率: 基于宝石自身等级（与原版一致：宝石等级决定成功率，与装备当前等级无关）
-        double rate = Math.min(cfg.getEssenceUpgradeBaseRate() + (gemLevel - 1) * cfg.getEssenceUpgradePerLevel(),
-                cfg.getEssenceUpgradeMaxRate());
+        // 成功率: 基于宝石自身等级；测试宝石可用 gem_success_rate 覆盖（0=必失败 / 1=必成功）
+        double rate = EliteGemFactory.getGemSuccessRate(gem);
+        if (rate < 0) {
+            rate = Math.min(cfg.getEssenceUpgradeBaseRate() + (gemLevel - 1) * cfg.getEssenceUpgradePerLevel(),
+                    cfg.getEssenceUpgradeMaxRate());
+        }
         boolean ok = rng.nextDouble() < rate;
 
         // 首次放入宝石时保存原版 Lore 与显示名（供还原）
@@ -356,7 +359,7 @@ public class EliteEssenceUpgradeListener implements Listener {
         }
     }
 
-    /** 拆卸所有宝石：装备上每颗宝石等级 X → 返还 X 颗宝石，每颗等级 max(1,X-1)（等级流失1级）。 */
+    /** 拆卸所有宝石与符文：宝石每颗等级 X → 返还 X 颗宝石（每颗 Lv.max(1,X-1)），符文按自身等级返还。 */
     private void doGemRemoveAll(Player player, Inventory inv, ItemStack equip) {
         String[] ids = EliteGemFactory.getInstalledGems(equip);
         int[] lvs = EliteGemFactory.getInstalledGemLevels(equip);
@@ -370,13 +373,29 @@ public class EliteEssenceUpgradeListener implements Listener {
                 outLvs.add(lvs[i]);
             }
         }
-        if (outIds.isEmpty()) {
+        // 收集所有符文（类型 + 等级）
+        List<String> runeTypes = new ArrayList<>();
+        List<Integer> runeLvs = new ArrayList<>();
+        if (equip != null && equip.hasItemMeta()) {
+            var rpdc = equip.getItemMeta().getPersistentDataContainer();
+            for (int i = 0; i < com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS.length; i++) {
+                String type = rpdc.get(com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS[i],
+                        PersistentDataType.STRING);
+                if (type != null) {
+                    Integer lvI = rpdc.get(com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOT_LEVELS[i],
+                            PersistentDataType.INTEGER);
+                    runeTypes.add(type);
+                    runeLvs.add(lvI == null ? 1 : Math.max(1, Math.min(10, lvI)));
+                }
+            }
+        }
+        if (outIds.isEmpty() && runeTypes.isEmpty()) {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&c✘ 该装备没有可拆卸的宝石！"));
+                    "&c✘ 该装备没有可拆卸的宝石/符文！"));
             return;
         }
 
-        // 还原装备（清空全部宝石槽/符文/属性加成/名字/Lore/光效）
+        // 还原装备（清空全部宝石/符文槽/属性加成/名字/Lore/光效）
         revertToOriginal(equip);
 
         // 返还宝石：X 颗，每颗等级 max(1, X-1)（流失1级，最低1级）
@@ -398,6 +417,15 @@ public class EliteEssenceUpgradeListener implements Listener {
                 total += batch;
             }
         }
+        // 返还符文：按自身等级（符文几级装几级，不流失）
+        int runeTotal = 0;
+        for (int k = 0; k < runeTypes.size(); k++) {
+            ItemStack rune = com.clawx.elitemobs.rune.EliteRuneFactory.createRune(
+                    runeTypes.get(k), runeLvs.get(k), plugin.getMessages());
+            player.getInventory().addItem(rune).values().forEach(
+                    d -> player.getWorld().dropItemNaturally(player.getLocation(), d));
+            runeTotal++;
+        }
 
         // 刷新铁砧：还原后的装备放回 slot0 + 消耗拆卸器
         ItemStack finalEquip = equip;
@@ -410,7 +438,10 @@ public class EliteEssenceUpgradeListener implements Listener {
         player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 "  &d&l✦ &f宝石拆卸成功！ &d&l✦"));
         player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "  &7已拆卸所有宝石，返还 &e" + total + " &7颗宝石（等级已流失）"));
+                "  &7已拆卸并返还 &e" + total + " &7颗宝石（等级流失）"
+                        + (runeTotal > 0 ? "，&d" + runeTotal + " &7颗符文" : "")));
+        player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                "  &7装备已还原为原版（属性/名字/Lore/光效已清除）"));
         player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 "  &8&m------------------------------------&r"));
     }
@@ -430,28 +461,64 @@ public class EliteEssenceUpgradeListener implements Listener {
         return null;
     }
 
-    /** 宝石是否匹配装备类型（attack/knockback/thunder/speed/rare→武器；defense→护甲）。 */
+    /** 宝石是否匹配装备类型（attack/knockback/thunder/rare→武器；defense→护甲；magnet→两者均可）。 */
     private boolean gemFitsEquip(ItemStack equip, String effect) {
         boolean weapon = isWeapon(equip);
         return switch (effect == null ? "" : effect.toLowerCase()) {
-            case "attack", "knockback", "thunder", "speed", "rare" -> weapon;
+            case "attack", "knockback", "thunder", "rare" -> weapon;
             case "defense" -> isArmor(equip);
+            case "magnet" -> true;   // 磁力宝石：武器/护甲均可
             default -> true;
         };
     }
 
     /** 读取武器当前实际攻击伤害：Minecraft 实际伤害 = 玩家基础 1 + 所有 ATTACK_DAMAGE ADD_NUMBER modifier 之和（含淬炼加成），与游戏工具提示/实际伤害一致。 */
+    /** 读取武器当前实际攻击伤害：游戏工具条显示的总攻击 = 基础 1 + 修饰符之和（与真实伤害一致）。
+     *  优先读物品 DataComponent 中的真实修饰符（排除淬炼自带的 elite_damage），
+     *  读不到（如纯原版默认组件）时回退到原版伤害表；再叠加已装攻击宝石加成。
+     *  兼容非标准/自定义武器（如矛类，其修饰符在 DataComponent 中可读）。 */
     private double getActualWeaponDamage(ItemStack item) {
-        double sum = 1.0; // 玩家基础空手伤害（工具提示显示的攻击伤害包含它）
-        if (item != null && item.hasItemMeta()) {
-            var mods = item.getItemMeta().getAttributeModifiers(Attribute.ATTACK_DAMAGE);
-            if (mods != null) {
-                for (AttributeModifier m : mods) {
-                    if (m.getOperation() == AttributeModifier.Operation.ADD_NUMBER) sum += m.getAmount();
+        if (item == null) return 0.0;
+        double dmg = 0.0;
+        boolean found = false;
+        NamespacedKey eliteKey = new NamespacedKey(plugin, "elite_damage");
+        ItemAttributeModifiers am = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (am != null) {
+            for (ItemAttributeModifiers.Entry e : am.modifiers()) {
+                if (e.attribute() == Attribute.ATTACK_DAMAGE
+                        && e.modifier().getOperation() == AttributeModifier.Operation.ADD_NUMBER
+                        && !e.modifier().getKey().equals(eliteKey)) {
+                    dmg += e.modifier().getAmount();
+                    found = true;
                 }
             }
         }
-        return sum;
+        // 第二层：DataComponent 读不到时尝试 Bukkit API（可能返回默认修饰符，兼容自定义武器）
+        if (!found && item.hasItemMeta()) {
+            var mods = item.getItemMeta().getAttributeModifiers(Attribute.ATTACK_DAMAGE);
+            if (mods != null) {
+                for (AttributeModifier m : mods) {
+                    if (m.getOperation() == AttributeModifier.Operation.ADD_NUMBER
+                            && !m.getKey().equals(eliteKey)) {
+                        dmg += m.getAmount();
+                        found = true;
+                    }
+                }
+            }
+        }
+        // 第三层：仍读不到时回退到原版伤害表（最后手段）
+        if (!found) dmg = getVanillaBaseDamage(item.getType());
+        // 基础 1.0（工具条总攻击 = 基础 1 + 修饰符之和）
+        dmg += 1.0;
+        // 加上已装攻击宝石加成
+        String[] ids = EliteGemFactory.getInstalledGems(item);
+        int[] lvs = EliteGemFactory.getInstalledGemLevels(item);
+        for (int i = 0; i < EliteGemFactory.MAX_GEM_SLOTS; i++) {
+            if (ids[i] != null && "attack".equals(gemEffectFor(ids[i]))) {
+                dmg += EliteGemFactory.attackBonus(lvs[i]);
+            }
+        }
+        return dmg;
     }
 
     /** 根据等级返回失败降级数。 */
@@ -473,7 +540,7 @@ public class EliteEssenceUpgradeListener implements Listener {
                 case "attack" -> attack += EliteGemFactory.attackBonus(lvs[i]);
                 case "defense" -> defense += EliteGemFactory.defenseBonus(lvs[i]);
                 case "knockback" -> knockback = Math.max(knockback, EliteGemFactory.knockbackLevel(lvs[i]));
-                case "speed" -> speed += 0.002 * lvs[i]; // 每级 +2% 基础移速（基础 0.1，2% = 0.002，与 lore 一致）
+                // 迅捷宝石已改为移速符文；speed 保留用于下方以 0 清除旧数据的移速 modifier
                 default -> {}
             }
         }
@@ -542,6 +609,26 @@ public class EliteEssenceUpgradeListener implements Listener {
         for (NamespacedKey k : com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS) pdc.remove(k);
         for (NamespacedKey k : com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOT_LEVELS) pdc.remove(k);
         equip.setItemMeta(meta);
+        // 移除本插件添加的全部属性加成（淬炼攻击/防御/移速 + 符文生命/移速），避免拆卸/还原后残留
+        removePluginAttributeModifiers(equip);
+    }
+
+    /** 移除装备上本插件添加的全部属性修饰符（淬炼攻击/防御/移速 + 符文生命/移速），用于拆卸/还原时清理。 */
+    private void removePluginAttributeModifiers(ItemStack item) {
+        ItemAttributeModifiers existing = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (existing == null) return;
+        Set<NamespacedKey> keys = Set.of(
+                new NamespacedKey(plugin, "elite_damage"),
+                new NamespacedKey(plugin, "elite_armor"),
+                new NamespacedKey(plugin, "elite_speed"),
+                new NamespacedKey(plugin, "elite_rune_health"),
+                new NamespacedKey(plugin, "elite_rune_speed"));
+        ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.itemAttributes();
+        for (ItemAttributeModifiers.Entry e : existing.modifiers()) {
+            if (keys.contains(e.modifier().getKey())) continue;
+            builder.addModifier(e.attribute(), e.modifier(), e.getGroup());
+        }
+        item.setData(DataComponentTypes.ATTRIBUTE_MODIFIERS, builder.build());
     }
 
     /** 安全写入属性 modifier（按 key 全量替换，避免累积）。 */
@@ -682,16 +769,20 @@ public class EliteEssenceUpgradeListener implements Listener {
         int totalLevel = EliteGemFactory.totalGemLevel(equip);
         int slots = EliteGemFactory.gemSlotsForLevel(totalLevel);
         int used = 0;
-        for (int i = 0; i < slots; i++) if (ids[i] != null) used++;
+        // 统计所有已装宝石（含降级后被锁定的槽位——宝石仍生效，必须显示）
+        for (int i = 0; i < EliteGemFactory.MAX_GEM_SLOTS; i++) if (ids[i] != null) used++;
 
         lore.add(ChatColor.translateAlternateColorCodes('&',
                 msg(msgs, "essence-upgrade.lore.gem-title", "&e✦ 宝石槽&7 ({used}/{max})")
                         .replace("{used}", String.valueOf(used))
                         .replace("{max}", String.valueOf(slots))));
-        for (int i = 0; i < slots; i++) {
+        // 遍历全部槽位：所有已装宝石都要显示；空槽只在当前容量内显示
+        for (int i = 0; i < EliteGemFactory.MAX_GEM_SLOTS; i++) {
             if (ids[i] == null) {
-                lore.add(ChatColor.translateAlternateColorCodes('&',
-                        msg(msgs, "essence-upgrade.lore.gem-empty", "   &8◇ 空槽")));
+                if (i < slots) {
+                    lore.add(ChatColor.translateAlternateColorCodes('&',
+                            msg(msgs, "essence-upgrade.lore.gem-empty", "   &8◇ 空槽")));
+                }
                 continue;
             }
             String eff = gemEffectFor(ids[i]);
@@ -701,14 +792,16 @@ public class EliteEssenceUpgradeListener implements Listener {
                 case "defense" -> "&7→ &b减伤 +" + String.format("%.1f", EliteGemFactory.defenseBonus(lvs[i]));
                 case "knockback" -> "&7→ &f击退 Lv." + EliteGemFactory.knockbackLevel(lvs[i]);
                 case "thunder" -> "&7→ &e雷电 " + String.format("%.0f%%", EliteGemFactory.thunderChance(lvs[i]) * 100);
-                case "speed" -> "&7→ &b移速 +" + (lvs[i] * 2) + "%";
+                case "magnet" -> "&7→ &b磁力拾取 &f+" + EliteGemFactory.magnetRadius(lvs[i]) + " &7格";
                 case "rare" -> "&7→ &6稀有";
                 default -> "";
             };
+            // 超出当前容量的槽位标注"锁定"（宝石仍生效）
+            String lock = i >= slots ? " &8(槽位锁定)" : "";
             lore.add(ChatColor.translateAlternateColorCodes('&',
                     msg(msgs, "essence-upgrade.lore.gem-line", "   &e◆ {gem} &7{effect}")
                             .replace("{gem}", gemName + " &7Lv." + lvs[i])
-                            .replace("{effect}", effectDesc)));
+                            .replace("{effect}", effectDesc + lock)));
         }
     }
 
@@ -1124,7 +1217,7 @@ public class EliteEssenceUpgradeListener implements Listener {
 
     // ==================== 符文槽 Lore ====================
 
-    /** 向 Lore 追加符文槽显示：标题(已用/总数) + 每个符文一行（图标+效果），空槽单独一行。 */
+    /** 向 Lore 追加符文槽显示：标题(已装/容量) + 所有已装符文一行（含锁定槽位），空槽仅在容量内显示。 */
     private void appendRuneSlotsLore(ItemMeta meta, List<String> lore, int slots) {
         if (slots <= 0) return;
         if (slots > com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS.length) {
@@ -1133,32 +1226,40 @@ public class EliteEssenceUpgradeListener implements Listener {
 
         var pdc = meta.getPersistentDataContainer();
         int used = 0;
-        for (int i = 0; i < slots; i++) {
+        // 统计所有已装符文（含降级后被锁定的槽位——符文仍生效，必须显示）
+        for (int i = 0; i < com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS.length; i++) {
             if (pdc.has(com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS[i],
                     PersistentDataType.STRING)) used++;
         }
 
-        // 标题：✦ 符文槽 (2/4)
+        // 标题：✦ 符文槽 (已装/容量)
         lore.add(ChatColor.translateAlternateColorCodes('&',
                 msg(plugin.getMessages(), "essence-upgrade.lore.rune-title", "&d✦ 符文槽&7 ({used}/{max})")
                         .replace("{used}", String.valueOf(used))
                         .replace("{max}", String.valueOf(slots))));
 
-        for (int i = 0; i < slots; i++) {
+        for (int i = 0; i < com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS.length; i++) {
             String type = pdc.get(com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS[i],
                     PersistentDataType.STRING);
             if (type != null) {
                 var t = com.clawx.elitemobs.rune.EliteRuneFactory.TYPES.get(type);
+                Integer lvI = pdc.get(com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOT_LEVELS[i],
+                        PersistentDataType.INTEGER);
+                int rlvl = lvI == null ? 1 : Math.max(1, Math.min(10, lvI));
+                // 超出当前容量的槽位标注"锁定"（符文仍生效）
+                String lock = i >= slots ? " &8(槽位锁定)" : "";
                 String line = ChatColor.translateAlternateColorCodes('&',
                         msg(plugin.getMessages(), "essence-upgrade.lore.rune-line", "   &e◆ {rune} &7{effect}")
                                 .replace("{rune}", t != null
-                                        ? t.coloredName + " " + ChatColor.GRAY + t.icon
+                                        ? t.coloredName + " &7Lv." + rlvl + " " + ChatColor.GRAY + t.icon
                                         : ChatColor.WHITE + type)
-                                .replace("{effect}", t != null ? "&7→ &f" + t.effect : ""));
+                                .replace("{effect}", (t != null ? "&7→ &f" + t.effect : "") + lock));
                 lore.add(line);
             } else {
-                lore.add(ChatColor.translateAlternateColorCodes('&',
-                        msg(plugin.getMessages(), "essence-upgrade.lore.rune-empty", "   &8◇ 空槽")));
+                if (i < slots) {
+                    lore.add(ChatColor.translateAlternateColorCodes('&',
+                            msg(plugin.getMessages(), "essence-upgrade.lore.rune-empty", "   &8◇ 空槽")));
+                }
             }
         }
     }

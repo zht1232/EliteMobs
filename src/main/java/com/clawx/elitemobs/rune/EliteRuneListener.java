@@ -160,19 +160,20 @@ public class EliteRuneListener implements Listener {
 
         var pdc = meta.getPersistentDataContainer();
         int used = 0;
-        for (int i = 0; i < slots; i++) {
+        // 统计所有已装符文（含降级后被锁定的槽位——符文仍生效，必须显示）
+        for (int i = 0; i < com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS.length; i++) {
             if (pdc.has(com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS[i],
                     PersistentDataType.STRING)) used++;
         }
 
-        // 构造新的符文槽行（标题 + 每符文一行 + 空槽行）
+        // 构造新的符文槽行（标题 + 所有已装符文 + 容量内空槽）
         String title = ChatColor.translateAlternateColorCodes('&',
                 plugin.getMessages().getString("essence-upgrade.lore.rune-title", "&d✦ 符文槽&7 ({used}/{max})")
                         .replace("{used}", String.valueOf(used))
                         .replace("{max}", String.valueOf(slots)));
         List<String> runeLines = new ArrayList<>();
         runeLines.add(title);
-        for (int i = 0; i < slots; i++) {
+        for (int i = 0; i < com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS.length; i++) {
             String type = pdc.get(com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS[i],
                     PersistentDataType.STRING);
             if (type != null) {
@@ -180,17 +181,21 @@ public class EliteRuneListener implements Listener {
                 Integer lvI = pdc.get(com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOT_LEVELS[i],
                         PersistentDataType.INTEGER);
                 int rlvl = lvI == null ? 1 : Math.max(1, Math.min(10, lvI));
+                // 超出当前容量的槽位标注"锁定"（符文仍生效）
+                String lock = i >= slots ? " &8(槽位锁定)" : "";
                 runeLines.add(ChatColor.translateAlternateColorCodes('&',
                         plugin.getMessages().getString("essence-upgrade.lore.rune-line", "   &e◆ {rune} &7{effect}")
                                 .replace("{rune}", t != null
                                         ? t.coloredName + " &7Lv." + rlvl + " " + ChatColor.GRAY + t.icon
                                         : ChatColor.WHITE + type)
-                                .replace("{effect}", t != null
+                                .replace("{effect}", (t != null
                                         ? "&7→ &f" + com.clawx.elitemobs.rune.EliteRuneFactory.effectFor(t, rlvl)
-                                        : "")));
+                                        : "") + lock)));
             } else {
-                runeLines.add(ChatColor.translateAlternateColorCodes('&',
-                        plugin.getMessages().getString("essence-upgrade.lore.rune-empty", "   &8◇ 空槽")));
+                if (i < slots) {
+                    runeLines.add(ChatColor.translateAlternateColorCodes('&',
+                            plugin.getMessages().getString("essence-upgrade.lore.rune-empty", "   &8◇ 空槽")));
+                }
             }
         }
 

@@ -12,6 +12,10 @@ general:
   min-spawn-y: 0
   max-elites-per-chunk: 2
   enabled-mob-types: []
+  # 精英主动索敌范围（格）。插件每1秒让精英锁定范围内最近的非豁免玩家，
+  # 即使其他插件取消了原版追击事件，精英仍能追击玩家。
+  # 若对方插件连 setTarget 触发的追击事件也取消，需在对方插件中排除 EliteMobs 怪物。
+  target-range: 16
 
   # 高等级精英生成时全服广播提示
   spawn-announce:
@@ -81,6 +85,26 @@ elite-stats:
   damage-multiplier-max: 1.5
   speed-multiplier-min: 1.02
   speed-multiplier-max: 1.15
+
+# --- 护甲套装加成 ---
+# 判定依据: 玩家 4 个护甲位物品的 elitemobs:armor_lv 值之和（套装等级）。
+#   精英怪掉落护甲 = 精英等级；玩家淬炼护甲 = 宝石等级之和。四件 Lv.10 封顶 40。
+# 加成内容:
+#   - 减伤: 每 1 点套装等级提供 reduction-per-level% 减伤，封顶 max-reduction%
+#   - 速度: 套装等级 >= speed-level 获得速度 I
+#   - 再生: 套装等级 >= regen-level 获得再生 I + 不死图腾粒子
+armor-set-bonus:
+  enabled: true
+  reduction-per-level: 2.0    # 每点套装等级减伤 %
+  max-reduction: 20.0         # 减伤封顶 %
+  speed-level: 6              # 速度效果阈值（原 2）
+  regen-level: 10             # 再生效果阈值（原 4）
+
+# --- Boss 第二阶段 ---
+# 血量低于 hp-ratio 时 Boss 进入第二阶段：全服广播 + 力量I/速度II/抗性I + 血条变紫 + 闪电特效。
+boss-phase2:
+  enabled: true
+  hp-ratio: 0.5              # 血量低于该比例触发（0.5 = 50%）
 
 # --- 精英词缀系统 ---
 # 精英怪随机获得词缀，改变战斗行为与外观（名字后缀 + 专属粒子）
@@ -259,6 +283,11 @@ rune:
   drops:
     enabled: true
     chance: 0.02        # 0.02 = 2%（极难）
+    # 符文掉落等级公式: runeLevel = clamp(base + floor(精英等级 / divisor), 1, max-level)
+    #   默认 base=1 divisor=3 max=10: 精英1-2→Lv1 / 3-5→Lv2 / 6-8→Lv3 / 9-11→Lv4 / 12-14→Lv5 / 15-17→Lv6 / 18-20→Lv7
+    level-base: 1
+    level-divisor: 3
+    max-level: 10
 
 # ============================================
 #  宝石/掉落物配置
@@ -272,6 +301,9 @@ rune:
 #            / texture(头颅纹理) / potion-type / potion-amplifier
 #            / potion-duration / mob-types / chance / amount-min / amount-max
 #   也可直接在上方 config.yml 里用 gem-drops.custom 内联定义（旧方式，兼容）。
+#
+# 掉落优先级: 宝石(最高) > 保护符 > 符文(最低)
+#   宝石掉落时从 gems/*.yml 所有允许掉落的宝石中，按各自 chance 权重随机选一颗。
 gem-drops:
   mode: custom
 
@@ -286,3 +318,13 @@ gem-drops:
     level-4-6: 0.35
     level-7-9: 0.55
     level-10: 0.85
+
+  # --- 宝石掉落数量（每次判定成功掉落的颗数）---
+  gems:
+    amount-min: 1       # 普通精英最少
+    amount-max: 2       # 普通精英最多
+    boss-min: 2         # Boss 最少
+    boss-max: 4         # Boss 最多
+
+  # 保护符掉落概率（0.0-1.0）。要求: 宝石概率 > 保护符 >>> 符文
+  charm-drop-chance: 0.08

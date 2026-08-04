@@ -64,9 +64,10 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,ChatColor.YELLOW+"/em particle <\u804c\u4e1a>"+ChatColor.GRAY+" \u2014 \u6d4b\u8bd5\u804c\u4e1a\u7c92\u5b50\u7279\u6548\uff08tank/assassin/mage/summoner/boss\uff09");
         msg(s,"");
         msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u5b9d\u77f3\u6307\u4ee4 \u2501\u2501\u2501");
-        msg(s,ChatColor.YELLOW+"/em gem give <id> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6307\u5b9a\u5b9d\u77f3\uff08\u5982 attack_gem/defense_gem/thunder_gem\uff0c\u7b49\u7ea7 1-10\uff09");
+        msg(s,ChatColor.YELLOW+"/em gem give <id> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6307\u5b9a\u5b9d\u77f3\uff08\u5982 attack_gem/defense_gem/thunder_gem/magnet_gem\uff0c\u7b49\u7ea7 1-10\uff09");
         msg(s,ChatColor.YELLOW+"/em gem charm [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6dec\u70bc\u4fdd\u62a4\u7b26");
         msg(s,ChatColor.YELLOW+"/em gem remover [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u5b9d\u77f3\u62c6\u5378\u5668\uff08\u94c1\u7827\u62c6\u5378\u6240\u6709\u5b9d\u77f3\uff09");
+        msg(s,ChatColor.YELLOW+"/em gem test <0|100> [\u5b9d\u77f3id] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6307\u5b9a\u6210\u529f\u7387\u6d4b\u8bd5\u5b9d\u77f3\uff080=\u5fc5\u5931\u8d25 / 100=\u5fc5\u6210\u529f\uff09");
         msg(s,ChatColor.YELLOW+"/em gem list"+ChatColor.GRAY+" \u2014 \u5217\u51fa\u6240\u6709\u53ef\u53d1\u653e\u7684\u5b9d\u77f3");
         msg(s,"");
         msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u7b26\u6587\u6307\u4ee4 \u2501\u2501\u2501");
@@ -333,15 +334,17 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             case "charm" -> gemGiveCharm(s, args);
             case "remover" -> gemGiveRemover(s, args);
             case "give" -> gemGiveCustom(s, args);
+            case "test" -> gemGiveTest(s, args);
             case "list" -> gemListCustom(s);
             default -> showGemHelp(s);
         }
     }
 
     private void showGemHelp(CommandSender s) {
-        msg(s,ChatColor.GOLD+"/em gem give <id> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6307\u5b9a\u5b9d\u77f3\uff08\u5982 attack_gem/defense_gem/thunder_gem\uff0c\u7b49\u7ea7 1-10\uff09");
+        msg(s,ChatColor.GOLD+"/em gem give <id> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6307\u5b9a\u5b9d\u77f3\uff08\u5982 attack_gem/defense_gem/thunder_gem/magnet_gem\uff0c\u7b49\u7ea7 1-10\uff09");
         msg(s,ChatColor.GOLD+"/em gem charm [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6dec\u70bc\u4fdd\u62a4\u7b26");
         msg(s,ChatColor.GOLD+"/em gem remover [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u5b9d\u77f3\u62c6\u5378\u5668\uff08\u94c1\u7827\u62c6\u5378\u6240\u6709\u5b9d\u77f3\uff09");
+        msg(s,ChatColor.GOLD+"/em gem test <0|100> [\u5b9d\u77f3id] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6307\u5b9a\u6210\u529f\u7387\u7684\u6d4b\u8bd5\u5b9d\u77f3\uff080=\u5fc5\u5931\u8d25 / 100=\u5fc5\u6210\u529f\uff09");
         msg(s,ChatColor.GOLD+"/em gem list"+ChatColor.GRAY+" \u2014 \u5217\u51fa\u6240\u6709\u53ef\u53d1\u653e\u7684\u5b9d\u77f3");
     }
 
@@ -445,6 +448,47 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+count+" \u4e2a\u5b9d\u77f3\u62c6\u5378\u5668\uff01"+ChatColor.GRAY+" \u4e0e\u5df2\u6dec\u70bc\u88c5\u5907\u653e\u5165\u94c1\u7827\u5373\u53ef\u62c6\u5378");
     }
 
+    /** \u53d1\u653e\u6307\u5b9a\u6210\u529f\u7387\u7684\u6d4b\u8bd5\u5b9d\u77f3\uff080=\u5fc5\u5931\u8d25 / 100=\u5fc5\u6210\u529f\uff09\u3002\u683c\u5f0f: /em gem test <0|100> [\u5b9d\u77f3id] [\u6570\u91cf] */
+    private void gemGiveTest(CommandSender s, String[] args) {
+        if (!(s instanceof Player p)) { msg(s,ChatColor.RED+"\u274c \u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"); return; }
+        if (args.length < 3) { showGemHelp(s); return; }
+        double rate;
+        try { rate = Math.max(0, Math.min(100, Double.parseDouble(args[2]))); }
+        catch (NumberFormatException e) { msg(s,ChatColor.RED+"\u274c \u6210\u529f\u7387\u5fc5\u987b\u662f 0~100 \u7684\u6570\u5b57\uff08\u5982 0 \u6216 100\uff09"); return; }
+        String id = args.length >= 4 ? args[3].toLowerCase() : "attack_gem";
+        int count = args.length >= 5 ? Math.max(1, Math.min(64, parseIntSafe(args[4], 1))) : 1;
+        com.clawx.elitemobs.EliteConfig.CustomDrop target = null;
+        for (var d : plugin.getEliteConfig().getCustomDrops()) {
+            if (d.id != null && d.id.equalsIgnoreCase(id)) { target = d; break; }
+        }
+        if (target == null) {
+            msg(s,ChatColor.RED+"\u274c \u672a\u77e5\u5b9d\u77f3: "+id);
+            gemListCustom(s);
+            return;
+        }
+        double fraction = rate / 100.0;
+        ItemStack item = target.build(1);
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        if (meta == null) return;
+        meta.getPersistentDataContainer().set(
+                com.clawx.elitemobs.essence.EliteGemFactory.KEY_GEM_SUCCESS_RATE,
+                org.bukkit.persistence.PersistentDataType.DOUBLE, fraction);
+        // \u66f4\u65b0\u6210\u529f\u7387 lore \u884c\uff08build \u751f\u6210\u7684\u6700\u540e\u4e00\u884c\uff09
+        List<String> lore = meta.getLore();
+        if (lore != null && !lore.isEmpty()) {
+            lore.set(lore.size() - 1, ChatColor.translateAlternateColorCodes('&',
+                    "&a\u6210\u529f\u7387: " + String.format("%.0f", rate) + "% &7(\u6d4b\u8bd5)"));
+            meta.setLore(lore);
+        }
+        item.setItemMeta(meta);
+        item.setAmount(count);
+        p.getInventory().addItem(item).values()
+            .forEach(drop -> p.getWorld().dropItemNaturally(p.getLocation(), drop));
+        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+count+" \u4e2a\u6d4b\u8bd5\u5b9d\u77f3: "+ChatColor.RESET
+                + ChatColor.translateAlternateColorCodes('&', target.name)
+                + ChatColor.GRAY+" \u6210\u529f\u7387 "+String.format("%.0f", rate)+"%");
+    }
+
     // ==================== 符文指令 ====================
 
     /** /em rune list | give <类型> [数量] */
@@ -512,7 +556,11 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         if(a.length==2&&a[0].equalsIgnoreCase("particle"))
             return Arrays.asList("tank","assassin","mage","summoner","boss","pillar");
         if(a.length==2&&a[0].equalsIgnoreCase("gem"))
-            return Arrays.asList("charm","list","give","remover").stream().filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
+            return Arrays.asList("charm","list","give","remover","test").stream().filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
+        if(a.length==3&&a[0].equalsIgnoreCase("gem")&&a[1].equalsIgnoreCase("test"))
+            return Arrays.asList("0","100").stream().filter(x->x.startsWith(a[2].toLowerCase())).collect(Collectors.toList());
+        if(a.length==4&&a[0].equalsIgnoreCase("gem")&&a[1].equalsIgnoreCase("test"))
+            return plugin.getEliteConfig().getCustomDrops().stream().map(d->d.id).filter(x->x.toLowerCase().startsWith(a[3].toLowerCase())).collect(Collectors.toList());
         if(a.length==3&&a[0].equalsIgnoreCase("gem")&&a[1].equalsIgnoreCase("give"))
             return plugin.getEliteConfig().getCustomDrops().stream().map(d->d.id).filter(x->x.toLowerCase().startsWith(a[2].toLowerCase())).collect(Collectors.toList());
         if(a.length==4&&a[0].equalsIgnoreCase("gem")&&a[1].equalsIgnoreCase("give"))

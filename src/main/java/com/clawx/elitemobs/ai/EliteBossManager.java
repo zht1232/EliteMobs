@@ -1,5 +1,6 @@
 package com.clawx.elitemobs.ai;
 
+import com.clawx.elitemobs.EliteConfig;
 import com.clawx.elitemobs.EliteMobsPlugin;
 import com.clawx.elitemobs.EliteMobManager;
 import org.bukkit.*;
@@ -28,6 +29,8 @@ public class EliteBossManager {
     private final EliteMobsPlugin plugin;
     private final Map<UUID, BossBar> bossBars = new ConcurrentHashMap<>();
     private final Random rng = new Random();
+    // 已触发第二阶段的 Boss（每只 Boss 仅触发一次）
+    private final Set<UUID> phase2Triggered = ConcurrentHashMap.newKeySet();
 
     public EliteBossManager(EliteMobsPlugin plugin) {
         this.plugin = plugin;
@@ -90,11 +93,14 @@ public class EliteBossManager {
                 loc.clone().add(rng.nextDouble() - 0.5, rng.nextDouble() * 2, rng.nextDouble() - 0.5), 1);
         }
 
-        // 全服广播
+        // 全服广播（含坐标）
         String announce = ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
             + ChatColor.RED + "" + ChatColor.BOLD + "Boss\u8b66\u62a5\uff01"
             + ChatColor.GRAY + " \u2014 " + bossName + ChatColor.GRAY + " \u5728 "
-            + ChatColor.WHITE + loc.getWorld().getName() + ChatColor.GRAY + " \u964d\u751f\u4e86\uff01";
+            + ChatColor.WHITE + loc.getWorld().getName()
+            + ChatColor.GRAY + " \u5750\u6807 ("
+            + ChatColor.YELLOW + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
+            + ChatColor.GRAY + ") \u964d\u751f\u4e86\uff01";
         Bukkit.broadcastMessage(announce);
     }
 
@@ -122,6 +128,8 @@ public class EliteBossManager {
                     }
 
                     LivingEntity le = (LivingEntity) entity;
+                    // 第二阶段判定（血量低于阈值）
+                    checkPhase2(le);
                     // 更新血条进度
                     AttributeInstance hp = le.getAttribute(Attribute.MAX_HEALTH);
                     if (hp != null && hp.getValue() > 0) {
@@ -200,5 +208,44 @@ public class EliteBossManager {
     public void onBossDeath(LivingEntity entity) {
         BossBar bar = bossBars.remove(entity.getUniqueId());
         if (bar != null) bar.removeAll();
+        phase2Triggered.remove(entity.getUniqueId());
+    }
+
+    /**
+     * Boss 第二阶段：血量低于阈值时触发一次（强化 + 全服广播 + 血条变色 + 特效）。
+     * 阈值/开关由 config boss-phase2 控制（默认 50%）。
+     */
+    private void checkPhase2(LivingEntity boss) {
+        if (phase2Triggered.contains(boss.getUniqueId())) return;
+        EliteConfig cfg = plugin.getEliteConfig();
+        if (!cfg.isBossPhase2Enabled()) return;
+        double ratio = cfg.getBossPhase2HpRatio();
+        AttributeInstance hp = boss.getAttribute(Attribute.MAX_HEALTH);
+        if (hp == null || hp.getValue() <= 0) return;
+        if (boss.getHealth() / hp.getValue() > ratio) return;
+        phase2Triggered.add(boss.getUniqueId());
+
+        String name = boss.getCustomName() != null
+                ? ChatColor.stripColor(boss.getCustomName())
+                : boss.getType().name().toLowerCase().replace('_', ' ');
+        // 全服广播第二阶段
+        Bukkit.broadcastMessage(ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u26a1 "
+            + ChatColor.RED + name + ChatColor.GOLD + " \u8fdb\u5165\u4e86\u7b2c\u4e8c\u9636\u6bb5\uff01"
+            + ChatColor.DARK_RED + " \u26a1");
+        // 强化：力量 I + 速度 II + 抗性 I
+        boss.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 999999, 0, true, false));
+        boss.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 999999, 1, true, false));
+        boss.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 999999, 0, true, false));
+        // 特效：闪电 + 粒子 + 音效
+        Location loc = boss.getLocation();
+        loc.getWorld().strikeLightningEffect(loc);
+        for (int i = 0; i < 40; i++) {
+            EliteMobManager.spawnParticleSafe(loc.getWorld(), Particle.SOUL_FIRE_FLAME,
+                loc.clone().add(rng.nextDouble() - 0.5, rng.nextDouble() * 2, rng.nextDouble() - 0.5), 1);
+        }
+        loc.getWorld().playSound(loc, Sound.ENTITY_WITHER_SPAWN, 2.0f, 0.5f);
+        // 血条换色（第二阶段）
+        BossBar bar = bossBars.get(boss.getUniqueId());
+        if (bar != null) bar.setColor(BarColor.PURPLE);
     }
 }

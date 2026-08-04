@@ -63,32 +63,121 @@ public class EliteCombatListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onSetBonusDamageReduction(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player p)) return;
+        EliteConfig cfg = plugin.getEliteConfig();
+        if (!cfg.isSetBonusEnabled()) return;
         int setLevel = getEliteSetLevel(p);
         if (setLevel <= 0) return;
 
-        // 套装加成：每件平均等级提供2%额外减伤，最高20%
-        double setBonus = Math.min(setLevel * 2.0, 20.0) / 100.0;
+        // 套装加成：每点套装等级提供 X% 额外减伤，封顶 Y%（config: armor-set-bonus）
+        double setBonus = Math.min(setLevel * cfg.getSetBonusReductionPerLevel(),
+                cfg.getSetBonusMaxReduction()) / 100.0;
         event.setDamage(event.getDamage() * (1.0 - setBonus));
     }
 
-    // 套装效果粒子（每2秒检测一次）
+    // 套装效果粒子（每2秒检测一次，阈值由 config 控制）
     public void startSetBonusTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            EliteConfig cfg = plugin.getEliteConfig();
+            if (!cfg.isSetBonusEnabled()) return;
+            int speedLevel = cfg.getSetBonusSpeedLevel();
+            int regenLevel = cfg.getSetBonusRegenLevel();
             for (Player p : plugin.getServer().getOnlinePlayers()) {
                 int setLevel = getEliteSetLevel(p);
-                if (setLevel >= 4) {
-                    // 4件以上：生命恢复 + 粒子
+                if (setLevel >= regenLevel) {
+                    // 达到再生阈值：生命恢复 + 粒子
                     p.addPotionEffect(new org.bukkit.potion.PotionEffect(
                         org.bukkit.potion.PotionEffectType.REGENERATION, 60, 0, true, false));
                     EliteMobManager.spawnParticleSafe(p.getWorld(), org.bukkit.Particle.TOTEM_OF_UNDYING,
                         p.getLocation().add(0, 0.5, 0), 1);
-                } else if (setLevel >= 2) {
-                    // 2件以上：速度提升
+                } else if (setLevel >= speedLevel) {
+                    // 达到速度阈值：速度提升
                     p.addPotionEffect(new org.bukkit.potion.PotionEffect(
                         org.bukkit.potion.PotionEffectType.SPEED, 60, 0, true, false));
                 }
             }
         }, 40L, 40L);
+    }
+
+    // ==================== 磁力宝石（自动拾取附近掉落物） ====================
+
+    /** 计算玩家身上磁力宝石的拾取半径（主手 + 全部护甲，取最大；无则 0）。 */
+    private int getMagnetRadius(Player p) {
+        int best = 0;
+        var inv = p.getInventory();
+        ItemStack[] items = new ItemStack[]{inv.getItemInMainHand(),
+                inv.getHelmet(), inv.getChestplate(), inv.getLeggings(), inv.getBoots()};
+        for (ItemStack it : items) {
+            if (it == null || !it.hasItemMeta()) continue;
+            String[] ids = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGems(it);
+            int[] lvs = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGemLevels(it);
+            for (int i = 0; i < com.clawx.elitemobs.essence.EliteGemFactory.MAX_GEM_SLOTS; i++) {
+                if (ids[i] != null && "magnet".equals(gemEffectFor(ids[i]))) {
+                    best = Math.max(best, com.clawx.elitemobs.essence.EliteGemFactory.magnetRadius(lvs[i]));
+                }
+            }
+        }
+        return best;
+    }
+
+    /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */
+    public void startMagnetTask() {
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            for (Player p : plugin.getServer().getOnlinePlayers()) {
+                if (p.isDead() || !p.isOnline()) continue;
+                int radius = getMagnetRadius(p);
+                if (radius <= 0) continue;
+                Location pl = p.getLocation();
+                for (Entity e : p.getNearbyEntities(radius, radius, radius)) {
+                    if (!(e instanceof Item item) || item.isDead()) continue;
+                    Location il = item.getLocation();
+                    double dist = il.distance(pl);
+                    if (dist <= 0.01 || dist > radius) continue;
+                    org.bukkit.util.Vector dir = pl.toVector().subtract(il.toVector()).normalize();
+                    double speed = 0.35 + (1.0 - dist / radius) * 0.25;
+                    item.setVelocity(dir.multiply(speed).setY(Math.max(0.2, speed * 0.6)));
+                }
+            }
+        }, 40L, 10L);
+    }
+
+    // ==================== 精英强制索敌（应对"玩家免疫追击"类插件） ====================
+
+    /**
+     * 每 1 秒让精英主动索敌：若精英当前无有效目标，则锁定范围内最近的、未拥有
+     * elitemobs.bypass 权限的玩家。这样即使其他插件取消了原版的追击事件，精英仍能
+     * 重新锁定玩家。若对方插件连 setTarget 触发的追击事件也取消，则需在对方插件中
+     * 排除/放行 EliteMobs 的怪物（见 config target-range 配置说明）。
+     */
+    public void startTargetTask() {
+        int range = plugin.getEliteConfig().getTargetRange();
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            for (EliteMobManager.EliteMobData data : plugin.getMobManager().getEliteMobs()) {
+                LivingEntity e = data.entity;
+                if (e == null || e.isDead() || !e.isValid()) continue;
+                if (!(e instanceof Mob mob)) continue;
+                // 已有有效目标则不干预；玩家目标跑出索敌范围时重新索敌（避免无限追远），非玩家目标不干预
+                LivingEntity cur = mob.getTarget();
+                boolean need = false;
+                if (cur == null || cur.isDead() || !cur.isValid()) {
+                    need = true;
+                } else if (cur instanceof Player cp) {
+                    if (cp.hasPermission("elitemobs.bypass")) need = true;
+                    else if (cp.getLocation().distance(e.getLocation()) > range) need = true;
+                }
+                if (!need) continue;
+                // 寻找范围内最近的非豁免玩家
+                Player best = null;
+                double bestDist = range;
+                Location loc = e.getLocation();
+                for (Entity ent : e.getNearbyEntities(range, range, range)) {
+                    if (!(ent instanceof Player p) || p.isDead() || !p.isOnline()) continue;
+                    if (p.hasPermission("elitemobs.bypass")) continue;
+                    double d = p.getLocation().distance(loc);
+                    if (d <= bestDist) { bestDist = d; best = p; }
+                }
+                if (best != null) mob.setTarget(best);
+            }
+        }, 20L, 20L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -453,54 +542,79 @@ public class EliteCombatListener implements Listener {
      * @param level 精英等级
      * @param boss  是否为 Boss（Boss 使用更高的判定概率）
      */
+    /**
+     * 处理精英/Boss 的掉落物（统一入口）。
+     *
+     * <p>掉落优先级: 宝石(概率最高) > 保护符 > 符文(概率最低)。
+     * 宝石掉落时从 gems/*.yml 所有允许掉落的宝石中按各自 chance 权重随机选一颗。</p>
+     */
     private void rollGemDrops(EntityDeathEvent event, int level, boolean boss) {
         EliteConfig cfg = plugin.getEliteConfig();
         if (!cfg.isGemDropsEnabled()) return;
 
-        // 按等级段概率判定精华掉落（原版 essence-drops 逻辑）
-        double chance = cfg.getEssenceDropChance(level);
-        if (boss) chance = Math.min(chance * 1.5, 1.0);
-        if (chance > 0.0 && rng.nextDouble() < chance) {
-            int amount = randomInt(cfg.getEssenceMinAmount(), cfg.getEssenceMaxAmount());
-            var msgs = plugin.getMessages();
-            for (int i = 0; i < amount; i++) {
-                // 随机掉武器精华或护甲精华
-                ItemStack essence = rng.nextBoolean()
-                        ? com.clawx.elitemobs.essence.EliteEssenceFactory.createEliteEssence(level, msgs)
-                        : com.clawx.elitemobs.essence.EliteEssenceFactory.createArmorEssence(level, msgs);
-                event.getDrops().add(essence);
+        // 1) 宝石掉落：先按等级段概率判定（宝石概率最高），成功则掉落多颗，每颗独立权重随机
+        double gemChance = cfg.getGemDropChance(level, boss);
+        if (gemChance > 0 && rng.nextDouble() < gemChance) {
+            EntityType mobType = event.getEntity().getType();
+            List<EliteConfig.CustomDrop> pool = new ArrayList<>();
+            for (EliteConfig.CustomDrop d : cfg.getCustomDrops()) {
+                if (d.allows(mobType) && d.getChance(level) > 0) pool.add(d);
+            }
+            if (!pool.isEmpty()) {
+                // 掉落颗数：普通精英 amount-min~max，Boss 更多（boss-min~max）
+                int min = boss ? cfg.getGemBossMin() : cfg.getGemAmountMin();
+                int max = boss ? cfg.getGemBossMax() : cfg.getGemAmountMax();
+                int count = randomInt(min, max);
+                for (int n = 0; n < count; n++) {
+                    // 每颗独立按权重随机选宝石（可同种也可不同种）
+                    EliteConfig.CustomDrop chosen = pickWeightedGem(pool, level);
+                    int amt = randomInt(chosen.amountMin, chosen.amountMax);
+                    // 宝石等级由精英等级决定（1 + level/3，上限为该宝石 max-level）
+                    int gemLevel = Math.max(1, Math.min(chosen.maxLevel, 1 + level / 3));
+                    ItemStack item = buildCustomDrop(chosen, gemLevel);
+                    if (item != null) { item.setAmount(amt); event.getDrops().add(item); }
+                }
             }
         }
 
-        // gems/*.yml + gem-drops.custom 自定义宝石（各宝石按自身等级段概率独立判定）
-        EntityType mobType = event.getEntity().getType();
-        for (EliteConfig.CustomDrop drop : cfg.getCustomDrops()) {
-            if (!drop.allows(mobType)) continue;
-            double c = drop.getChance(level);
-            if (boss) c = Math.min(c * 1.5, 1.0);
-            if (c <= 0.0 || rng.nextDouble() >= c) continue;
-            int amt = randomInt(drop.amountMin, drop.amountMax);
-            // 宝石等级由精英等级决定（1 + level/3，上限为该宝石 max-level）
-            int gemLevel = Math.max(1, Math.min(drop.maxLevel, 1 + level / 3));
-            for (int i = 0; i < amt; i++) {
-                ItemStack item = buildCustomDrop(drop, gemLevel);
-                if (item != null) event.getDrops().add(item);
-            }
+        // 2) 保护符掉落（概率介于宝石与符文之间：宝石 > 保护符 >>> 符文）
+        double charmChance = cfg.getCharmDropChance();
+        if (boss) charmChance = Math.min(charmChance * 1.5, 1.0);
+        if (charmChance > 0 && rng.nextDouble() < charmChance) {
+            event.getDrops().add(com.clawx.elitemobs.essence.EliteEssenceFactory
+                    .createProtectionCharm(plugin.getMessages()));
         }
 
-        // 符文（极难掉落：Boss 才可能掉，概率很低）
+        // 3) 符文（极难掉落：概率最低，Boss ×2）
         if (cfg.isRuneDropsEnabled()) {
             double runeChance = cfg.getRuneDropChance();
             if (boss) runeChance *= 2.0;
             if (runeChance > 0 && rng.nextDouble() < runeChance) {
                 String[] types = {"HEALTH", "SPEED", "STRENGTH", "REGEN", "RESIST", "FIRE"};
-                // 符文等级由精英等级决定：精英 Lv.1-3→符文 Lv.1 / 4-6→2 / 7-9→3 / 10+→4~10
-                int runeLevel = Math.max(1, Math.min(10, 1 + level / 3));
+                // 符文掉落等级公式（config rune.drops 可配置）:
+                //   runeLevel = clamp(base + floor(精英等级 / divisor), 1, max-level)
+                //   默认 base=1 divisor=3 max=10: 精英1-2→Lv1 / 3-5→2 / 6-8→3 / 9-11→4 / 12-14→5 / 15-17→6 / 18-20→7
+                int runeLevel = Math.max(1, Math.min(cfg.getRuneDropMaxLevel(),
+                        cfg.getRuneDropLevelBase() + level / cfg.getRuneDropLevelDivisor()));
                 ItemStack rune = com.clawx.elitemobs.rune.EliteRuneFactory.createRune(
                         types[rng.nextInt(types.length)], runeLevel, plugin.getMessages());
                 event.getDrops().add(rune);
             }
         }
+    }
+
+    /** 从允许掉落的宝石池中按各自 chance 加权随机选一颗（权重 = 该宝石在指定等级段的概率）。 */
+    private EliteConfig.CustomDrop pickWeightedGem(List<EliteConfig.CustomDrop> pool, int level) {
+        double total = 0;
+        for (EliteConfig.CustomDrop d : pool) total += d.getChance(level);
+        double roll = rng.nextDouble() * total;
+        EliteConfig.CustomDrop chosen = pool.get(pool.size() - 1);
+        double acc = 0;
+        for (EliteConfig.CustomDrop d : pool) {
+            acc += d.getChance(level);
+            if (roll < acc) { chosen = d; break; }
+        }
+        return chosen;
     }
 
     /** 构建自定义宝石物品（材质/头颅纹理/药水/附魔/光效/名称/Lore，带宝石等级）。 */

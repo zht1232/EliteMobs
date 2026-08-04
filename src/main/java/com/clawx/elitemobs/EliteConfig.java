@@ -18,6 +18,16 @@ public class EliteConfig {
     private double eliteSpawnChance;
     private int minSpawnY;
     private int maxElitesPerChunk;
+    private int targetRange = 16;   // 精英主动索敌范围（格），应对其他插件取消追击事件
+    // 护甲套装加成（armor-set-bonus）
+    private boolean setBonusEnabled = true;
+    private double setBonusReductionPerLevel = 2.0;   // 每点套装等级减伤 %
+    private double setBonusMaxReduction = 20.0;       // 减伤封顶 %
+    private int setBonusSpeedLevel = 6;               // 套装等级达到该值获得速度效果
+    private int setBonusRegenLevel = 10;              // 套装等级达到该值获得再生效果
+    // Boss 第二阶段（boss-phase2）
+    private boolean bossPhase2Enabled = true;
+    private double bossPhase2HpRatio = 0.5;           // 血量低于该比例触发第二阶段
     private Set<EntityType> enabledMobTypes;
     private Map<EntityType, EliteMobProfile> mobProfiles;
     private boolean wallClimbEnabled, blockBreakEnabled, itemStealEnabled, damageScalingEnabled, weaponEnhancementEnabled;
@@ -78,7 +88,10 @@ public class EliteConfig {
     private boolean gemDropsEnabled;
     // 宝石掉落概率（按等级段）
     private double gemDropChanceLow, gemDropChanceMid, gemDropChanceHigh, gemDropChanceMax;
-    private int gemAmountMin = 1, gemAmountMax = 1;
+    private int gemAmountMin = 1, gemAmountMax = 2;   // 普通精英每次掉落宝石颗数范围
+    private int gemBossMin = 2, gemBossMax = 4;       // Boss 每次掉落宝石颗数范围
+    // 保护符掉落概率（要求: 宝石概率 > 保护符 >>> 符文）
+    private double charmDropChance = 0.08;
     // 战利品袋
     private boolean lootBagEnabled;
     private double lootBagChance, lootBagBossChance;
@@ -106,6 +119,10 @@ public class EliteConfig {
     // 符文掉落（极难）
     private boolean runeDropsEnabled = true;
     private double runeDropChance = 0.02;
+    // 符文掉落等级公式: runeLevel = clamp(base + floor(精英等级/divisor), 1, maxLevel)
+    private int runeDropLevelBase = 1;
+    private int runeDropLevelDivisor = 3;
+    private int runeDropMaxLevel = 10;
 
     public EliteConfig(JavaPlugin plugin) { this.plugin = plugin; this.config = plugin.getConfig(); load(); }
 
@@ -116,6 +133,16 @@ public class EliteConfig {
         eliteSpawnChance = config.getDouble("general.elite-spawn-chance", 0.05);
         minSpawnY = config.getInt("general.min-spawn-y", 0);
         maxElitesPerChunk = config.getInt("general.max-elites-per-chunk", 2);
+        targetRange = config.getInt("general.target-range", 16);
+        // 护甲套装加成
+        setBonusEnabled = config.getBoolean("armor-set-bonus.enabled", true);
+        setBonusReductionPerLevel = config.getDouble("armor-set-bonus.reduction-per-level", 2.0);
+        setBonusMaxReduction = config.getDouble("armor-set-bonus.max-reduction", 20.0);
+        setBonusSpeedLevel = config.getInt("armor-set-bonus.speed-level", 6);
+        setBonusRegenLevel = config.getInt("armor-set-bonus.regen-level", 10);
+        // Boss 第二阶段
+        bossPhase2Enabled = config.getBoolean("boss-phase2.enabled", true);
+        bossPhase2HpRatio = config.getDouble("boss-phase2.hp-ratio", 0.5);
         enabledMobTypes = new HashSet<>();
         List<String> typeList = config.getStringList("general.enabled-mob-types");
         if (typeList.isEmpty()) {
@@ -234,15 +261,22 @@ public class EliteConfig {
 
         // 宝石掉落概率（按等级段）
         gemDropChanceLow = config.getDouble("gem-drops.gems.level-1-3",
-                config.getDouble("loot.essence-drops.level-1-3", 0.15));
+                config.getDouble("gem-drops.drops.level-1-3",
+                config.getDouble("loot.essence-drops.level-1-3", 0.15)));
         gemDropChanceMid = config.getDouble("gem-drops.gems.level-4-6",
-                config.getDouble("loot.essence-drops.level-4-6", 0.35));
+                config.getDouble("gem-drops.drops.level-4-6",
+                config.getDouble("loot.essence-drops.level-4-6", 0.35)));
         gemDropChanceHigh = config.getDouble("gem-drops.gems.level-7-9",
-                config.getDouble("loot.essence-drops.level-7-9", 0.55));
+                config.getDouble("gem-drops.drops.level-7-9",
+                config.getDouble("loot.essence-drops.level-7-9", 0.55)));
         gemDropChanceMax = config.getDouble("gem-drops.gems.level-10",
-                config.getDouble("loot.essence-drops.level-10", 0.85));
+                config.getDouble("gem-drops.drops.level-10",
+                config.getDouble("loot.essence-drops.level-10", 0.85)));
         gemAmountMin = Math.max(1, config.getInt("gem-drops.gems.amount-min", 1));
-        gemAmountMax = Math.max(gemAmountMin, config.getInt("gem-drops.gems.amount-max", 1));
+        gemAmountMax = Math.max(gemAmountMin, config.getInt("gem-drops.gems.amount-max", 2));
+        gemBossMin = Math.max(1, config.getInt("gem-drops.gems.boss-min", 2));
+        gemBossMax = Math.max(gemBossMin, config.getInt("gem-drops.gems.boss-max", 4));
+        charmDropChance = config.getDouble("gem-drops.charm-drop-chance", 0.08);
 
         // 战利品袋
         lootBagEnabled = config.getBoolean("gem-drops.lootbag.enabled", true);
@@ -396,6 +430,9 @@ public class EliteConfig {
         runeXpCost = config.getInt("rune.install-cost.xp-levels", 30);
         runeDropsEnabled = config.getBoolean("rune.drops.enabled", true);
         runeDropChance = config.getDouble("rune.drops.chance", 0.02);
+        runeDropLevelBase = config.getInt("rune.drops.level-base", 1);
+        runeDropLevelDivisor = Math.max(1, config.getInt("rune.drops.level-divisor", 3));
+        runeDropMaxLevel = Math.max(1, config.getInt("rune.drops.max-level", 10));
 
         // LuckPerms
         luckPermsEnabled = config.getBoolean("luckperms.enabled", false);
@@ -417,6 +454,16 @@ public class EliteConfig {
     public double getEliteSpawnChance() { return eliteSpawnChance; }
     public int getMinSpawnY() { return minSpawnY; }
     public int getMaxElitesPerChunk() { return maxElitesPerChunk; }
+    public int getTargetRange() { return targetRange; }
+    // ========== 护甲套装加成 ==========
+    public boolean isSetBonusEnabled() { return setBonusEnabled; }
+    public double getSetBonusReductionPerLevel() { return setBonusReductionPerLevel; }
+    public double getSetBonusMaxReduction() { return setBonusMaxReduction; }
+    public int getSetBonusSpeedLevel() { return setBonusSpeedLevel; }
+    public int getSetBonusRegenLevel() { return setBonusRegenLevel; }
+    // ========== Boss 第二阶段 ==========
+    public boolean isBossPhase2Enabled() { return bossPhase2Enabled; }
+    public double getBossPhase2HpRatio() { return bossPhase2HpRatio; }
     public Set<EntityType> getEnabledMobTypes() { return enabledMobTypes; }
     public EliteMobProfile getProfile(EntityType type) { return mobProfiles.getOrDefault(type, new EliteMobProfile()); }
     public boolean isWallClimbEnabled() { return wallClimbEnabled; }
@@ -504,6 +551,9 @@ public class EliteConfig {
     public int getRuneXpCost() { return runeXpCost; }
     public boolean isRuneDropsEnabled() { return runeDropsEnabled; }
     public double getRuneDropChance() { return runeDropChance; }
+    public int getRuneDropLevelBase() { return runeDropLevelBase; }
+    public int getRuneDropLevelDivisor() { return runeDropLevelDivisor; }
+    public int getRuneDropMaxLevel() { return runeDropMaxLevel; }
 
     // ????
     public boolean isLevelScalingEnabled() { return levelScalingEnabled; }
@@ -536,6 +586,9 @@ public class EliteConfig {
 
     public int getGemAmountMin() { return gemAmountMin; }
     public int getGemAmountMax() { return gemAmountMax; }
+    public int getGemBossMin() { return gemBossMin; }
+    public int getGemBossMax() { return gemBossMax; }
+    public double getCharmDropChance() { return charmDropChance; }
 
     public boolean isLootBagEnabled() { return lootBagEnabled; }
     public double getLootBagChance() { return lootBagChance; }
@@ -777,7 +830,7 @@ public class EliteConfig {
                 case "defense" -> "&b";
                 case "knockback" -> "&f";
                 case "thunder" -> "&e";
-                case "speed" -> "&a";
+                case "magnet" -> "&b";
                 case "rare" -> "&6";
                 default -> "&f";
             };
@@ -832,7 +885,7 @@ public class EliteConfig {
                 colored.add(org.bukkit.ChatColor.translateAlternateColorCodes('&',
                         effectColor(effect) + baseName + " &7品质: " + qualityFor(level)));
                 colored.add(org.bukkit.ChatColor.DARK_GRAY
-                        + ("defense".equals(effect) ? "护甲" : "武器") + " Lv." + level);
+                        + ("magnet".equals(effect) ? "装备" : "defense".equals(effect) ? "护甲" : "武器") + " Lv." + level);
                 colored.add(org.bukkit.ChatColor.translateAlternateColorCodes('&',
                         "&7将装备与此宝石放入铁砧淬炼"));
                 double rate = successRate(level);
