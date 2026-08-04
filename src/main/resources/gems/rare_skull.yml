@@ -1,0 +1,21 @@
+# ============================================
+#  宝石配置 - 稀有战利品（自定义头颅纹理）
+#  每个文件 = 一颗宝石，复制本文件改名即可添加新宝石
+# ============================================
+
+id: rare_skull
+material: PLAYER_HEAD
+texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDFlODQ4ZmU2NTA2MDRkOTY5M2JjODc1YjM3YjU3MGIwNzZhZDM2YzBiZWI0NjE3YzY5ZDUyMGI2Y2I1MjZmMCJ9fX0="
+name: "&6稀有战利品"
+# 淬炼效果: 无特殊属性，仅作收藏/兑换，允许淬炼但无加成
+effect: rare
+max-level: 1
+lore:
+  - "&7击杀稀有精英获得"
+# 限定哪些生物掉落（留空 = 所有精英）
+mob-types: [ZOMBIE, SKELETON]
+chance:
+  level-7-9: 0.20
+  level-10: 0.35
+amount-min: 1
+amount-max: 1

@@ -1,0 +1,180 @@
+package com.clawx.elitemobs.essence;
+
+import org.bukkit.NamespacedKey;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
+
+import com.clawx.elitemobs.EliteMobsPlugin;
+
+/**
+ * 宝石槽系统 —— 统一宝石淬炼/镶嵌（替代原攻击伤害宝石/护甲宝石精华）。
+ *
+ * <p>所有 gems/*.yml 宝石都能淬炼到装备上，每种宝石独立等级 Lv.1-10，
+ * 宝石等级之和用于解锁宝石槽与符文槽数量。</p>
+ *
+ * <p>淬炼机制与原版完全一致：成功率随宝石等级、失败降级（等级越高掉越多）、
+ * 保护符防降级但宝石仍消耗。</p>
+ */
+public final class EliteGemFactory {
+
+    /** 装备上的宝石槽 PDC 键（gem_1 ~ gem_4，存宝石类型 id，如 attack_gem） */
+    public static final NamespacedKey[] KEY_GEM_SLOTS = {
+        new NamespacedKey("elitemobs", "gem_1"),
+        new NamespacedKey("elitemobs", "gem_2"),
+        new NamespacedKey("elitemobs", "gem_3"),
+        new NamespacedKey("elitemobs", "gem_4"),
+    };
+    /** 装备上的宝石槽等级 PDC 键（gem_lv_1 ~ gem_lv_4，存整数等级） */
+    public static final NamespacedKey[] KEY_GEM_SLOT_LEVELS = {
+        new NamespacedKey("elitemobs", "gem_lv_1"),
+        new NamespacedKey("elitemobs", "gem_lv_2"),
+        new NamespacedKey("elitemobs", "gem_lv_3"),
+        new NamespacedKey("elitemobs", "gem_lv_4"),
+    };
+    public static final int MAX_GEM_SLOTS = 4;
+
+    private EliteGemFactory() {}
+
+    // ==================== 槽位数量解锁（按宝石等级之和） ====================
+
+    /** 根据宝石等级之和返回可用的宝石槽数量（初始 1 个，慢慢解锁）。 */
+    public static int gemSlotsForLevel(int totalGemLevel) {
+        if (totalGemLevel >= 10) return 4;
+        if (totalGemLevel >= 6) return 3;
+        if (totalGemLevel >= 3) return 2;
+        return 1;
+    }
+
+    /** 根据宝石等级之和返回可用的符文槽数量（初始 0 个，慢慢解锁）。 */
+    public static int runeSlotsForTotalLevel(int totalGemLevel) {
+        if (totalGemLevel >= 12) return 4;
+        if (totalGemLevel >= 8) return 3;
+        if (totalGemLevel >= 4) return 2;
+        if (totalGemLevel >= 1) return 1;
+        return 0;
+    }
+
+    // ==================== 读取装备宝石 ====================
+
+    /** 读取装备已镶嵌的宝石（槽位 -> 宝石类型 id，空槽为 null）。 */
+    public static String[] getInstalledGems(ItemStack equip) {
+        if (equip == null || !equip.hasItemMeta()) return new String[MAX_GEM_SLOTS];
+        var pdc = equip.getItemMeta().getPersistentDataContainer();
+        String[] gems = new String[MAX_GEM_SLOTS];
+        for (int i = 0; i < MAX_GEM_SLOTS; i++) {
+            gems[i] = pdc.get(KEY_GEM_SLOTS[i], PersistentDataType.STRING);
+        }
+        return gems;
+    }
+
+    /** 读取装备各宝石槽等级（默认 1）。 */
+    public static int[] getInstalledGemLevels(ItemStack equip) {
+        if (equip == null || !equip.hasItemMeta()) return new int[MAX_GEM_SLOTS];
+        var pdc = equip.getItemMeta().getPersistentDataContainer();
+        int[] lv = new int[MAX_GEM_SLOTS];
+        for (int i = 0; i < MAX_GEM_SLOTS; i++) {
+            Integer v = pdc.get(KEY_GEM_SLOT_LEVELS[i], PersistentDataType.INTEGER);
+            lv[i] = v == null ? 1 : Math.max(1, Math.min(10, v));
+        }
+        return lv;
+    }
+
+    /** 装备上所有宝石等级之和（用于解锁槽位）。 */
+    public static int totalGemLevel(ItemStack equip) {
+        int[] lv = getInstalledGemLevels(equip);
+        String[] ids = getInstalledGems(equip);
+        int sum = 0;
+        for (int i = 0; i < MAX_GEM_SLOTS; i++) {
+            if (ids[i] != null) sum += lv[i];
+        }
+        return sum;
+    }
+
+    /** 查找装备上已有该宝石的槽位（无则返回 -1）。 */
+    public static int findGemSlot(ItemStack equip, String gemId) {
+        String[] ids = getInstalledGems(equip);
+        for (int i = 0; i < MAX_GEM_SLOTS; i++) {
+            if (gemId.equalsIgnoreCase(ids[i])) return i;
+        }
+        return -1;
+    }
+
+    /** 查找装备上空闲宝石槽（无则返回 -1）。 */
+    public static int findEmptyGemSlot(ItemStack equip) {
+        String[] ids = getInstalledGems(equip);
+        for (int i = 0; i < MAX_GEM_SLOTS; i++) {
+            if (ids[i] == null) return i;
+        }
+        return -1;
+    }
+
+    /** 写入宝石到指定槽位（类型 + 等级）。 */
+    public static void setGemSlot(ItemStack equip, int slot, String gemId, int level) {
+        if (equip == null || slot < 0 || slot >= MAX_GEM_SLOTS) return;
+        ItemMeta meta = equip.getItemMeta();
+        if (meta == null) return;
+        var pdc = meta.getPersistentDataContainer();
+        pdc.set(KEY_GEM_SLOTS[slot], PersistentDataType.STRING, gemId);
+        pdc.set(KEY_GEM_SLOT_LEVELS[slot], PersistentDataType.INTEGER,
+                Math.max(1, Math.min(10, level)));
+        equip.setItemMeta(meta);
+    }
+
+    /** 移除指定槽位的宝石。 */
+    public static void clearGemSlot(ItemStack equip, int slot) {
+        if (equip == null || slot < 0 || slot >= MAX_GEM_SLOTS) return;
+        ItemMeta meta = equip.getItemMeta();
+        if (meta == null) return;
+        var pdc = meta.getPersistentDataContainer();
+        pdc.remove(KEY_GEM_SLOTS[slot]);
+        pdc.remove(KEY_GEM_SLOT_LEVELS[slot]);
+        equip.setItemMeta(meta);
+    }
+
+    // ==================== 宝石物品识别（掉落物/指令发放的宝石） ====================
+
+    /** 是否为宝石物品（gems/*.yml 构建，带 gem_id PDC）。 */
+    public static boolean isGem(ItemStack item) {
+        return item != null && item.hasItemMeta()
+                && item.getItemMeta().getPersistentDataContainer().has(
+                        new NamespacedKey("elitemobs", "gem_id"), PersistentDataType.STRING);
+    }
+
+    /** 获取宝石物品的 id（非宝石返回 null）。 */
+    public static String getGemId(ItemStack item) {
+        if (!isGem(item)) return null;
+        return item.getItemMeta().getPersistentDataContainer().get(
+                new NamespacedKey("elitemobs", "gem_id"), PersistentDataType.STRING);
+    }
+
+    /** 获取宝石物品的效果类型（attack/defense/thunder/knockback，非宝石返回 null）。 */
+    public static String getGemEffect(ItemStack item) {
+        if (!isGem(item)) return null;
+        return item.getItemMeta().getPersistentDataContainer().get(
+                new NamespacedKey("elitemobs", "gem_effect"), PersistentDataType.STRING);
+    }
+
+    /** 获取宝石物品自身等级（非宝石返回 1）。 */
+    public static int getGemLevel(ItemStack item) {
+        if (!isGem(item)) return 1;
+        Integer lv = item.getItemMeta().getPersistentDataContainer().get(
+                new NamespacedKey("elitemobs", "gem_level"), PersistentDataType.INTEGER);
+        return lv == null ? 1 : Math.max(1, Math.min(10, lv));
+    }
+
+    // ==================== 效果计算（按宝石等级，原算法） ====================
+
+    /** 攻击宝石：攻击力 = 等级² × 0.5。 */
+    public static double attackBonus(int level) { return level * level * 0.5; }
+
+    /** 防御宝石：护甲减伤 = 等级 × 1.5。 */
+    public static double defenseBonus(int level) { return level * 1.5; }
+
+    /** 击退宝石：击退等级 = 等级（与攻击/防御一致的原算法，非概率）。 */
+    public static int knockbackLevel(int level) { return level; }
+
+    /** 雷电宝石：召唤闪电概率 = 等级越高概率越高（8% + 每级 7%，上限 85%）。 */
+    public static double thunderChance(int level) { return Math.min(0.08 + level * 0.07, 0.85); }
+}
+

@@ -13,9 +13,7 @@ import com.clawx.elitemobs.ai.EliteBossManager;
 import com.clawx.elitemobs.ai.EliteAffixHandler;
 import com.clawx.elitemobs.combat.DamageScaler;
 import com.clawx.elitemobs.combat.WeaponEnhancer;
-import com.clawx.elitemobs.gem.GemManager;
-import com.clawx.elitemobs.gem.GemAnvilListener;
-import com.clawx.elitemobs.gem.GemUseListener;
+import com.clawx.elitemobs.essence.EliteEssenceUpgradeListener;
 import com.clawx.elitemobs.spawn.EliteSpawnHandler;
 import com.clawx.elitemobs.commands.EliteMobsCommand;
 import java.io.File;
@@ -34,7 +32,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private EliteBossManager bossManager;
     private EliteAffixHandler affixHandler;
     private EliteCombatListener combatListener;
-    private GemManager gemManager;
+    private EliteEssenceUpgradeListener essenceListener;
     private org.bukkit.configuration.file.FileConfiguration messages;
 
     @Override public void onEnable() {
@@ -43,6 +41,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
         saveDefaultConfig();
         reloadConfig();
         loadMessages();
+        saveDefaultGems();
+        saveDefaultMobs();
         EconomyHook.init();
         eliteConfig = new EliteConfig(this);
         mobManager = new EliteMobManager(this);
@@ -54,9 +54,11 @@ public final class EliteMobsPlugin extends JavaPlugin {
         eliteClassAI = new EliteClassAI(this);
         bossManager = new EliteBossManager(this);
         affixHandler = new EliteAffixHandler(this);
-        gemManager = new GemManager(this);
-        getServer().getPluginManager().registerEvents(new GemAnvilListener(this, gemManager), this);
-        getServer().getPluginManager().registerEvents(new GemUseListener(this, gemManager), this);
+        essenceListener = new EliteEssenceUpgradeListener(this);
+        getServer().getPluginManager().registerEvents(essenceListener, this);
+        com.clawx.elitemobs.rune.EliteRuneListener runeListener = new com.clawx.elitemobs.rune.EliteRuneListener(this);
+        getServer().getPluginManager().registerEvents(runeListener, this);
+        runeListener.startRunePotionTask();
         getServer().getPluginManager().registerEvents(affixHandler, this);
         getServer().getPluginManager().registerEvents(new EliteSpawnHandler(this), this);
         combatListener = new EliteCombatListener(this);
@@ -97,12 +99,28 @@ public final class EliteMobsPlugin extends JavaPlugin {
         }, 20L, eliteConfig.getAITickInterval());
     }
 
-    public void reload() { reloadConfig(); loadMessages(); EconomyHook.init(); eliteConfig = new EliteConfig(this); damageScaler.reload(); weaponEnhancer.reload(); if (gemManager != null) gemManager.getRegistry().reload(); }
+    public void reload() { reloadConfig(); loadMessages(); EconomyHook.init(); eliteConfig = new EliteConfig(this); damageScaler.reload(); weaponEnhancer.reload(); }
 
     private void loadMessages() {
         saveResource("messages.yml", true);
         File file = new File(getDataFolder(), "messages.yml");
         messages = YamlConfiguration.loadConfiguration(file);
+    }
+
+    /** 首次启动时复制 gems/*.yml 默认宝石配置（不覆盖用户已有文件）。 */
+    private void saveDefaultGems() {
+        File dir = new File(getDataFolder(), "gems");
+        if (!dir.isDirectory() && !dir.mkdirs()) return;
+        for (String name : new String[]{"attack_gem.yml", "defense_gem.yml", "rare_skull.yml", "speed_potion.yml", "thunder_gem.yml", "knockback_gem.yml"}) {
+            File f = new File(dir, name);
+            if (!f.exists()) saveResource("gems/" + name, false);
+        }
+    }
+
+    /** 首次启动时复制 mobs.yml 默认怪物定义（不覆盖用户已有文件）。 */
+    private void saveDefaultMobs() {
+        File f = new File(getDataFolder(), "mobs.yml");
+        if (!f.exists()) saveResource("mobs.yml", false);
     }
 
     public org.bukkit.configuration.file.FileConfiguration getMessages() { return messages; }
@@ -119,7 +137,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
     public EliteBossManager getBossManager() { return bossManager; }
     public EliteAffixHandler getAffixHandler() { return affixHandler; }
     public EliteCombatListener getCombatListener() { return combatListener; }
-    public GemManager getGemManager() { return gemManager; }
+    public EliteEssenceUpgradeListener getEssenceListener() { return essenceListener; }
 
     /** 注册 PlaceholderAPI 占位符（软依赖，未装 PAPI 时静默跳过） */
     private void registerPapi() {

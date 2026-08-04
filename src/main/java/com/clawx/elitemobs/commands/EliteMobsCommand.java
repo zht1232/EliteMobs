@@ -7,6 +7,7 @@ import org.bukkit.World;
 import org.bukkit.command.*;
 import org.bukkit.entity.*;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.inventory.ItemStack;
 import com.clawx.elitemobs.EliteMobsPlugin;
 import com.clawx.elitemobs.EliteMobManager;
 import java.util.*;
@@ -34,6 +35,8 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             case "stat" -> statCheck(sender, args);
             case "boss" -> bossSpawn(sender, args);
             case "particle" -> particleTest(sender, args);
+            case "gem" -> gemCmd(sender, args);
+            case "rune" -> runeCmd(sender, args);
 
             default -> showHelp(sender);
         }
@@ -59,7 +62,16 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,ChatColor.YELLOW+"/em stealtest"+ChatColor.GRAY+" \u2014 \u751f\u6210\u5077\u7269\u54c1\u6d4b\u8bd5\u7cbe\u82f1");
         msg(s,ChatColor.YELLOW+"/em boss <\u7c7b\u578b> [\u7b49\u7ea7]"+ChatColor.GRAY+" \u2014 \u76f4\u63a5\u751f\u6210Boss\uff08\u9ed8\u8ba4Lv.15\uff09");
         msg(s,ChatColor.YELLOW+"/em particle <\u804c\u4e1a>"+ChatColor.GRAY+" \u2014 \u6d4b\u8bd5\u804c\u4e1a\u7c92\u5b50\u7279\u6548\uff08tank/assassin/mage/summoner/boss\uff09");
-    }
+        msg(s,"");
+        msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u5b9d\u77f3\u6307\u4ee4 \u2501\u2501\u2501");
+        msg(s,ChatColor.YELLOW+"/em gem give <id> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6307\u5b9a\u5b9d\u77f3\uff08\u5982 attack_gem/defense_gem/thunder_gem\uff0c\u7b49\u7ea7 1-10\uff09");
+        msg(s,ChatColor.YELLOW+"/em gem charm [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6dec\u70bc\u4fdd\u62a4\u7b26");
+        msg(s,ChatColor.YELLOW+"/em gem remover [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u5b9d\u77f3\u62c6\u5378\u5668\uff08\u94c1\u7827\u62c6\u5378\u6240\u6709\u5b9d\u77f3\uff09");
+        msg(s,ChatColor.YELLOW+"/em gem list"+ChatColor.GRAY+" \u2014 \u5217\u51fa\u6240\u6709\u53ef\u53d1\u653e\u7684\u5b9d\u77f3");
+        msg(s,"");
+        msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u7b26\u6587\u6307\u4ee4 \u2501\u2501\u2501");
+        msg(s,ChatColor.YELLOW+"/em rune list"+ChatColor.GRAY+" \u2014 \u5217\u51fa\u6240\u6709\u7b26\u6587\u7c7b\u578b");
+        msg(s,ChatColor.YELLOW+"/em rune give <\u7c7b\u578b> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u7b26\u6587\uff08HEALTH/SPEED/STRENGTH/REGEN/RESIST/FIRE\uff09");    }
 
     // ---- \u72b6\u6001 ----
     private void showInfo(CommandSender s) {
@@ -310,17 +322,211 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,ChatColor.GREEN+"\u2705 \u6b63\u5728\u663e\u793a\u7c92\u5b50\u7279\u6548: "+name+ChatColor.GRAY+" \uff081\u79d2\uff0c\u7ed3\u675f\u540e\u81ea\u52a8\u6e05\u7406\uff09");
     }
 
+    // ==================== 精华(宝石)指令 ====================
+
+    /** /em gem weapon [等级] | armor [等级] | charm [数量] */
+    private void gemCmd(CommandSender s, String[] args) {
+        if (!has(s,"elitemobs.admin")) return;
+        if (args.length < 2) { showGemHelp(s); return; }
+        String sub = args[1].toLowerCase();
+        switch (sub) {
+            case "charm" -> gemGiveCharm(s, args);
+            case "remover" -> gemGiveRemover(s, args);
+            case "give" -> gemGiveCustom(s, args);
+            case "list" -> gemListCustom(s);
+            default -> showGemHelp(s);
+        }
+    }
+
+    private void showGemHelp(CommandSender s) {
+        msg(s,ChatColor.GOLD+"/em gem give <id> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6307\u5b9a\u5b9d\u77f3\uff08\u5982 attack_gem/defense_gem/thunder_gem\uff0c\u7b49\u7ea7 1-10\uff09");
+        msg(s,ChatColor.GOLD+"/em gem charm [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u6dec\u70bc\u4fdd\u62a4\u7b26");
+        msg(s,ChatColor.GOLD+"/em gem remover [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u5b9d\u77f3\u62c6\u5378\u5668\uff08\u94c1\u7827\u62c6\u5378\u6240\u6709\u5b9d\u77f3\uff09");
+        msg(s,ChatColor.GOLD+"/em gem list"+ChatColor.GRAY+" \u2014 \u5217\u51fa\u6240\u6709\u53ef\u53d1\u653e\u7684\u5b9d\u77f3");
+    }
+
+    /** \u5217\u51fa\u6240\u6709\u53ef\u53d1\u653e\u7684\u81ea\u5b9a\u4e49\u5b9d\u77f3 */
+    private void gemListCustom(CommandSender s) {
+        List<com.clawx.elitemobs.EliteConfig.CustomDrop> drops = plugin.getEliteConfig().getCustomDrops();
+        if (drops.isEmpty()) {
+            msg(s,ChatColor.RED+"\u274c \u6ca1\u6709\u53ef\u53d1\u653e\u7684\u81ea\u5b9a\u4e49\u5b9d\u77f3\uff08gems/*.yml \u6216 gem-drops.custom \u4e3a\u7a7a\uff09");
+            return;
+        }
+        msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u53ef\u53d1\u653e\u7684\u81ea\u5b9a\u4e49\u5b9d\u77f3 \u2501\u2501\u2501");
+        for (var d : drops) {
+            msg(s,ChatColor.YELLOW+d.id+ChatColor.GRAY+" \u2014 "+ChatColor.RESET
+                    + ChatColor.translateAlternateColorCodes('&', d.name));
+        }
+        msg(s,ChatColor.GRAY+"\u53ef\u4ee5\u7528 /em gem give <id> \u53d1\u653e");
+    }
+
+    /** \u53d1\u653e\u81ea\u5b9a\u4e49\u5b9d\u77f3\uff08gems/*.yml \u4e2d\u5b9a\u4e49\uff09\u3002\u683c\u5f0f: /em gem give <id> [\u7b49\u7ea7] [\u6570\u91cf] */
+    private void gemGiveCustom(CommandSender s, String[] args) {
+        if (!(s instanceof Player p)) { msg(s,ChatColor.RED+"\u274c \u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"); return; }
+        if (args.length < 3) { showGemHelp(s); return; }
+        String id = args[2].toLowerCase();
+        com.clawx.elitemobs.EliteConfig.CustomDrop target = null;
+        for (var d : plugin.getEliteConfig().getCustomDrops()) {
+            if (d.id.equalsIgnoreCase(id)) { target = d; break; }
+        }
+        if (target == null) {
+            msg(s,ChatColor.RED+"\u274c \u672a\u77e5\u5b9d\u77f3: "+args[2]);
+            gemListCustom(s);
+            return;
+        }
+        int level = 1;
+        int count = 1;
+        if (args.length >= 4) {
+            try { level = Math.max(1, Math.min(10, Integer.parseInt(args[3]))); }
+            catch (NumberFormatException ignored) {}
+        }
+        if (args.length >= 5) {
+            count = Math.max(1, Math.min(64, parseIntSafe(args[4], 1)));
+        }
+        ItemStack item = target.build(level);
+        item.setAmount(count);
+        p.getInventory().addItem(item).values()
+            .forEach(drop -> p.getWorld().dropItemNaturally(p.getLocation(), drop));
+        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+count+" \u4e2a: "+ChatColor.RESET
+                + ChatColor.translateAlternateColorCodes('&', target.name)
+                + ChatColor.GRAY+" Lv."+level);
+    }
+
+    /** 发放攻击/防御宝石（带等级与数量）。格式: /em gem weapon [等级] [数量] */
+    private void gemGiveEssence(CommandSender s, String[] args, boolean weapon) {
+        if (!(s instanceof Player p)) { msg(s,ChatColor.RED+"\u274c \u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"); return; }
+        int lvl = 5;
+        int count = 1;
+        if (args.length >= 3) {
+            try { lvl = Math.max(1, Math.min(10, Integer.parseInt(args[2]))); }
+            catch (NumberFormatException ignored) {}
+        }
+        if (args.length >= 4) {
+            count = Math.max(1, Math.min(64, parseIntSafe(args[3], 1)));
+        }
+        // 统一宝石：weapon → 攻击宝石 attack_gem / armor → 防御宝石 defense_gem
+        String targetId = weapon ? "attack_gem" : "defense_gem";
+        com.clawx.elitemobs.EliteConfig.CustomDrop target = null;
+        for (var d : plugin.getEliteConfig().getCustomDrops()) {
+            if (d.id != null && d.id.equalsIgnoreCase(targetId)) { target = d; break; }
+        }
+        if (target == null) {
+            msg(s,ChatColor.RED+"\u274c \u672a\u627e\u5230\u5b9d\u77f3\u914d\u7f6e: "+targetId+ChatColor.GRAY+"\uff08\u8bf7\u68c0\u67e5 gems/\u76ee\u5f55\uff09");
+            return;
+        }
+        ItemStack item = target.build(lvl);
+        item.setAmount(count);
+        p.getInventory().addItem(item).values()
+            .forEach(drop -> p.getWorld().dropItemNaturally(p.getLocation(), drop));
+        String typeName = weapon ? "\u653b\u51fb\u5b9d\u77f3" : "\u9632\u5fa1\u5b9d\u77f3";
+        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+typeName+ChatColor.GRAY+" [Lv."+lvl+"] x"+count);
+        msg(s,ChatColor.GRAY+"\u5c06\u5b9d\u77f3\u4e0e\u88c5\u5907\u653e\u5165\u94c1\u7827\u5373\u53ef\u6dec\u70bc");
+    }
+
+    /** 发放淬炼保护符。 */
+    private void gemGiveCharm(CommandSender s, String[] args) {
+        if (!(s instanceof Player p)) { msg(s,ChatColor.RED+"\u274c \u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"); return; }
+        int count = args.length >= 3 ? Math.max(1, Math.min(64, parseIntSafe(args[2], 1))) : 1;
+        ItemStack charm = com.clawx.elitemobs.essence.EliteEssenceFactory.createProtectionCharm(plugin.getMessages());
+        charm.setAmount(count);
+        p.getInventory().addItem(charm).values()
+            .forEach(drop -> p.getWorld().dropItemNaturally(p.getLocation(), drop));
+        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+count+" \u4e2a\u6dec\u70bc\u4fdd\u62a4\u7b26\uff01"+ChatColor.GRAY+" \u653e\u5165\u80cc\u5305\u5373\u53ef\u751f\u6548");
+    }
+
+    /** \u53d1\u653e\u5b9d\u77f3\u62c6\u5378\u5668\u3002\u683c\u5f0f: /em gem remover [\u6570\u91cf] */
+    private void gemGiveRemover(CommandSender s, String[] args) {
+        if (!(s instanceof Player p)) { msg(s,ChatColor.RED+"\u274c \u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"); return; }
+        int count = args.length >= 3 ? Math.max(1, Math.min(64, parseIntSafe(args[2], 1))) : 1;
+        ItemStack remover = com.clawx.elitemobs.essence.EliteEssenceFactory.createGemRemover(plugin.getMessages());
+        remover.setAmount(count);
+        p.getInventory().addItem(remover).values()
+            .forEach(drop -> p.getWorld().dropItemNaturally(p.getLocation(), drop));
+        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+count+" \u4e2a\u5b9d\u77f3\u62c6\u5378\u5668\uff01"+ChatColor.GRAY+" \u4e0e\u5df2\u6dec\u70bc\u88c5\u5907\u653e\u5165\u94c1\u7827\u5373\u53ef\u62c6\u5378");
+    }
+
+    // ==================== 符文指令 ====================
+
+    /** /em rune list | give <类型> [数量] */
+    private void runeCmd(CommandSender s, String[] args) {
+        if (!has(s,"elitemobs.admin")) return;
+        if (args.length < 2) { showRuneHelp(s); return; }
+        switch (args[1].toLowerCase()) {
+            case "list" -> {
+                msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u53ef\u7528\u7b26\u6587 \u2501\u2501\u2501");
+                for (var t : com.clawx.elitemobs.rune.EliteRuneFactory.TYPES.values()) {
+                    msg(s,ChatColor.YELLOW+t.id+ChatColor.GRAY+" \u2014 "+ChatColor.RESET
+                            + ChatColor.translateAlternateColorCodes('&', t.coloredName)
+                            + ChatColor.GRAY+" | "
+                            + ChatColor.translateAlternateColorCodes('&', t.desc)
+                            + ChatColor.GRAY+" | \u7b49\u7ea7: &f1-10");
+                }
+                msg(s,ChatColor.GRAY+"\u7528 /em rune give <\u7c7b\u578b> [\u7b49\u7ea7] [\u6570\u91cf] \u53d1\u653e\u7279\u5b9a\u7b49\u7ea7\u7b26\u6587");
+            }
+            case "give" -> runeGive(s, args);
+            default -> showRuneHelp(s);
+        }
+    }
+
+    private void showRuneHelp(CommandSender s) {
+        msg(s,ChatColor.GOLD+"/em rune list"+ChatColor.GRAY+" \u2014 \u5217\u51fa\u6240\u6709\u7b26\u6587\u7c7b\u578b");
+        msg(s,ChatColor.GOLD+"/em rune give <\u7c7b\u578b> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u7b26\u6587\uff08HEALTH/SPEED/STRENGTH/REGEN/RESIST/FIRE\uff0c\u7b49\u7ea7 1-10\uff09");
+        msg(s,ChatColor.GRAY+"\u5c06\u7b26\u6587\u4e0e\u5df2\u6dec\u70bc\u7684\u88c5\u5907\u653e\u5165\u94c1\u7827\u5373\u53ef\u9576\u5d4c");
+    }
+
+    private void runeGive(CommandSender s, String[] args) {
+        if (!(s instanceof Player p)) { msg(s,ChatColor.RED+"\u274c \u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"); return; }
+        if (args.length < 3) { showRuneHelp(s); return; }
+        String type = args[2].toUpperCase();
+        if (!com.clawx.elitemobs.rune.EliteRuneFactory.TYPES.containsKey(type)) {
+            msg(s,ChatColor.RED+"\u274c \u672a\u77e5\u7b26\u6587\u7c7b\u578b: "+type+ChatColor.GRAY+" \u53ef\u7528: HEALTH/SPEED/STRENGTH/REGEN/RESIST/FIRE");
+            return;
+        }
+        int level = 1;
+        int count = 1;
+        if (args.length >= 4) {
+            try { level = Math.max(1, Math.min(10, Integer.parseInt(args[3]))); }
+            catch (NumberFormatException ignored) {}
+        }
+        if (args.length >= 5) {
+            count = Math.max(1, Math.min(64, parseIntSafe(args[4], 1)));
+        }
+        ItemStack rune = com.clawx.elitemobs.rune.EliteRuneFactory.createRune(type, level, plugin.getMessages());
+        rune.setAmount(count);
+        p.getInventory().addItem(rune).values()
+            .forEach(drop -> p.getWorld().dropItemNaturally(p.getLocation(), drop));
+        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u53d1\u653e "+count+" \u4e2a\u7b26\u6587: "+ChatColor.RESET
+                + ChatColor.translateAlternateColorCodes('&', com.clawx.elitemobs.rune.EliteRuneFactory.TYPES.get(type).coloredName)
+                + ChatColor.GRAY+" Lv."+level);
+    }
+
         private void msg(CommandSender s,String m){s.sendMessage(m);}
     private String icon(boolean b){return b?ChatColor.GREEN+"\u2705":ChatColor.RED+"\u274c";}
     private String fmt(EntityType t){String n=t.name().toLowerCase().replace('_',' ');StringBuilder sb=new StringBuilder();for(String w:n.split(" "))sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1)).append(' ');return sb.toString().trim();}
 
     @Override
     public List<String> onTabComplete(CommandSender s,Command c,String l,String[] a){
-        if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","stealtest","boss","particle").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
+        if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","stealtest","boss","particle","gem","rune").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
         if(a.length==2&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")||a[0].equalsIgnoreCase("boss")))
             return plugin.getEliteConfig().getEnabledMobTypes().stream().map(x->x.name().toLowerCase()).filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
         if(a.length==2&&a[0].equalsIgnoreCase("particle"))
             return Arrays.asList("tank","assassin","mage","summoner","boss","pillar");
+        if(a.length==2&&a[0].equalsIgnoreCase("gem"))
+            return Arrays.asList("charm","list","give","remover").stream().filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
+        if(a.length==3&&a[0].equalsIgnoreCase("gem")&&a[1].equalsIgnoreCase("give"))
+            return plugin.getEliteConfig().getCustomDrops().stream().map(d->d.id).filter(x->x.toLowerCase().startsWith(a[2].toLowerCase())).collect(Collectors.toList());
+        if(a.length==4&&a[0].equalsIgnoreCase("gem")&&a[1].equalsIgnoreCase("give"))
+            return Arrays.asList("1","3","5","7","10").stream().filter(x->x.startsWith(a[3].toLowerCase())).collect(Collectors.toList());
+        if(a.length==5&&a[0].equalsIgnoreCase("gem")&&a[1].equalsIgnoreCase("give"))
+            return Arrays.asList("1","5","10","32","64").stream().filter(x->x.startsWith(a[4].toLowerCase())).collect(Collectors.toList());
+        if(a.length==2&&a[0].equalsIgnoreCase("rune"))
+            return Arrays.asList("list","give").stream().filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
+        if(a.length==3&&a[0].equalsIgnoreCase("rune")&&a[1].equalsIgnoreCase("give"))
+            return Arrays.asList("HEALTH","SPEED","STRENGTH","REGEN","RESIST","FIRE").stream().filter(x->x.toLowerCase().startsWith(a[2].toLowerCase())).collect(Collectors.toList());
+        if(a.length==4&&a[0].equalsIgnoreCase("rune")&&a[1].equalsIgnoreCase("give"))
+            return Arrays.asList("1","3","5","7","10").stream().filter(x->x.startsWith(a[3].toLowerCase())).collect(Collectors.toList());
+        if(a.length==5&&a[0].equalsIgnoreCase("rune")&&a[1].equalsIgnoreCase("give"))
+            return Arrays.asList("1","5","10","32","64").stream().filter(x->x.startsWith(a[4].toLowerCase())).collect(Collectors.toList());
         if(a.length==3&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")))
             return Arrays.asList("1","3","5","7","10","15","20");
         if(a.length==4&&(a[0].equalsIgnoreCase("test")))

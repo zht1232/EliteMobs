@@ -7,6 +7,7 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.plugin.java.JavaPlugin;
 import com.clawx.elitemobs.combat.EnchantUtil;
 import com.clawx.elitemobs.ai.EliteAffix;
+import java.io.File;
 import java.util.*;
 
 public class EliteConfig {
@@ -98,6 +99,13 @@ public class EliteConfig {
     private double affixChance;
     private int affixMin, affixMax;
     private final Map<EliteAffix, Integer> affixWeights = new LinkedHashMap<>();
+    // 符文系统（镶嵌消耗）
+    private double runeMoneyCost = 1000.0;
+    private int runePointsCost = 50;
+    private int runeXpCost = 30;
+    // 符文掉落（极难）
+    private boolean runeDropsEnabled = true;
+    private double runeDropChance = 0.02;
 
     public EliteConfig(JavaPlugin plugin) { this.plugin = plugin; this.config = plugin.getConfig(); load(); }
 
@@ -126,18 +134,32 @@ public class EliteConfig {
             }
         }
         mobProfiles = new HashMap<>();
-        if (config.contains("mob-profiles")) {
-            for (String key : config.getConfigurationSection("mob-profiles").getKeys(false)) {
+        // 优先从独立 mobs.yml 加载怪物定义（顶层直接是各怪物；兼容 config.yml 中带 mob-profiles 包裹的旧格式）
+        org.bukkit.configuration.file.FileConfiguration mobCfg = loadYaml("mobs.yml");
+        org.bukkit.configuration.ConfigurationSection profSec = null;
+        if (mobCfg != null) {
+            if (mobCfg.contains("mob-profiles")) {
+                profSec = mobCfg.getConfigurationSection("mob-profiles");
+            } else {
+                // mobs.yml 顶层即各怪物定义（ZOMBIE: / SKELETON: ...）
+                profSec = mobCfg.getRoot().getConfigurationSection("");
+            }
+        }
+        if ((profSec == null || profSec.getKeys(false).isEmpty()) && config.contains("mob-profiles")) {
+            profSec = config.getConfigurationSection("mob-profiles");
+        }
+        if (profSec != null) {
+            for (String key : profSec.getKeys(false)) {
                 try {
                     EntityType type = EntityType.valueOf(key.toUpperCase());
                     EliteMobProfile p = new EliteMobProfile();
-                    p.healthMultiplier = config.getDouble("mob-profiles."+key+".health-multiplier", 2.0);
-                    p.damageMultiplier = config.getDouble("mob-profiles."+key+".damage-multiplier", 1.5);
-                    p.speedMultiplier = config.getDouble("mob-profiles."+key+".speed-multiplier", 1.15);
-                    p.canClimbWalls = config.getBoolean("mob-profiles."+key+".can-climb-walls", false);
-                    p.canBreakBlocks = config.getBoolean("mob-profiles."+key+".can-break-blocks", false);
-                    p.canStealItems = config.getBoolean("mob-profiles."+key+".can-steal-items", true);
-                    p.priority = config.getInt("mob-profiles."+key+".priority", 5);
+                    p.healthMultiplier = profSec.getDouble(key + ".health-multiplier", 2.0);
+                    p.damageMultiplier = profSec.getDouble(key + ".damage-multiplier", 1.5);
+                    p.speedMultiplier = profSec.getDouble(key + ".speed-multiplier", 1.15);
+                    p.canClimbWalls = profSec.getBoolean(key + ".can-climb-walls", false);
+                    p.canBreakBlocks = profSec.getBoolean(key + ".can-break-blocks", false);
+                    p.canStealItems = profSec.getBoolean(key + ".can-steal-items", true);
+                    p.priority = profSec.getInt(key + ".priority", 5);
                     mobProfiles.put(type, p);
                 } catch (IllegalArgumentException e) {
                     plugin.getLogger().warning("Unknown mob type in profiles: " + key);
@@ -227,7 +249,7 @@ public class EliteConfig {
         lootBagChance = config.getDouble("gem-drops.lootbag.chance", 0.10);
         lootBagBossChance = config.getDouble("gem-drops.lootbag.boss-chance", 0.50);
 
-        // custom 自定义掉落物
+        // custom 自定义掉落物（gem-drops.custom，向后兼容）
         customDrops = new ArrayList<>();
         if (config.contains("gem-drops.custom")) {
             for (Map<?, ?> raw : config.getMapList("gem-drops.custom")) {
@@ -240,6 +262,9 @@ public class EliteConfig {
                 }
             }
         }
+
+        // gems/*.yml 目录：每颗宝石一个文件，方便增删（推荐的宝石配置方式）
+        loadGemFiles();
 
         // 击杀奖励 (Vault 金币 + PlayerPoints 点券)
         moneyRewardEnabled = config.getBoolean("loot.rewards.money.enabled", true);
@@ -365,6 +390,13 @@ public class EliteConfig {
         essenceArmorBonusPerLevel = config.getDouble("essence-upgrade.armor-bonus-per-level", 1.5);
         essenceArmorMaxBonus = config.getDouble("essence-upgrade.armor-max-bonus", 15.0);
 
+        // 符文系统
+        runeMoneyCost = config.getDouble("rune.install-cost.money", 1000.0);
+        runePointsCost = config.getInt("rune.install-cost.points", 50);
+        runeXpCost = config.getInt("rune.install-cost.xp-levels", 30);
+        runeDropsEnabled = config.getBoolean("rune.drops.enabled", true);
+        runeDropChance = config.getDouble("rune.drops.chance", 0.02);
+
         // LuckPerms
         luckPermsEnabled = config.getBoolean("luckperms.enabled", false);
         lpGroups = new ArrayList<>();
@@ -466,6 +498,13 @@ public class EliteConfig {
     public double getEssenceArmorBonusPerLevel() { return essenceArmorBonusPerLevel; }
     public double getEssenceArmorMaxBonus() { return essenceArmorMaxBonus; }
 
+    // ========== 符文系统 ==========
+    public double getRuneMoneyCost() { return runeMoneyCost; }
+    public int getRunePointsCost() { return runePointsCost; }
+    public int getRuneXpCost() { return runeXpCost; }
+    public boolean isRuneDropsEnabled() { return runeDropsEnabled; }
+    public double getRuneDropChance() { return runeDropChance; }
+
     // ????
     public boolean isLevelScalingEnabled() { return levelScalingEnabled; }
     public String getLevelScalingFormula() { return levelScalingFormula; }
@@ -502,8 +541,42 @@ public class EliteConfig {
     public double getLootBagChance() { return lootBagChance; }
     public double getLootBagBossChance() { return lootBagBossChance; }
 
+    /**
+     * 加载 plugins/EliteMobs/gems/*.yml 目录下的宝石定义。
+     * 每个文件 = 一颗宝石：文件顶层直接写 id/material/name/lore/chance 等字段
+     * （与 gem-drops.custom 条目同构）。复制文件即可新增宝石，删除文件即可移除宝石。
+     */
+    private void loadGemFiles() {
+        File dir = new File(plugin.getDataFolder(), "gems");
+        if (!dir.isDirectory()) return;
+        File[] files = dir.listFiles((d, name) -> name.toLowerCase().endsWith(".yml"));
+        if (files == null) return;
+        java.util.Arrays.sort(files);
+        for (File f : files) {
+            try {
+                org.bukkit.configuration.file.YamlConfiguration gc =
+                        org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
+                // 顶层即宝石定义（含 material/id 等字段）
+                Map<String, Object> m = new LinkedHashMap<>(gc.getValues(false));
+                m.putIfAbsent("id", f.getName().replace(".yml", "").toLowerCase());
+                customDrops.add(CustomDrop.fromMap(this, m));
+                plugin.getLogger().info("  宝石已加载: " + m.getOrDefault("id", f.getName())
+                        + " (" + f.getName() + ")");
+            } catch (Exception e) {
+                plugin.getLogger().warning("解析宝石文件 " + f.getName() + " 失败: " + e.getMessage());
+            }
+        }
+    }
+
     /** custom 模式: 自定义掉落物列表 */
     public List<CustomDrop> getCustomDrops() { return customDrops; }
+
+    /** 加载插件数据目录下的独立 YAML 文件（不存在返回 null）。 */
+    private org.bukkit.configuration.file.FileConfiguration loadYaml(String name) {
+        File f = new File(plugin.getDataFolder(), name);
+        if (!f.isFile()) return null;
+        return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
+    }
 
     // ========== 击杀奖励 (Vault 金币 + PlayerPoints 点券) ==========
     public boolean isMoneyRewardEnabled() { return moneyRewardEnabled; }
@@ -579,9 +652,14 @@ public class EliteConfig {
         public int potionAmplifier;               // 药水等级（0=一级）
         public int potionDuration;                // 药水时长（秒）
         public Set<EntityType> mobTypes = new HashSet<>(); // 限定掉落生物，空=全部
+        public String effect;                     // 宝石效果类型: attack=攻击 / defense=防御 / thunder=雷电 / knockback=击退 / speed=移速 / rare=稀有
+        public int maxLevel = 1;                  // 宝石最高等级（掉落时按精英等级折算，默认1=无等级）
+        /** 所属配置（读取成功率参数用），fromMap 时注入。 */
+        public EliteConfig owner;
 
         static CustomDrop fromMap(EliteConfig cfg, Map<String, Object> m) {
             CustomDrop d = new CustomDrop();
+            d.owner = cfg;
             d.id = String.valueOf(m.getOrDefault("id", "drop"));
             Object mat = m.get("material");
             d.material = Material.EMERALD;
@@ -607,6 +685,10 @@ public class EliteConfig {
                 d.potionAmplifier = Math.max(0, ((Number) m.getOrDefault("potion-amplifier", 0)).intValue());
                 d.potionDuration = Math.max(1, ((Number) m.getOrDefault("potion-duration", 30)).intValue());
             }
+            // 宝石效果类型（thunder=雷电 / knockback=击退，等级越高概率越高）
+            Object effObj = m.get("effect");
+            if (effObj != null) d.effect = String.valueOf(effObj).toLowerCase();
+            d.maxLevel = Math.max(1, ((Number) m.getOrDefault("max-level", 1)).intValue());
             // 限定掉落生物
             Object mobObj = m.get("mob-types");
             if (mobObj instanceof List<?> mobList) {
@@ -679,19 +761,85 @@ public class EliteConfig {
             } catch (Exception ignored) {}
         }
 
-        /** 构建该掉落物的 ItemStack */
+        /** 宝石等级对应的名称颜色（与原版一致：Lv9+绿 / 7-8金 / 4-6粉 / 2-3红 / 1蓝）。 */
+        private static String levelColor(int level) {
+            if (level >= 9) return "&2";
+            if (level >= 7) return "&6";
+            if (level >= 4) return "&d";
+            if (level >= 2) return "&c";
+            return "&b";
+        }
+
+        /** 宝石效果对应的主色调。 */
+        private static String effectColor(String eff) {
+            return switch (eff == null ? "" : eff) {
+                case "attack" -> "&c";
+                case "defense" -> "&b";
+                case "knockback" -> "&f";
+                case "thunder" -> "&e";
+                case "speed" -> "&a";
+                case "rare" -> "&6";
+                default -> "&f";
+            };
+        }
+
+        /** 按等级返回品质文本（与原版一致：普通/优秀/传说/史诗/神话）。 */
+        private static String qualityFor(int level) {
+            if (level >= 10) return "&2&l神话";
+            if (level >= 7) return "&b&l史诗";
+            if (level >= 4) return "&a&l传说";
+            if (level >= 2) return "&e&l优秀";
+            return "&f普通";
+        }
+
+        /** 淬炼成功率：baseRate + (等级-1)*perLevel，封顶 maxRate（与淬炼判定一致）。 */
+        private double successRate(int level) {
+            double base = owner != null ? owner.getEssenceUpgradeBaseRate() : 0.35;
+            double per = owner != null ? owner.getEssenceUpgradePerLevel() : 0.045;
+            double max = owner != null ? owner.getEssenceUpgradeMaxRate() : 0.95;
+            return Math.min(base + (level - 1) * per, max);
+        }
+
+        /** 构建该掉落物的 ItemStack（无等级，effect 宝石默认 Lv.1）。 */
         public org.bukkit.inventory.ItemStack build() {
+            return build(1);
+        }
+
+        /** 构建该掉落物的 ItemStack（可指定宝石等级；effect 宝石按等级显示品质/成功率/等级）。 */
+        public org.bukkit.inventory.ItemStack build(int level) {
             org.bukkit.inventory.ItemStack stack = new org.bukkit.inventory.ItemStack(material);
             org.bukkit.inventory.meta.ItemMeta meta = stack.getItemMeta();
             if (meta == null) return stack;
-            if (name != null && !name.isEmpty()) {
-                meta.setDisplayName(org.bukkit.ChatColor.translateAlternateColorCodes('&', name));
+            level = Math.max(1, Math.min(maxLevel, level));
+            boolean isGem = effect != null && !effect.isEmpty();
+
+            // 显示名：宝石使用原版风格 "&8&l&k||颜色名 &7[&fLv.X&7]&8&l&k||"
+            String baseName = (name != null && !name.isEmpty()) ? name : id;
+            if (isGem) {
+                String color = levelColor(level);
+                meta.setDisplayName(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                        "&8&l&k||" + color + baseName + " &7[&fLv." + level + "&7]&8&l&k||"));
+            } else if (!baseName.isEmpty()) {
+                meta.setDisplayName(org.bukkit.ChatColor.translateAlternateColorCodes('&', baseName));
             }
-            if (lore != null && !lore.isEmpty()) {
-                List<String> colored = new ArrayList<>();
+
+            // Lore：配置 lore 在前 + （宝石追加）品质 / 等级 / 用法 / 成功率
+            List<String> colored = new ArrayList<>();
+            if (lore != null) {
                 for (String line : lore) colored.add(org.bukkit.ChatColor.translateAlternateColorCodes('&', line));
-                meta.setLore(colored);
             }
+            if (isGem) {
+                colored.add(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                        effectColor(effect) + baseName + " &7品质: " + qualityFor(level)));
+                colored.add(org.bukkit.ChatColor.DARK_GRAY
+                        + ("defense".equals(effect) ? "护甲" : "武器") + " Lv." + level);
+                colored.add(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                        "&7将装备与此宝石放入铁砧淬炼"));
+                double rate = successRate(level);
+                colored.add(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                        "&a成功率: " + String.format("%.0f", rate * 100) + "%"));
+            }
+            meta.setLore(colored);
             // 头颅纹理
             if (meta instanceof org.bukkit.inventory.meta.SkullMeta skull && texture != null && !texture.isEmpty()) {
                 applyTexture(skull, texture);
@@ -710,6 +858,17 @@ public class EliteConfig {
             if (glow && enchants.isEmpty()) {
                 meta.addEnchant(org.bukkit.enchantments.Enchantment.UNBREAKING, 1, true);
             }
+            // 写入宝石 PDC（id + effect + 等级）——供攻击效果与等级显示
+            var pdc = meta.getPersistentDataContainer();
+            pdc.set(new org.bukkit.NamespacedKey("elitemobs", "gem_id"),
+                    org.bukkit.persistence.PersistentDataType.STRING, id);
+            if (effect != null && !effect.isEmpty()) {
+                pdc.set(new org.bukkit.NamespacedKey("elitemobs", "gem_effect"),
+                        org.bukkit.persistence.PersistentDataType.STRING, effect);
+            }
+            int lv = Math.max(1, Math.min(maxLevel, level));
+            pdc.set(new org.bukkit.NamespacedKey("elitemobs", "gem_level"),
+                    org.bukkit.persistence.PersistentDataType.INTEGER, lv);
             stack.setItemMeta(meta);
             return stack;
         }

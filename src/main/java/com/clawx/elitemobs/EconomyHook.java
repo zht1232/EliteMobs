@@ -20,11 +20,13 @@ public final class EconomyHook {
     private static Object vaultEconomy;
     private static Method vaultDeposit;
     private static Method vaultGetBalance;
+    private static Method vaultWithdraw;
 
     private static boolean pointsReady = false;
     private static Object pointsAPI;
     private static Method pointsGive;
     private static Method pointsLook;
+    private static Method pointsTake;
 
     private EconomyHook() {}
 
@@ -44,6 +46,7 @@ public final class EconomyHook {
                     vaultEconomy = rsp.getProvider();
                     vaultDeposit = vaultEconomy.getClass().getMethod("depositPlayer", OfflinePlayer.class, double.class);
                     vaultGetBalance = vaultEconomy.getClass().getMethod("getBalance", OfflinePlayer.class);
+                    vaultWithdraw = vaultEconomy.getClass().getMethod("withdrawPlayer", OfflinePlayer.class, double.class);
                     vaultReady = true;
                 }
             } catch (Throwable ignored) {}
@@ -59,6 +62,7 @@ public final class EconomyHook {
                 pointsAPI = cls.getMethod("getAPI").invoke(instance);
                 pointsGive = pointsAPI.getClass().getMethod("give", UUID.class, int.class);
                 pointsLook = pointsAPI.getClass().getMethod("look", UUID.class);
+                pointsTake = pointsAPI.getClass().getMethod("take", UUID.class, int.class);
                 pointsReady = true;
             } catch (Throwable ignored) {}
         }
@@ -108,6 +112,27 @@ public final class EconomyHook {
             return ((Number) pointsLook.invoke(pointsAPI, player.getUniqueId())).intValue();
         } catch (Throwable t) {
             return 0;
+        }
+    }
+
+    /** 扣除玩家金币（Vault）。amount<=0 或 Vault 不可用时返回 false。 */
+    public static boolean withdrawMoney(OfflinePlayer player, double amount) {
+        if (!vaultReady || player == null || amount <= 0) return false;
+        try {
+            vaultWithdraw.invoke(vaultEconomy, player, amount);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 扣除玩家点券（PlayerPoints）。amount<=0 或 PlayerPoints 不可用时返回 false。 */
+    public static boolean takePoints(OfflinePlayer player, int amount) {
+        if (!pointsReady || player == null || amount <= 0) return false;
+        try {
+            return ((Boolean) pointsTake.invoke(pointsAPI, player.getUniqueId(), amount));
+        } catch (Throwable t) {
+            return false;
         }
     }
 }

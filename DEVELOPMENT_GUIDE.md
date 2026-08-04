@@ -8,7 +8,7 @@
 - 精英怪物生成系统（1-20级）
 - 职业系统（坦克/刺客/法师/召唤师）
 - Boss 系统（Lv.15+ 可晋升）
-- 宝石掉落系统（支持 SnowyGems 集成）
+- 内置宝石系统（铁砧淬炼）
 - 伤害缩放机制
 - 装备生成系统
 
@@ -21,7 +21,6 @@ EliteMobs-Project/
 │   ├── EliteConfig.java              # 配置管理
 │   ├── EliteMobManager.java          # 精英怪管理
 │   ├── EliteCombatListener.java      # 战斗监听器
-│   ├── SnowyGemsFactory.java         # SnowyGems 宝石工厂
 │   ├── ai/
 │   │   ├── EliteClass.java           # 职业枚举
 │   │   ├── EliteClassAI.java         # 职业 AI
@@ -33,6 +32,16 @@ EliteMobs-Project/
 │   │   ├── DamageScaler.java         # 伤害缩放
 │   │   ├── WeaponEnhancer.java       # 武器强化
 │   │   └── EnchantUtil.java          # 附魔工具
+│   ├── gem/
+│   │   ├── GemRegistry.java          # 宝石注册表（加载 gems/*.yml）
+│   │   ├── GemConfig.java            # 宝石配置模型
+│   │   ├── GemType.java              # 宝石类型枚举
+│   │   ├── GemItemFactory.java       # 宝石物品构建（头颅纹理/Display/Tips）
+│   │   ├── GemRewards.java           # 奖励函数解析执行（Attribute/Enchant 等）
+│   │   ├── GemManager.java           # 淬炼核心（成功率/降级/保护符/特效）
+│   │   ├── GemAnvilListener.java     # 铁砧淬炼监听器
+│   │   ├── GemUseListener.java       # 战利品袋/PlayerGem 使用
+│   │   └── GemNbt.java               # 宝石 NBT 读写（PDC）
 │   ├── spawn/
 │   │   └── EliteSpawnHandler.java    # 生成处理
 │   └── commands/
@@ -40,7 +49,12 @@ EliteMobs-Project/
 ├── src/main/resources/
 │   ├── plugin.yml                    # 插件配置
 │   ├── config.yml                    # 用户配置
-│   └── messages.yml                  # 消息配置
+│   ├── messages.yml                  # 消息配置
+│   └── gems/
+│       ├── weapon-gems.yml           # 武器宝石
+│       ├── armor-gems.yml            # 护甲宝石
+│       ├── enchant-gems.yml          # 附魔宝石
+│       └── special-gems.yml          # 特殊宝石（保护符/无限/修复）
 └── compile.bat                       # 编译脚本
 ```
 
@@ -72,11 +86,15 @@ EliteMobs-Project/
   - 专属 Boss 血条
   - 特殊技能：冲击波/治愈/召唤
 
-#### 4. 宝石掉落系统
-支持三种模式（在 config.yml 中配置）：
-- **snowygems**：使用 SnowyGems 兼容宝石（需要 SnowyGems 插件）
-- **custom**：使用自定义宝石（独立运行，功能简化）
-- **disabled**：不掉落宝石
+#### 4. 内置宝石系统（铁砧淬炼）
+宝石配置在 `plugins/EliteMobs/gems/*.yml`（分 4 类文件）：
+- **weapon-gems.yml**：攻击宝石等（加武器攻击力）
+- **armor-gems.yml**：保护宝石/生命宝石/速度宝石（护甲套装减伤）
+- **enchant-gems.yml**：耐久/时运/锋利/保护附魔宝石
+- **special-gems.yml**：淬炼保护符/无限宝石/修复宝石
+
+淬炼玩法：将「装备 + 宝石」放入铁砧，结果槽显示成功率预览，点击淬炼。
+成功应用宝石效果 + 烟花庆祝；失败宝石消失、装备可能降级（保护符可避免）。
 
 #### 5. AI 行为系统
 - **爬墙 AI**：蜘蛛类怪物可以攀爬墙壁
@@ -87,7 +105,9 @@ EliteMobs-Project/
 ```bash
 /em spawn <类型> [等级]     # 生成精英怪
 /em boss <类型> [等级]      # 生成 Boss
-/em gem <类型> [等级] [数量] # 获取宝石
+/em gem list                # 列出所有宝石
+/em gem give <ID> [数量]    # 发放宝石
+/em gem bag [数量]          # 发放战利品袋
 /em info                    # 查看插件状态
 /em reload                  # 重载配置
 /em particle <职业>         # 测试粒子特效
@@ -106,13 +126,16 @@ general:
   
 # 宝石掉落模式
 gem-drops:
-  mode: snowygems            # snowygems / custom / disabled
-  drops:
-    enabled: true
+  mode: custom            # custom / disabled
+  gems:
     level-1-3: 0.15
     level-4-6: 0.35
     level-7-9: 0.55
     level-10: 0.85
+  lootbag:
+    enabled: true
+    chance: 0.10
+    boss-chance: 0.50
 
 # 生成广播
 general:
@@ -122,42 +145,15 @@ general:
     announce-range: -1       # -1 = 全服广播
 ```
 
-## 与 SnowyGems 集成
-
-### 集成方式
-EliteMobs 掉落 SnowyGems 兼容的宝石，玩家使用 SnowyGems 的 `/sgem embed` 指令进行镶嵌。
-
-### 工作流程
-1. 精英怪/Boss 被击杀
-2. 掉落 SnowyGems 兼容宝石
-3. 玩家使用 `/sgem embed` 打开镶嵌台
-4. 将宝石镶嵌到装备上
-
-### 支持的宝石类型
-- 攻击宝石（attack）
-- 防御宝石（defense）
-- 速度宝石（speed）
-- 生命宝石（health）
-- 锋利宝石（sharpness）
-- 保护宝石（protection）
-- 耐久宝石（unbreaking）
-- 效率宝石（efficiency）
-
-## 独立运行模式
-
-如果不安装 SnowyGems，可以将 `gem-drops.mode` 设置为 `custom`：
-- 掉落自定义宝石（绿宝石）
-- 宝石仅作为收集品
-- 需要配合其他插件实现镶嵌功能
-
 ## 技术细节
 
 ### 使用的 API
-- Paper API 1.21+
+- Paper API 26.x
 - Bukkit Inventory API
-- Bukkit Attribute API
+- Bukkit Attribute API（AttributeModifier + EquipmentSlotGroup）
 - Bukkit Particle API
 - Bukkit Boss Bar API
+- PersistentDataContainer（宝石 NBT 存储）
 
 ### 性能优化
 - 使用 ConcurrentHashMap 存储精英怪数据
@@ -166,18 +162,19 @@ EliteMobs 掉落 SnowyGems 兼容的宝石，玩家使用 SnowyGems 的 `/sgem e
 
 ### 兼容性
 - 支持 Paper 1.21+ / Paper 26.x
-- 支持 Folia（folia-supported: true）
-- 需要 Java 21+
+- 需要 Java 25（paper-api 26.2 为 Java 25 编译）
 
 ## 已知问题
 
 ### 已修复
-- ✅ GUI 拖拽物品问题（已移除自定义 GUI，改用 SnowyGems）
-- ✅ 附魔等级上限问题（已移除限制）
-- ✅ 宝石掉落模式切换（已添加配置选项）
+- ✅ 套装加成 armor_lv 实际生效
+- ✅ 铁砧淬炼提示纸颜色显示
+- ✅ 宝石物品头颅纹理丢失（build 流程覆盖 meta）
+- ✅ 淬炼槽位兼容两种放法
 
 ### 待改进
-- 自定义宝石的实际功能实现
+- 宝石拆卸系统
+- 宝石合成/进阶
 - 更多职业类型
 - 更多 Boss 技能
 
@@ -210,7 +207,7 @@ EliteMobs-28.0.0.jar
 
 ### v28.0.0（当前版本）
 - 移除 SnowyGems 依赖，改为内置宝石系统
-- 宝石外观/value 样式与 SnowyGems 完全一致（gems/*.yml 配置）
+- 宝石配置拆分 4 文件（weapon/armor/enchant/special）
 - 铁砧淬炼玩法：装备+宝石 → 成功率预览 → 点击淬炼
 - 淬炼成功烟花粒子 + 庆祝音效
 - 修复套装加成 armor_lv 永不生效的 Bug
@@ -223,7 +220,7 @@ EliteMobs-28.0.0.jar
 ### v26.2.1
 - 完整的职业系统
 - Boss 系统
-- SnowyGems 集成
+- ~~SnowyGems 集成~~（v28.0.0 已移除）
 - 宝石掉落配置
 - 性能优化
 

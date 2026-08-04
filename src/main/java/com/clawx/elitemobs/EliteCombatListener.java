@@ -21,8 +21,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import com.clawx.elitemobs.gem.GemConfig;
-import com.clawx.elitemobs.gem.GemRegistry;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -104,6 +102,56 @@ public class EliteCombatListener implements Listener {
             for (int i = 0; i < 10; i++) bar.append(i < (int) Math.ceil(pct / 10.0) ? ChatColor.DARK_RED + "\u2588" : ChatColor.GRAY + "\u2588");
             p.sendActionBar(ChatColor.RED + "[" + bar + ChatColor.RED + "] " + ChatColor.GOLD + fmt(e.getType()) + " Lv." + lv + ChatColor.GRAY + " | " + String.format("%.0f%%", pct));
         }
+    }
+
+    /** 主手武器上镶嵌的宝石效果：雷电=概率召唤闪电 / 击退=稳定击退敌人（按宝石等级）。 */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerAttackWithGem(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player p)) return;
+        if (!(event.getEntity() instanceof LivingEntity target)) return;
+        if (target.isDead()) return;
+        ItemStack hand = p.getInventory().getItemInMainHand();
+        if (hand == null || !hand.hasItemMeta()) return;
+
+        String[] gemIds = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGems(hand);
+        int[] gemLvs = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGemLevels(hand);
+
+        // 击退宝石：稳定施加（等级 = 装备上击退宝石的最高等级）
+        Integer kb = hand.getItemMeta().getPersistentDataContainer().get(
+                new org.bukkit.NamespacedKey("elitemobs", "gem_knockback"),
+                org.bukkit.persistence.PersistentDataType.INTEGER);
+        if (kb != null && kb > 0) {
+            org.bukkit.util.Vector dir = target.getLocation().toVector()
+                    .subtract(p.getLocation().toVector()).normalize();
+            double power = 0.4 + kb * 0.12;
+            target.setVelocity(dir.multiply(power).setY(0.3 + kb * 0.04));
+            target.getWorld().playSound(target.getLocation(), Sound.ENTITY_PLAYER_ATTACK_KNOCKBACK, 1.0f, 1.0f);
+        }
+
+        // 雷电宝石：按等级概率召唤闪电
+        for (int i = 0; i < com.clawx.elitemobs.essence.EliteGemFactory.MAX_GEM_SLOTS; i++) {
+            if (gemIds[i] == null) continue;
+            String eff = gemEffectFor(gemIds[i]);
+            if ("thunder".equals(eff)) {
+                int lv = gemLvs[i];
+                double chance = com.clawx.elitemobs.essence.EliteGemFactory.thunderChance(lv);
+                if (rng.nextDouble() < chance) {
+                    target.getWorld().strikeLightningEffect(target.getLocation());
+                    target.getWorld().playSound(target.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.0f, 1.0f);
+                    target.damage(2.0 + lv * 0.5, p);
+                }
+            }
+        }
+    }
+
+    /** 根据宝石 id 返回效果类型（通过 CustomDrop 定义）。 */
+    private String gemEffectFor(String gemId) {
+        for (var d : plugin.getEliteConfig().getCustomDrops()) {
+            if (d.id != null && d.id.equalsIgnoreCase(gemId) && d.effect != null) {
+                return d.effect.toLowerCase();
+            }
+        }
+        return null;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -398,12 +446,8 @@ public class EliteCombatListener implements Listener {
     /**
      * 处理精英/Boss 的掉落物（统一入口）。
      *
-     * <p>包含三类掉落：</p>
-     * <ul>
-     *   <li>custom 模式: 服主配置的自定义掉落物（gem-drops.custom）</li>
-     *   <li>宝石掉落: SnowyGems 风格宝石（按等级段概率，gem-drops.gems）</li>
-     *   <li>战利品袋: 随机开出宝石的奖励袋（gem-drops.lootbag）</li>
-     * </ul>
+     * <p>掉落逻辑与原版铁砧淬炼一致：按 loot.essence-drops 等级段概率
+     * 掉落武器精华/护甲精华（带等级），精华用于铁砧淬炼装备。</p>
      *
      * @param event 死亡事件（向其 Drops 添加物品）
      * @param level 精英等级
@@ -412,76 +456,76 @@ public class EliteCombatListener implements Listener {
     private void rollGemDrops(EntityDeathEvent event, int level, boolean boss) {
         EliteConfig cfg = plugin.getEliteConfig();
         if (!cfg.isGemDropsEnabled()) return;
-        String mode = cfg.getGemDropMode();
 
-        // 1. 自定义掉落物（custom / 默认都生效）
-        if (!"disabled".equals(mode)) {
-            for (EliteConfig.CustomDrop drop : cfg.getCustomDrops()) {
-                if (!drop.allows(event.getEntityType())) continue; // 按生物类型过滤
-                double c = drop.getChance(level);
-                if (c <= 0.0) continue;
-                if (rng.nextDouble() >= c) continue;
-                ItemStack item = drop.build();
-                item.setAmount(randomInt(drop.amountMin, drop.amountMax));
-                event.getDrops().add(item);
+        // 按等级段概率判定精华掉落（原版 essence-drops 逻辑）
+        double chance = cfg.getEssenceDropChance(level);
+        if (boss) chance = Math.min(chance * 1.5, 1.0);
+        if (chance > 0.0 && rng.nextDouble() < chance) {
+            int amount = randomInt(cfg.getEssenceMinAmount(), cfg.getEssenceMaxAmount());
+            var msgs = plugin.getMessages();
+            for (int i = 0; i < amount; i++) {
+                // 随机掉武器精华或护甲精华
+                ItemStack essence = rng.nextBoolean()
+                        ? com.clawx.elitemobs.essence.EliteEssenceFactory.createEliteEssence(level, msgs)
+                        : com.clawx.elitemobs.essence.EliteEssenceFactory.createArmorEssence(level, msgs);
+                event.getDrops().add(essence);
             }
         }
 
-        // 2. 宝石掉落（SnowyGems 风格，按等级段）
-        rollGemDropsByLevel(event, level, boss);
+        // gems/*.yml + gem-drops.custom 自定义宝石（各宝石按自身等级段概率独立判定）
+        EntityType mobType = event.getEntity().getType();
+        for (EliteConfig.CustomDrop drop : cfg.getCustomDrops()) {
+            if (!drop.allows(mobType)) continue;
+            double c = drop.getChance(level);
+            if (boss) c = Math.min(c * 1.5, 1.0);
+            if (c <= 0.0 || rng.nextDouble() >= c) continue;
+            int amt = randomInt(drop.amountMin, drop.amountMax);
+            // 宝石等级由精英等级决定（1 + level/3，上限为该宝石 max-level）
+            int gemLevel = Math.max(1, Math.min(drop.maxLevel, 1 + level / 3));
+            for (int i = 0; i < amt; i++) {
+                ItemStack item = buildCustomDrop(drop, gemLevel);
+                if (item != null) event.getDrops().add(item);
+            }
+        }
 
-        // 3. 战利品袋
-        rollLootBag(event, level, boss);
-    }
-
-    /**
-     * 宝石掉落：从已加载宝石中按等级段概率随机掉落。
-     * 概率沿用 gem-drops.drops.level-X-Y / boss-level-X-Y，数量 gem-drops.gems.amount-min/max。
-     */
-    private void rollGemDropsByLevel(EntityDeathEvent event, int level, boolean boss) {
-        if (plugin.getGemManager() == null) return;
-        GemRegistry registry = plugin.getGemManager().getRegistry();
-        if (registry.size() == 0) return;
-        EliteConfig cfg = plugin.getEliteConfig();
-        double chance = cfg.getGemDropChance(level, boss);
-        if (chance <= 0.0) return;
-        if (rng.nextDouble() >= chance) return;
-
-        int amount = randomInt(cfg.getGemAmountMin(), cfg.getGemAmountMax());
-        for (int i = 0; i < amount; i++) {
-            GemConfig gem = pickGemForLevel(registry, level);
-            if (gem == null) continue;
-            ItemStack gemItem = plugin.getGemManager().getFactory().build(gem, 1);
-            if (gemItem != null) event.getDrops().add(gemItem);
+        // 符文（极难掉落：Boss 才可能掉，概率很低）
+        if (cfg.isRuneDropsEnabled()) {
+            double runeChance = cfg.getRuneDropChance();
+            if (boss) runeChance *= 2.0;
+            if (runeChance > 0 && rng.nextDouble() < runeChance) {
+                String[] types = {"HEALTH", "SPEED", "STRENGTH", "REGEN", "RESIST", "FIRE"};
+                // 符文等级由精英等级决定：精英 Lv.1-3→符文 Lv.1 / 4-6→2 / 7-9→3 / 10+→4~10
+                int runeLevel = Math.max(1, Math.min(10, 1 + level / 3));
+                ItemStack rune = com.clawx.elitemobs.rune.EliteRuneFactory.createRune(
+                        types[rng.nextInt(types.length)], runeLevel, plugin.getMessages());
+                event.getDrops().add(rune);
+            }
         }
     }
 
-    /**
-     * 战利品袋：精英有概率掉一个"奖励袋"，开袋随机获得宝石。
-     */
-    private void rollLootBag(EntityDeathEvent event, int level, boolean boss) {
-        EliteConfig cfg = plugin.getEliteConfig();
-        if (!cfg.isLootBagEnabled()) return;
-        double chance = boss ? cfg.getLootBagBossChance() : cfg.getLootBagChance();
-        if (chance <= 0.0) return;
-        if (rng.nextDouble() >= chance) return;
-        ItemStack bag = plugin.getGemManager().getFactory().buildLootBag(level, boss);
-        if (bag != null) event.getDrops().add(bag);
+    /** 构建自定义宝石物品（材质/头颅纹理/药水/附魔/光效/名称/Lore，带宝石等级）。 */
+    private ItemStack buildCustomDrop(EliteConfig.CustomDrop d, int level) {
+        try {
+            return d.build(level);
+        } catch (Exception e) {
+            plugin.getLogger().warning("构建自定义宝石失败 " + d.id + ": " + e.getMessage());
+            return null;
+        }
     }
 
-    /** 按等级段从宝石池随机选一颗宝石（低等级偏向普通宝石）。 */
-    private GemConfig pickGemForLevel(GemRegistry registry, int level) {
-        List<GemConfig> pool = new ArrayList<>(registry.all());
-        if (pool.isEmpty()) return null;
-        // 按等级过滤：等级越高，越倾向"真/神"进阶宝石（名称含 · 的进阶宝石）
-        java.util.List<GemConfig> advanced = new ArrayList<>();
-        for (GemConfig g : pool) {
-            if (g.id.contains("真") || g.id.contains("神")) advanced.add(g);
-        }
-        double r = rng.nextDouble();
-        if (level >= 15 && !advanced.isEmpty() && r < 0.35) return advanced.get(rng.nextInt(advanced.size()));
-        if (level >= 10 && !advanced.isEmpty() && r < 0.25) return advanced.get(rng.nextInt(advanced.size()));
-        return pool.get(rng.nextInt(pool.size()));
+    /** 给头颅应用 base64 纹理（反射兼容 Paper）。 */
+    private void applySkullTexture(SkullMeta meta, String base64) {
+        try {
+            Class<?> profileClass = Class.forName("com.destroystokyo.paper.profile.CraftPlayerProfile");
+            java.lang.reflect.Constructor<?> ctor = profileClass.getConstructor(java.util.UUID.class, String.class);
+            Object profile = ctor.newInstance(java.util.UUID.randomUUID(), null);
+            java.lang.reflect.Method setProperty = profile.getClass().getMethod("setProperty",
+                    Class.forName("com.destroystokyo.paper.profile.ProfileProperty"));
+            setProperty.invoke(profile, new Object[]{new com.destroystokyo.paper.profile.ProfileProperty("textures", base64, null)});
+            java.lang.reflect.Method setPlayerProfile = meta.getClass().getMethod("setPlayerProfile",
+                    Class.forName("com.destroystokyo.paper.profile.PlayerProfile"));
+            setPlayerProfile.invoke(meta, profile);
+        } catch (Exception ignored) {}
     }
 
     private int randomInt(int min, int max) {

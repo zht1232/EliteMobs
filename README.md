@@ -43,10 +43,16 @@
 > 词缀权重可在 `config.yml` 中调整，不想要的词缀权重设 `0` 即可移除。
 
 ### 💎 掉落系统
-`gem-drops.mode` 支持三种模式：
-- **`custom`**（无需任何额外插件）：服主完全自主配置精英怪掉落物，支持材质 / 名称 / Lore / 附魔 / 光效 / **自定义头颅纹理** / **药水效果** / **按生物类型限定** / 各等级段概率 / 数量
-- **`snowygems`**：掉落真实的 [SnowyGems](https://www.minebbs.com/) 宝石（可镶嵌、拆卸、生效）
+`gem-drops.mode` 支持两种模式：
+- **`custom`**（默认）：服主完全自主配置精英怪掉落物，支持材质 / 名称 / Lore / 附魔 / 光效 / **自定义头颅纹理** / **药水效果** / **按生物类型限定** / 各等级段概率 / 数量
 - **`disabled`**：不掉落
+
+### 💠 内置宝石系统（铁砧淬炼）
+- **宝石来源**：精英怪按等级段掉落宝石 + 战利品袋（右键开出），或管理员用 `/em gem give` 发放
+- **宝石配置**：`plugins/EliteMobs/gems/*.yml`（分 weapon / armor / enchant / special 四类）
+- **淬炼玩法**：将「装备 + 宝石」放入铁砧 → 结果槽显示成功率预览 → 点击淬炼
+  - 成功：宝石生效（武器攻击 / 护甲套装减伤 / 附魔 / 无限耐久等）+ 烟花庆祝
+  - 失败：宝石消失，装备可能降级（携带「淬炼保护符」可避免）
 
 ### 💰 经济奖励
 击杀精英怪发放奖励（Vault + PlayerPoints，均为软依赖）：
@@ -66,9 +72,9 @@
 |------|------|------|
 | `/em spawn <类型> [等级]` | `elitemobs.spawn` | 手动生成精英怪 |
 | `/em boss <类型> [等级]` | `elitemobs.admin` | 在脚下生成 Boss |
-| `/em gem list` | `elitemobs.admin` | 列出 SnowyGems 已加载宝石 |
-| `/em gem give <ID> [数量]` | `elitemobs.admin` | 按 ID 发放真实宝石 |
-| `/em gem <别名> [数量]` | `elitemobs.admin` | 发放宝石（attack/defense/speed/health/sharpness/protection/unbreaking/efficiency） |
+| `/em gem list` | `elitemobs.admin` | 列出所有宝石 |
+| `/em gem give <ID> [数量]` | `elitemobs.admin` | 发放宝石（Tab 补全 ID） |
+| `/em gem bag [数量]` | `elitemobs.admin` | 发放战利品袋 |
 | `/em particle <职业>` | `elitemobs.admin` | 测试职业粒子特效 |
 | `/em test [类型] [等级] [数量]` | `elitemobs.admin` | 批量生成测试 |
 | `/em wave [种类数]` | `elitemobs.admin` | 生成精英波 |
@@ -98,7 +104,7 @@
 
 ### 必需
 - **Paper 1.21+ / Paper 26.x**
-- **Java 21+**
+- **Java 25**
 
 ### 可选（均为软依赖，未装自动跳过）
 | 插件 | 用途 |
@@ -106,7 +112,6 @@
 | Vault + 经济插件 | 击杀金币奖励 |
 | PlayerPoints | 击杀点券奖励 |
 | PlaceholderAPI | `%elitemobs_*` 占位符 |
-| SnowyGems | 掉落真实宝石（需其支持当前 MC 版本） |
 | LuckPerms | 权限组掉落/奖励/经验加成 |
 | WorldGuard / GriefPrevention / Towny / Factions | 区域保护 |
 | MythicMobs / mcMMO | 兼容 |
@@ -147,7 +152,7 @@ elite-affixes:
 ### 掉落模式
 ```yaml
 gem-drops:
-  mode: custom                  # snowygems / custom / disabled
+  mode: custom                  # custom / disabled
   custom:
     - id: attack_gem
       material: EMERALD
@@ -176,7 +181,38 @@ gem-drops:
       potion-type: SPEED
       potion-amplifier: 1
       potion-duration: 300
+  # 内置宝石掉落（铁砧淬炼宝石）
+  gems:
+    level-1-3: 0.15
+    level-4-6: 0.35
+    level-7-9: 0.55
+    level-10: 0.85
+    amount-min: 1
+    amount-max: 1
+  # 战利品袋（右键开出宝石）
+  lootbag:
+    enabled: true
+    chance: 0.10
+    boss-chance: 0.50
 ```
+
+### 宝石配置（gems/*.yml）
+宝石配置分 4 个文件：`weapon-gems.yml` / `armor-gems.yml` / `enchant-gems.yml` / `special-gems.yml`。每颗宝石格式：
+```yaml
+攻击宝石:
+  Name: 攻击宝石
+  Require: [WEAPON]            # 可淬炼的装备类别
+  Display: "&8&l&k||&c&l攻击宝石&8&l&k||"   # 边框样式
+  Tips:                        # lore
+    - "&7将装备与此宝石放入 &b铁砧&7 淬炼"
+    - "&7武器攻击力&c+1 &7(上限20)"
+  Texture: "eyJ0ZXh0dXJlcyI6..."   # 头颅纹理 base64
+  Success: 100                 # 成功率 1-100
+  SuccessTip: "&f淬炼成功！武器攻击力+1"
+  Rewards:
+    - Attribute{name=damage;operation=0;slot=auto;var=v+1;limit=20}
+```
+可用 Rewards：`Attribute{...}` / `Enchant{...}` / `LoreAdd{...}` / `Name{...}` / `Unbreakable` / `Durability{...}`。
 
 ### 经济奖励
 ```yaml
@@ -207,7 +243,6 @@ loot:
 |--------|------|
 | `%elitemobs_elite_count%` | 当前在线精英怪数量 |
 | `%elitemobs_drop_mode%` | 当前掉落模式 |
-| `%elitemobs_gem_hook%` | SnowyGems 挂钩状态（connected/loading/unavailable） |
 | `%elitemobs_player_combo%` | 玩家当前连杀数 |
 | `%elitemobs_player_money%` | 玩家金币余额 |
 | `%elitemobs_player_points%` | 玩家点券余额 |
@@ -227,7 +262,7 @@ loot:
 ## 📝 更新日志
 
 ### v28.0.0
-- ✅ **内置宝石系统**：移除 SnowyGems 依赖，宝石外观/value 样式与 SnowyGems 完全一致
+- ✅ **内置宝石系统**：移除 SnowyGems 依赖，自研宝石 + 铁砧淬炼玩法
   - 配置在 `plugins/EliteMobs/gems/*.yml`，支持属性/附魔/药水/战利品等宝石
   - **铁砧淬炼**：装备+宝石 → 成功率预览 → 点击淬炼
   - 淬炼成功：烟花粒子 + 庆祝音效
