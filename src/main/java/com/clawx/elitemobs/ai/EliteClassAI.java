@@ -26,8 +26,8 @@ import java.util.*;
 public class EliteClassAI implements Listener {
     private final EliteMobsPlugin plugin;
     private static final Random rng = new Random();
-    // 坦克飞绕盾牌（ItemDisplay 实体，跟随怪物旋转）
-    private final Map<UUID, org.bukkit.entity.ItemDisplay[]> tankDisplays = new java.util.concurrent.ConcurrentHashMap<>();
+    // 坦克飞绕盾牌（原版 EliteMobs 风格：Item 掉落物实体 + velocity 平滑旋转，无朝向问题、不卡顿）
+    private final Map<UUID, org.bukkit.entity.Item[]> tankDisplays = new java.util.concurrent.ConcurrentHashMap<>();
 
     public EliteClassAI(EliteMobsPlugin plugin) {
         this.plugin = plugin;
@@ -289,51 +289,60 @@ public class EliteClassAI implements Listener {
 
     // ==================== 坦克飞绕盾牌（ItemDisplay 实体） ====================
 
-    /** 为坦克创建 6 个飞绕盾牌（真实物品显示，不可交互、无碰撞、跟随怪物） */
+    /** 为坦克创建 6 个飞绕盾牌（Item 掉落物实体：不可拾取、无重力、无敌，跟随怪物） */
     private void ensureTankDisplays(LivingEntity e) {
         if (tankDisplays.containsKey(e.getUniqueId())) return;
         int n = 6;
-        org.bukkit.entity.ItemDisplay[] arr = new org.bukkit.entity.ItemDisplay[n];
+        org.bukkit.entity.Item[] arr = new org.bukkit.entity.Item[n];
         try {
             for (int i = 0; i < n; i++) {
-                org.bukkit.entity.ItemDisplay id = (org.bukkit.entity.ItemDisplay)
-                        e.getWorld().spawnEntity(e.getLocation(), EntityType.ITEM_DISPLAY);
-                id.setItemStack(new org.bukkit.inventory.ItemStack(Material.SHIELD));
-                id.setDisplayWidth(0.7f);
-                id.setDisplayHeight(0.7f);
-                id.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
-                id.setInvulnerable(true);
-                id.setGravity(false);
-                arr[i] = id;
+                // 每个盾牌写入唯一 PDC，防止掉落物互相 merge 成堆
+                org.bukkit.inventory.ItemStack shield = new org.bukkit.inventory.ItemStack(Material.SHIELD);
+                var meta = shield.getItemMeta();
+                meta.getPersistentDataContainer().set(new org.bukkit.NamespacedKey("elitemobs", "orb_id"),
+                        org.bukkit.persistence.PersistentDataType.INTEGER, i);
+                shield.setItemMeta(meta);
+                org.bukkit.entity.Item it = e.getWorld().dropItem(e.getLocation().add(0, 1.0, 0), shield);
+                it.setPickupDelay(Integer.MAX_VALUE); // 不可拾取
+                it.setGravity(false);
+                it.setInvulnerable(true);
+                arr[i] = it;
             }
         } catch (Exception ex) {
             plugin.getLogger().warning("[EliteMobs] \u5766\u514b\u98de\u7ed5\u76fe\u724c\u521b\u5efa\u5931\u8d25: " + ex.getMessage());
-            for (org.bukkit.entity.ItemDisplay id : arr) if (id != null) id.remove();
+            for (org.bukkit.entity.Item it : arr) if (it != null) it.remove();
             return;
         }
         tankDisplays.put(e.getUniqueId(), arr);
         plugin.getLogger().info("[EliteMobs] \u5df2\u4e3a\u5766\u514b " + e.getType().name() + " \u521b\u5efa " + n + " \u4e2a\u98de\u7ed5\u76fe\u724c");
     }
 
-    /** 每 tick 更新坦克飞绕盾牌位置（绕身体旋转 + 跟随怪物移动） */
+    /** 每 tick 更新坦克飞绕盾牌（绕身体平滑旋转 + 跟随怪物移动，原版用 velocity 推进而非 teleport 防卡顿） */
     private void updateTankDisplays(LivingEntity e, int tick) {
-        org.bukkit.entity.ItemDisplay[] arr = tankDisplays.get(e.getUniqueId());
+        org.bukkit.entity.Item[] arr = tankDisplays.get(e.getUniqueId());
         if (arr == null) return;
-        Location loc = e.getLocation();
+        Location center = e.getLocation().add(0, 1.0, 0);
+        double speed = 0.15;
         for (int i = 0; i < arr.length; i++) {
-            org.bukkit.entity.ItemDisplay id = arr[i];
-            if (id == null || !id.isValid()) continue;
-            double a = (tick * 0.12 + i * Math.PI * 2 / arr.length);
+            org.bukkit.entity.Item it = arr[i];
+            if (it == null || !it.isValid()) continue;
+            double a = (tick * speed + i * Math.PI * 2 / arr.length);
             double r = 1.2;
-            id.teleport(loc.clone().add(Math.cos(a) * r, 1.05, Math.sin(a) * r));
+            Location target = center.clone().add(Math.cos(a) * r, 0, Math.sin(a) * r);
+            org.bukkit.util.Vector mv = target.toVector().subtract(it.getLocation().toVector());
+            if (mv.lengthSquared() > 9) { // 怪物瞬移/距离过大直接传送，避免拉出长线
+                it.teleport(target);
+            } else {
+                it.setVelocity(mv.multiply(0.3)); // 向目标平滑推进 30%
+            }
         }
     }
 
     /** 清理坦克飞绕盾牌（死亡/失效时移除实体） */
     private void cleanupTankDisplays(UUID uuid) {
-        org.bukkit.entity.ItemDisplay[] arr = tankDisplays.remove(uuid);
+        org.bukkit.entity.Item[] arr = tankDisplays.remove(uuid);
         if (arr == null) return;
-        for (org.bukkit.entity.ItemDisplay id : arr) if (id != null && id.isValid()) id.remove();
+        for (org.bukkit.entity.Item it : arr) if (it != null && it.isValid()) it.remove();
     }
 
     /** 精英死亡时清理坦克飞绕盾牌 */
