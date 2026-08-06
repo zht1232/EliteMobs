@@ -82,6 +82,7 @@ public class EliteConfig {
     private double nightSpeedBonus;
     private double nightDamageMultiplier;
     private double nightSpawnMultiplier;
+    private boolean vanillaNightBoostEnabled = true;
     // 生成广播
     private boolean spawnAnnounceEnabled;
     private int spawnAnnounceMinLevel;
@@ -255,6 +256,7 @@ public class EliteConfig {
         nightSpeedBonus = config.getDouble("features.night-enhancement.speed-bonus", 0.12);
         nightDamageMultiplier = config.getDouble("features.night-enhancement.damage-multiplier", 1.2);
         nightSpawnMultiplier = config.getDouble("features.night-enhancement.spawn-multiplier", 1.5);
+        vanillaNightBoostEnabled = config.getBoolean("features.night-enhancement.vanilla-mobs", true);
 
         // 生成广播
         spawnAnnounceEnabled = config.getBoolean("general.spawn-announce.enabled", true);
@@ -311,7 +313,7 @@ public class EliteConfig {
         // 击杀奖励 (Vault 金币 + PlayerPoints 点券)
         moneyRewardEnabled = config.getBoolean("loot.rewards.money.enabled", true);
         moneyRewardBase = config.getDouble("loot.rewards.money.base", 0.0);
-        moneyRewardPerLevel = config.getDouble("loot.rewards.money.per-level", 5.0);
+        moneyRewardPerLevel = config.getDouble("loot.rewards.money.per-level", 8.0);
         moneyRewardBossMult = config.getDouble("loot.rewards.money.boss-multiplier", 3.0);
         pointsRewardEnabled = config.getBoolean("loot.rewards.points.enabled", true);
         pointsRewardBase = config.getInt("loot.rewards.points.base", 0);
@@ -575,6 +577,8 @@ public class EliteConfig {
     public double getNightSpeedBonus() { return nightSpeedBonus; }
     public double getNightDamageMultiplier() { return nightDamageMultiplier; }
     public double getNightSpawnMultiplier() { return nightSpawnMultiplier; }
+    /** 原版怪物夜间是否也获得与精英一致的力量/速度强化 */
+    public boolean isVanillaNightBoostEnabled() { return vanillaNightBoostEnabled; }
 
     // 生成广播
     public boolean isSpawnAnnounceEnabled() { return spawnAnnounceEnabled; }
@@ -762,7 +766,17 @@ public class EliteConfig {
                 }
             }
             Object enchObj = m.get("enchants");
-            if (enchObj instanceof Map<?, ?> enchMap) {
+            if (enchObj instanceof org.bukkit.configuration.ConfigurationSection enchCs) {
+                for (String key : enchCs.getKeys(false)) {
+                    Enchantment ench = EnchantUtil.get(key.toUpperCase());
+                    if (ench == null) {
+                        cfg.plugin.getLogger().warning("gem-drops.custom 未知附魔: " + key);
+                        continue;
+                    }
+                    Object v = enchCs.get(key);
+                    try { d.enchants.put(ench, Math.max(1, ((Number) v).intValue())); } catch (Exception ignored) {}
+                }
+            } else if (enchObj instanceof Map<?, ?> enchMap) {
                 for (Map.Entry<?, ?> e : enchMap.entrySet()) {
                     Enchantment ench = EnchantUtil.get(String.valueOf(e.getKey()).toUpperCase());
                     if (ench == null) {
@@ -775,7 +789,14 @@ public class EliteConfig {
             }
             d.glow = Boolean.parseBoolean(String.valueOf(m.getOrDefault("glow", false)));
             Object chanceObj = m.get("chance");
-            if (chanceObj instanceof Map<?, ?> chanceMap) {
+            // 注意：getValues(false) 返回的嵌套 section 是 ConfigurationSection 而非 Map，
+            // 必须同时兼容两种类型，否则 chance 解析失败导致所有宝石 pool 为空（不掉落）
+            if (chanceObj instanceof org.bukkit.configuration.ConfigurationSection chanceCs) {
+                for (String key : chanceCs.getKeys(false)) {
+                    Object v = chanceCs.get(key);
+                    try { d.chance.put(key, ((Number) v).doubleValue()); } catch (Exception ignored) {}
+                }
+            } else if (chanceObj instanceof Map<?, ?> chanceMap) {
                 for (Map.Entry<?, ?> e : chanceMap.entrySet()) {
                     try { d.chance.put(String.valueOf(e.getKey()), ((Number) e.getValue()).doubleValue()); }
                     catch (Exception ignored) {}

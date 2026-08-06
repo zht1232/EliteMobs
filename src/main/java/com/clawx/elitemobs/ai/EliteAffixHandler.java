@@ -63,13 +63,23 @@ public class EliteAffixHandler implements Listener {
             sb.append(a.name());
         }
         e.setMetadata(META_AFFIX, new FixedMetadataValue(plugin, sb.toString()));
+        // PDC 持久化：metadata 不跨 chunk 持久化，区块重载后词缀会丢失，写 PDC 兜底
+        e.getPersistentDataContainer().set(new org.bukkit.NamespacedKey("elitemobs", "elite_affix"),
+                org.bukkit.persistence.PersistentDataType.STRING, sb.toString());
     }
 
-    /** 读取精英怪携带的词缀 */
+    /** 读取精英怪携带的词缀（metadata 优先 + PDC 兜底） */
     public static Set<EliteAffix> getAffixes(LivingEntity e) {
         Set<EliteAffix> set = new HashSet<>();
-        if (e == null || !e.hasMetadata(META_AFFIX)) return set;
-        String raw = e.getMetadata(META_AFFIX).get(0).asString();
+        if (e == null) return set;
+        String raw = null;
+        if (e.hasMetadata(META_AFFIX)) raw = e.getMetadata(META_AFFIX).get(0).asString();
+        if (raw == null) {
+            raw = e.getPersistentDataContainer().get(
+                    new org.bukkit.NamespacedKey("elitemobs", "elite_affix"),
+                    org.bukkit.persistence.PersistentDataType.STRING);
+        }
+        if (raw == null) return set;
         for (String s : raw.split(",")) {
             EliteAffix a = EliteAffix.fromString(s);
             if (a != null) set.add(a);

@@ -133,7 +133,8 @@ public class EliteMobManager {
         applyVisuals(entity, level, config);
         applyEquipment(entity, level, config, profile);
 
-        if (entity instanceof Mob mob && !NO_ARMOR_MOBS.contains(entity.getType())) {
+        if (entity instanceof Mob mob && !NO_ARMOR_MOBS.contains(entity.getType())
+                && config.isWeaponEnhancementEnabled()) {
             WeaponEnhancer we = plugin.getWeaponEnhancer();
             if (we != null) we.enhanceWeapon(mob, level);
         }
@@ -376,8 +377,41 @@ public class EliteMobManager {
             if (plugin.getAffixHandler() != null) plugin.getAffixHandler().tick(data.entity);
             if (isNightTime(data.entity.getWorld()) && plugin.getEliteConfig().isNightEnhancementEnabled()) {
                 spawnNightParticles(data.entity);
+                applyNightBoost(data.entity);
             }
         }
+    }
+
+    /**
+     * 夜间强化：给实体施加力量/速度（夜间时段内精英与原版怪一致变强）。
+     * 力量等级由 night-damage-multiplier、速度等级由 night-speed-bonus 折算。
+     */
+    private void applyNightBoost(LivingEntity e) {
+        if (e == null || e.isDead() || !e.isValid()) return;
+        EliteConfig cfg = plugin.getEliteConfig();
+        int strength = Math.max(0, Math.min((int) Math.round((cfg.getNightDamageMultiplier() - 1.0) * 5), 4));
+        int speed = Math.max(0, Math.min((int) Math.round(cfg.getNightSpeedBonus() / 0.1), 4));
+        if (strength > 0) e.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 80, strength - 1, true, false));
+        if (speed > 0) e.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 80, speed - 1, true, false));
+    }
+
+    /** 原版怪物夜间加强：夜间给在线玩家附近的原版怪物施加力量/速度（与精英一致），可配置关闭。 */
+    public void startVanillaNightBoostTask() {
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            EliteConfig cfg = plugin.getEliteConfig();
+            if (!cfg.isNightEnhancementEnabled() || !cfg.isVanillaNightBoostEnabled()) return;
+            for (org.bukkit.entity.Player p : plugin.getServer().getOnlinePlayers()) {
+                if (p.isDead() || !p.isValid()) continue;
+                if (!isNightTime(p.getWorld())) continue;
+                for (Entity ent : p.getNearbyEntities(16, 16, 16)) {
+                    if (!(ent instanceof LivingEntity le)) continue;
+                    if (le instanceof org.bukkit.entity.Player) continue;
+                    if (le instanceof Animals || le instanceof WaterMob || le instanceof Ambient || le instanceof Villager) continue;
+                    if (isElite(le)) continue; // 精英已在 tickAllEliteMobs 处理
+                    applyNightBoost(le);
+                }
+            }
+        }, 20L, 40L);
     }
 
     private void spawnNightParticles(LivingEntity entity) {
@@ -395,8 +429,19 @@ public class EliteMobManager {
         }
     }
 
-    public static boolean isElite(LivingEntity e) { return e != null && e.hasMetadata("elite"); }
-    public static int getEliteLevel(LivingEntity e) { return (e != null && e.hasMetadata("elite_level")) ? e.getMetadata("elite_level").get(0).asInt() : 0; }
+    public static boolean isElite(LivingEntity e) {
+        if (e == null) return false;
+        if (e.hasMetadata("elite")) return true;
+        return e.getPersistentDataContainer().has(new org.bukkit.NamespacedKey("elitemobs", "elite"),
+                org.bukkit.persistence.PersistentDataType.BOOLEAN);
+    }
+    public static int getEliteLevel(LivingEntity e) {
+        if (e == null) return 0;
+        if (e.hasMetadata("elite_level")) return e.getMetadata("elite_level").get(0).asInt();
+        Integer lv = e.getPersistentDataContainer().get(new org.bukkit.NamespacedKey("elitemobs", "elite_level"),
+                org.bukkit.persistence.PersistentDataType.INTEGER);
+        return lv == null ? 0 : lv;
+    }
     public static long getSpawnTime(LivingEntity e) { return (e != null && e.hasMetadata("elite_spawn_time")) ? e.getMetadata("elite_spawn_time").get(0).asLong() : 0; }
     public int countElitesInChunk(org.bukkit.Chunk chunk) { int c = 0; for (Entity e : chunk.getEntities()) if (e instanceof LivingEntity le && isElite(le)) c++; return c; }
     public int getEliteCount() { return eliteMobs.size(); }
@@ -428,6 +473,11 @@ public class EliteMobManager {
         if (list.size() >= max) return false;
         list.add(item);
         return true;
+    }
+
+    /** 取出并移除某怪被偷的物品（供死亡归还原主/击杀者） */
+    public List<ItemStack> takeStolenItems(UUID mobUuid) {
+        return stolenItems.remove(mobUuid);
     }
 
     public static class EliteMobData {

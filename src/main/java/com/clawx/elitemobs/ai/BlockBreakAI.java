@@ -91,6 +91,11 @@ public class BlockBreakAI implements Listener {
                     breakingProgress.remove(id);
                     continue;
                 }
+                // 领地保护：受保护区域内的方块不破坏（WorldGuard/GriefPrevention/Towny/Factions）
+                if (com.clawx.elitemobs.compat.ProtectionHook.isProtected(targetBlock.getLocation())) {
+                    breakingProgress.remove(id);
+                    continue;
+                }
 
                 String blockKey = blockToKey(targetBlock);
                 Map<String, Integer> mobProgress = breakingProgress.computeIfAbsent(id, k -> new ConcurrentHashMap<>());

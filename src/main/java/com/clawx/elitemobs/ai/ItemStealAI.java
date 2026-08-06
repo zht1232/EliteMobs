@@ -28,6 +28,7 @@ public class ItemStealAI implements Listener {
 
     @EventHandler
     public void onDamage(EntityDamageByEntityEvent event) {
+        if (!plugin.getEliteConfig().isItemStealEnabled()) return;
         if (!(event.getEntity() instanceof Player) || !(event.getDamager() instanceof Mob)) return;
         if (!EliteMobManager.isElite((LivingEntity) event.getDamager())) return;
 

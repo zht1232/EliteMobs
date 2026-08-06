@@ -117,8 +117,8 @@ public class EliteSpawnHandler implements Listener {
         if (level < cfg.getSpawnAnnounceMinLevel()) return;
 
         FileConfiguration msgs = plugin.getMessages();
-        String template = msgs != null && msgs.contains("announce-spawn")
-            ? msgs.getString("announce-spawn")
+        String template = msgs != null && msgs.contains("messages.announce-spawn")
+            ? msgs.getString("messages.announce-spawn")
             : "&c\u26a0 &e{elite_name}&c \u5728 &7{world}&c \u51fa\u73b0\u4e86\uff01";
 
         String typeName = entity.getType().name().toLowerCase().replace('_', ' ');

@@ -71,6 +71,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(itemStealAI, this);
         getServer().getPluginManager().registerEvents(eliteClassAI, this);
         getServer().getPluginManager().registerEvents(damageScaler, this);
+        mobManager.startVanillaNightBoostTask();
         Objects.requireNonNull(getCommand("elitemobs")).setExecutor(new EliteMobsCommand(this));
         startAITask();
         registerPapi();

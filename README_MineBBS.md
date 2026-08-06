@@ -250,7 +250,14 @@ amount-max: 1
 - 🐛 **修复精英不掉宝石**：掉落改为必掉，颗数 = 1 + 精英等级/3（Boss +1），每颗权重随机、可能不同种
 - 🎯 **生成距离**：等级越高的精英生成离最近玩家越远（`general.spawn-distance`，可配置），避免高级怪刷在玩家/基地旁
 - ⚡ **闪电收敛**：普通精英生成不再召唤真实闪电（不再破坏/引燃基地），闪电特效仅保留给 Boss 晋升
-- 🔧 编译脚本适配 paper-api 26.2.build.60-beta
+- � 修复：Boss 双倍掉落、雷电宝石连环闪电（防重入）、偷窃开关失效、精英识别（metadata+PDC 双判）
+- 🌙 **夜间强化**：精英 + 原版怪夜间力量/速度提升（`features.night-enhancement.vanilla-mobs` 可关）
+- ✅ 死亡归还被偷物品（`features.item-steal.return-on-death`）
+- ✅ 词缀/职业 PDC 持久化：区块卸载重载后不丢失
+- ✅ 领地保护兼容（WorldGuard/GriefPrevention/Towny/Factions）：破块 AI 不拆玩家建筑
+- ✅ 武器强化开关生效、广播文案可自定义（messages.yml）、雷电宝石真闪电不引燃方块
+- ✅ 击杀金币奖励提升（per-level 5 → 8，Boss ×3）
+- �🔧 编译脚本适配 paper-api 26.2.build.60-beta
 
 ### v29.0.0
 - ✅ **宝石统一淬炼系统重构**（6 种宝石：攻击/防御/雷电/击退/磁力/稀有）

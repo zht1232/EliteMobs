@@ -29,6 +29,8 @@ public class EliteCombatListener implements Listener {
     private final EliteMobsPlugin plugin;
     private final Random rng = new Random();
     private final Map<UUID, Integer> comboKills = new HashMap<>();
+    /** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem */
+    private boolean processingGemAttack = false;
 
     public EliteCombatListener(EliteMobsPlugin plugin) {
         this.plugin = plugin;
@@ -196,6 +198,7 @@ public class EliteCombatListener implements Listener {
     /** 主手武器上镶嵌的宝石效果：雷电=概率召唤闪电 / 击退=稳定击退敌人（按宝石等级）。 */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerAttackWithGem(EntityDamageByEntityEvent event) {
+        if (processingGemAttack) return; // 防重入：避免 target.damage() 触发连环闪电
         if (!(event.getDamager() instanceof Player p)) return;
         if (!(event.getEntity() instanceof LivingEntity target)) return;
         if (target.isDead()) return;
@@ -205,31 +208,40 @@ public class EliteCombatListener implements Listener {
         String[] gemIds = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGems(hand);
         int[] gemLvs = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGemLevels(hand);
 
-        // 击退宝石：稳定施加（等级 = 装备上击退宝石的最高等级）
-        Integer kb = hand.getItemMeta().getPersistentDataContainer().get(
-                new org.bukkit.NamespacedKey("elitemobs", "gem_knockback"),
-                org.bukkit.persistence.PersistentDataType.INTEGER);
-        if (kb != null && kb > 0) {
-            org.bukkit.util.Vector dir = target.getLocation().toVector()
-                    .subtract(p.getLocation().toVector()).normalize();
-            double power = 0.4 + kb * 0.12;
-            target.setVelocity(dir.multiply(power).setY(0.3 + kb * 0.04));
-            target.getWorld().playSound(target.getLocation(), Sound.ENTITY_PLAYER_ATTACK_KNOCKBACK, 1.0f, 1.0f);
-        }
+        processingGemAttack = true;
+        try {
+            // 击退宝石：稳定施加（等级 = 装备上击退宝石的最高等级）
+            Integer kb = hand.getItemMeta().getPersistentDataContainer().get(
+                    new org.bukkit.NamespacedKey("elitemobs", "gem_knockback"),
+                    org.bukkit.persistence.PersistentDataType.INTEGER);
+            if (kb != null && kb > 0) {
+                org.bukkit.util.Vector dir = target.getLocation().toVector()
+                        .subtract(p.getLocation().toVector()).normalize();
+                double power = 0.4 + kb * 0.12;
+                target.setVelocity(dir.multiply(power).setY(0.3 + kb * 0.04));
+                target.getWorld().playSound(target.getLocation(), Sound.ENTITY_PLAYER_ATTACK_KNOCKBACK, 1.0f, 1.0f);
+            }
 
-        // 雷电宝石：按等级概率召唤闪电
-        for (int i = 0; i < com.clawx.elitemobs.essence.EliteGemFactory.MAX_GEM_SLOTS; i++) {
-            if (gemIds[i] == null) continue;
-            String eff = gemEffectFor(gemIds[i]);
-            if ("thunder".equals(eff)) {
-                int lv = gemLvs[i];
-                double chance = com.clawx.elitemobs.essence.EliteGemFactory.thunderChance(lv);
-                if (rng.nextDouble() < chance) {
-                    target.getWorld().strikeLightningEffect(target.getLocation());
-                    target.getWorld().playSound(target.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.0f, 1.0f);
-                    target.damage(2.0 + lv * 0.5, p);
+            // 雷电宝石：按等级概率召唤闪电
+            for (int i = 0; i < com.clawx.elitemobs.essence.EliteGemFactory.MAX_GEM_SLOTS; i++) {
+                if (gemIds[i] == null) continue;
+                String eff = gemEffectFor(gemIds[i]);
+                if ("thunder".equals(eff)) {
+                    int lv = gemLvs[i];
+                    double chance = com.clawx.elitemobs.essence.EliteGemFactory.thunderChance(lv);
+                    if (rng.nextDouble() < chance) {
+                        // 真闪电（苦力怕可被充电成高压爬行者）+ 宝石等级额外伤害
+                        // 闪电实体打标记：由 onLightningIgnite 取消引燃，避免落点四处着火
+                        org.bukkit.entity.LightningStrike ls = target.getWorld().strikeLightning(target.getLocation());
+                        if (ls != null) ls.setMetadata("elitemobs_lightning",
+                                new org.bukkit.metadata.FixedMetadataValue(plugin, true));
+                        target.getWorld().playSound(target.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.0f, 1.0f);
+                        target.damage(2.0 + lv * 0.5, p);
+                    }
                 }
             }
+        } finally {
+            processingGemAttack = false;
         }
     }
 
@@ -243,19 +255,41 @@ public class EliteCombatListener implements Listener {
         return null;
     }
 
+    /**
+     * 取消插件真闪电引燃方块：保留真闪电的伤害与苦力怕充电，
+     * 但不再在落点点火（不烧毁地面/建筑）。只影响本插件标记的闪电。
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onLightningIgnite(org.bukkit.event.block.BlockIgniteEvent event) {
+        if (event.getCause() != org.bukkit.event.block.BlockIgniteEvent.IgniteCause.LIGHTNING) return;
+        if (event.getIgnitingEntity() instanceof org.bukkit.entity.LightningStrike ls
+                && ls.hasMetadata("elitemobs_lightning")) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** 判断装备槽物品是否为被偷物品（同一对象引用，ItemStealAI 存入/装备用的是同一实例） */
+    private boolean containsStolenRef(List<ItemStack> stolen, ItemStack slot) {
+        if (slot == null) return false;
+        for (ItemStack it : stolen) if (it == slot) return true;
+        return false;
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onEliteDeath(EntityDeathEvent event) {
         LivingEntity e = event.getEntity();
-        if (!EliteMobManager.isElite(e)) return;
+        boolean elite = EliteMobManager.isElite(e);
+        plugin.getLogger().info("[EliteMobs-DEBUG] onEliteDeath " + e.getType().name()
+                + " isElite=" + elite + " level=" + EliteMobManager.getEliteLevel(e)
+                + " dropsInEvent=" + event.getDrops().size());
+        if (!elite) return;
 
-        // Boss死亡：清理血条 + 专属掉落
+        // Boss死亡：清理血条（掉落统一走末尾 rollGemDrops，Boss 加成由 isBoss 判定，避免双倍掉落）
         if (com.clawx.elitemobs.ai.EliteBossManager.isBoss(e)) {
             plugin.getBossManager().onBossDeath(e);
-            // Boss专属掉落：宝石/自定义掉落物 + 头颅
-            int level = EliteMobManager.getEliteLevel(e);
-            rollGemDrops(event, level, true);
 
             // Boss击杀广播
+            int level = EliteMobManager.getEliteLevel(e);
             Player killer = e.getKiller();
             if (killer != null) {
                 Bukkit.broadcastMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "\u2620 "
@@ -263,6 +297,34 @@ public class EliteCombatListener implements Listener {
                     + ChatColor.GOLD + " \u51fb\u6740\u4e86 Boss "
                     + ChatColor.RED + e.getType().name().toLowerCase().replace('_', ' ')
                     + ChatColor.GRAY + " [Lv." + level + "]!");
+            }
+        }
+
+        // ===== 死亡归还被偷物品（features.item-steal.return-on-death）=====
+        if (plugin.getEliteConfig().isReturnStolenItemsOnDeath()) {
+            List<ItemStack> stolen = plugin.getMobManager().takeStolenItems(e.getUniqueId());
+            if (stolen != null && !stolen.isEmpty()) {
+                // 从怪身上移除被偷物品（同一对象引用），避免与装备掉落重复
+                org.bukkit.inventory.EntityEquipment geq = e.getEquipment();
+                if (geq != null) {
+                    if (containsStolenRef(stolen, geq.getItemInOffHand())) geq.setItemInOffHand(null);
+                    if (containsStolenRef(stolen, geq.getBoots())) geq.setBoots(null);
+                    if (containsStolenRef(stolen, geq.getLeggings())) geq.setLeggings(null);
+                    if (containsStolenRef(stolen, geq.getChestplate())) geq.setChestplate(null);
+                    if (containsStolenRef(stolen, geq.getHelmet())) geq.setHelmet(null);
+                }
+                Player gk = e.getKiller();
+                if (gk != null) {
+                    for (ItemStack it : stolen) {
+                        if (it == null) continue;
+                        gk.getInventory().addItem(it).values().forEach(d -> e.getWorld().dropItemNaturally(e.getLocation(), d));
+                    }
+                    gk.sendMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "[EliteMobs] " + ChatColor.GRAY
+                            + "\u8fd4\u8fd8\u4e86\u88ab\u5077\u8d70\u7684 " + ChatColor.YELLOW + stolen.size()
+                            + ChatColor.GRAY + " \u4ef6\u7269\u54c1\uff01");
+                } else {
+                    for (ItemStack it : stolen) if (it != null) e.getWorld().dropItemNaturally(e.getLocation(), it);
+                }
             }
         }
 
@@ -296,8 +358,8 @@ public class EliteCombatListener implements Listener {
             if (skull != null) event.getDrops().add(skull);
         }
 
-        // ===== 宝石/自定义掉落物 =====
-        rollGemDrops(event, level, false);
+        // ===== 宝石/自定义掉落物（Boss 走一次，避免双倍掉落）=====
+        rollGemDrops(event, level, com.clawx.elitemobs.ai.EliteBossManager.isBoss(e));
 
         // ===== 击杀奖励（金币 + 点券）=====
         Player killer = e.getKiller();
@@ -450,6 +512,22 @@ public class EliteCombatListener implements Listener {
     /**
      * ??????? - ????????????
      */
+    /**
+     * 精英苦力怕爆炸：清除身上所有药水效果（防止原版机制把 Boss 晋升等正面效果
+     * 扩散成正面药水云），并在爆炸位置生成负面药水云（迟缓/中毒/凋零）。
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEliteCreeperExplode(org.bukkit.event.entity.EntityExplodeEvent event) {
+        if (!(event.getEntity() instanceof Creeper creeper)) return;
+        if (!EliteMobManager.isElite(creeper)) return;
+        // 爆炸前清除苦力怕身上的药水效果，避免把原版效果（含正面效果）扩散成药水云
+        for (PotionEffect effect : new ArrayList<>(creeper.getActivePotionEffects())) {
+            creeper.removePotionEffect(effect.getType());
+        }
+        int level = EliteMobManager.getEliteLevel(creeper);
+        onCreeperExplosion(creeper, event.getLocation(), level);
+    }
+
     public void onCreeperExplosion(Creeper creeper, Location loc, int level) {
         if (!plugin.getEliteConfig().isParticleEffectsEnabled()) return;
         try {
@@ -550,7 +628,10 @@ public class EliteCombatListener implements Listener {
      */
     private void rollGemDrops(EntityDeathEvent event, int level, boolean boss) {
         EliteConfig cfg = plugin.getEliteConfig();
-        if (!cfg.isGemDropsEnabled()) return;
+        boolean enabled = cfg.isGemDropsEnabled();
+        plugin.getLogger().info("[EliteMobs-DEBUG] rollGemDrops level=" + level + " boss=" + boss
+                + " enabled=" + enabled + " dropsInEvent=" + event.getDrops().size());
+        if (!enabled) return;
 
         // 1) 宝石掉落：必掉（只要 gems/*.yml 有可用宝石），颗数随精英等级提升，每颗独立权重随机（可不同种）
         EntityType mobType = event.getEntity().getType();
@@ -558,9 +639,12 @@ public class EliteCombatListener implements Listener {
         for (EliteConfig.CustomDrop d : cfg.getCustomDrops()) {
             if (d.allows(mobType) && d.getChance(level) > 0) pool.add(d);
         }
+        plugin.getLogger().info("[EliteMobs-DEBUG] gem pool size=" + pool.size()
+                + " (customDrops=" + cfg.getCustomDrops().size() + ")");
         if (!pool.isEmpty()) {
             // 颗数 = 1 + 精英等级/3（Lv1→1, Lv3→2, Lv6→3, Lv9→4, Lv12→5, Lv15→6, Lv18→7），Boss 额外 +1
             int count = Math.min(1 + level / 3 + (boss ? 1 : 0), 10);
+            plugin.getLogger().info("[EliteMobs-DEBUG] dropping gems count=" + count);
             for (int n = 0; n < count; n++) {
                 // 每颗独立按权重随机选宝石（可同种也可不同种）
                 EliteConfig.CustomDrop chosen = pickWeightedGem(pool, level);
@@ -568,7 +652,13 @@ public class EliteCombatListener implements Listener {
                 // 宝石等级由精英等级决定（1 + level/3，上限为该宝石 max-level）
                 int gemLevel = Math.max(1, Math.min(chosen.maxLevel, 1 + level / 3));
                 ItemStack item = buildCustomDrop(chosen, gemLevel);
-                if (item != null) { item.setAmount(amt); event.getDrops().add(item); }
+                if (item != null) {
+                    item.setAmount(amt);
+                    event.getDrops().add(item);
+                    plugin.getLogger().info("[EliteMobs-DEBUG] +gem " + chosen.id + " amt=" + amt + " gemLv=" + gemLevel);
+                } else {
+                    plugin.getLogger().warning("[EliteMobs-DEBUG] gem build FAILED for " + chosen.id);
+                }
             }
         }
 

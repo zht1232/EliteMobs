@@ -55,6 +55,10 @@ public class EliteBossManager {
 
     private void promoteToBoss(LivingEntity entity, int level) {
         entity.setMetadata("elite_boss", new FixedMetadataValue(plugin, true));
+        // PDC 持久化标记：metadata 不跨 chunk 持久化，区块卸载重载后会丢失，
+        // 用 PDC 兜底保证 Boss 身份在重载后仍可识别（掉落/血条/二阶段依赖它）
+        entity.getPersistentDataContainer().set(new org.bukkit.NamespacedKey("elitemobs", "elite_boss"),
+                org.bukkit.persistence.PersistentDataType.BOOLEAN, true);
 
         // 3倍血量
         AttributeInstance hp = entity.getAttribute(Attribute.MAX_HEALTH);
@@ -84,9 +88,9 @@ public class EliteBossManager {
             }
         }
 
-        // 生成特效
+        // 生成特效（真闪电：Boss 登场落雷，可对附近实体造成真实伤害/充电）
         Location loc = entity.getLocation();
-        loc.getWorld().strikeLightningEffect(loc);
+        loc.getWorld().strikeLightning(loc);
         loc.getWorld().playSound(loc, Sound.ENTITY_WITHER_SPAWN, 3.0f, 0.5f);
         for (int i = 0; i < 50; i++) {
             EliteMobManager.spawnParticleSafe(loc.getWorld(), Particle.SOUL_FIRE_FLAME,
@@ -105,7 +109,11 @@ public class EliteBossManager {
     }
 
     public static boolean isBoss(LivingEntity entity) {
-        return entity != null && entity.hasMetadata("elite_boss");
+        if (entity == null) return false;
+        if (entity.hasMetadata("elite_boss")) return true;
+        return entity.getPersistentDataContainer().has(
+                new org.bukkit.NamespacedKey("elitemobs", "elite_boss"),
+                org.bukkit.persistence.PersistentDataType.BOOLEAN);
     }
 
     /** Boss 定时任务：更新血条 + Boss技能 */
@@ -236,9 +244,9 @@ public class EliteBossManager {
         boss.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 999999, 0, true, false));
         boss.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 999999, 1, true, false));
         boss.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 999999, 0, true, false));
-        // 特效：闪电 + 粒子 + 音效
+        // 特效：真闪电 + 粒子 + 音效
         Location loc = boss.getLocation();
-        loc.getWorld().strikeLightningEffect(loc);
+        loc.getWorld().strikeLightning(loc);
         for (int i = 0; i < 40; i++) {
             EliteMobManager.spawnParticleSafe(loc.getWorld(), Particle.SOUL_FIRE_FLAME,
                 loc.clone().add(rng.nextDouble() - 0.5, rng.nextDouble() * 2, rng.nextDouble() - 0.5), 1);

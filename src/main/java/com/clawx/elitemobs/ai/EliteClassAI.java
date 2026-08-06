@@ -35,6 +35,9 @@ public class EliteClassAI implements Listener {
     /** 给精英怪分配职业并应用属性 */
     public void applyClass(LivingEntity entity, int level, EliteClass eliteClass) {
         entity.setMetadata("elite_class", new FixedMetadataValue(plugin, eliteClass.name()));
+        // PDC 持久化：metadata 不跨 chunk，区块重载后职业不丢失
+        entity.getPersistentDataContainer().set(new org.bukkit.NamespacedKey("elitemobs", "elite_class"),
+                org.bukkit.persistence.PersistentDataType.STRING, eliteClass.name());
 
         switch (eliteClass) {
             case TANK -> {
@@ -62,9 +65,16 @@ public class EliteClassAI implements Listener {
     }
 
     public static EliteClass getEliteClass(LivingEntity entity) {
-        if (!entity.hasMetadata("elite_class")) return null;
-        try { return EliteClass.valueOf(entity.getMetadata("elite_class").get(0).asString()); }
-        catch (Exception e) { return null; }
+        if (entity == null) return null;
+        String name = null;
+        if (entity.hasMetadata("elite_class")) name = entity.getMetadata("elite_class").get(0).asString();
+        if (name == null) {
+            name = entity.getPersistentDataContainer().get(
+                    new org.bukkit.NamespacedKey("elitemobs", "elite_class"),
+                    org.bukkit.persistence.PersistentDataType.STRING);
+        }
+        if (name == null) return null;
+        try { return EliteClass.valueOf(name); } catch (Exception e) { return null; }
     }
 
     /** 每 tick 处理职业行为 */
