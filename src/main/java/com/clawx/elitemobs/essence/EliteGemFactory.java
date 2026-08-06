@@ -190,5 +190,11 @@ public final class EliteGemFactory {
 
     /** 磁力宝石：自动拾取距离 = 3 + 等级（上限 12 格，等级越高吸得越远）。 */
     public static int magnetRadius(int level) { return Math.min(3 + level, 12); }
+
+    /** 二段跳宝石：跳跃力度（向上速度），等级越高跳得越高（上限 1.8）。 */
+    public static double jumpPower(int level) { return Math.min(1.0 + level * 0.06, 1.8); }
+
+    /** 二段跳宝石：再次起跳冷却（毫秒），等级越高蓄力越快（冷却越短，Lv1≈2.7s → Lv10=0.4s）。 */
+    public static int jumpCooldown(int level) { return Math.max(400, 3000 - level * 260); }
 }
 

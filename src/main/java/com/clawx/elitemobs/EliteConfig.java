@@ -863,6 +863,7 @@ public class EliteConfig {
                 case "knockback" -> "&f";
                 case "thunder" -> "&e";
                 case "magnet" -> "&b";
+                case "doublejump" -> "&a";
                 case "rare" -> "&6";
                 default -> "&f";
             };

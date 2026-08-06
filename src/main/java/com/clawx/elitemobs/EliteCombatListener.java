@@ -29,6 +29,8 @@ public class EliteCombatListener implements Listener {
     private final EliteMobsPlugin plugin;
     private final Random rng = new Random();
     private final Map<UUID, Integer> comboKills = new HashMap<>();
+    /** 二段跳宝石：上次二段跳时间戳（毫秒） */
+    private final Map<UUID, Long> lastDoubleJump = new HashMap<>();
     /** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem */
     private boolean processingGemAttack = false;
 
@@ -119,6 +121,66 @@ public class EliteCombatListener implements Listener {
             }
         }
         return best;
+    }
+
+    // ==================== 二段跳宝石（等级越高蓄力越快/冷却越短） ====================
+
+    /** 计算玩家身上二段跳宝石的最高等级（主手 + 副手 + 全部护甲）。 */
+    private int getDoubleJumpLevel(Player p) {
+        int best = 0;
+        var inv = p.getInventory();
+        ItemStack[] items = new ItemStack[]{inv.getItemInMainHand(), inv.getItemInOffHand(),
+                inv.getHelmet(), inv.getChestplate(), inv.getLeggings(), inv.getBoots()};
+        for (ItemStack it : items) {
+            if (it == null || !it.hasItemMeta()) continue;
+            String[] ids = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGems(it);
+            int[] lvs = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGemLevels(it);
+            for (int i = 0; i < com.clawx.elitemobs.essence.EliteGemFactory.MAX_GEM_SLOTS; i++) {
+                if (ids[i] != null && "doublejump".equals(gemEffectFor(ids[i]))) {
+                    best = Math.max(best, lvs[i]);
+                }
+            }
+        }
+        return best;
+    }
+
+    /** 二段跳宝石：空中双击空格二段跳；等级越高冷却越短（蓄力越快）。 */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onDoubleJumpToggle(org.bukkit.event.player.PlayerToggleFlightEvent event) {
+        Player p = event.getPlayer();
+        if (p.getGameMode() == org.bukkit.GameMode.CREATIVE || p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
+        int lv = getDoubleJumpLevel(p);
+        if (lv <= 0) return;
+        if (!event.isFlying()) return; // 只处理双击空格（尝试开启飞行）
+        event.setCancelled(true);
+        long now = System.currentTimeMillis();
+        long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
+        // 仅在空中且冷却已过才二段跳
+        if (!p.isOnGround() && now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
+            p.setFlying(false);
+            p.setAllowFlight(false); // 消耗一次，落地后按冷却恢复
+            p.setVelocity(p.getVelocity().setY(com.clawx.elitemobs.essence.EliteGemFactory.jumpPower(lv)));
+            p.getWorld().playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 0.9f);
+            p.getWorld().spawnParticle(Particle.CLOUD, p.getLocation(), 12, 0.3, 0.1, 0.3, 0);
+            lastDoubleJump.put(p.getUniqueId(), now);
+        }
+        // 冷却未过或在地面：吞掉本次双击（不二段跳），落地蓄力完成后才能再次二段跳
+    }
+
+    /** 定时恢复二段跳：玩家落地且冷却已过 → 重新允许飞行（下一次二段跳）。 */
+    public void startDoubleJumpTask() {
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            for (Player p : plugin.getServer().getOnlinePlayers()) {
+                int lv = getDoubleJumpLevel(p);
+                if (lv <= 0) continue;
+                if (!p.isOnGround() || p.getAllowFlight()) continue;
+                long now = System.currentTimeMillis();
+                long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
+                if (now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
+                    p.setAllowFlight(true);
+                }
+            }
+        }, 20L, 20L);
     }
 
     /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */

@@ -461,11 +461,11 @@ public class EliteEssenceUpgradeListener implements Listener {
         return null;
     }
 
-    /** 宝石是否匹配装备类型（attack/knockback/thunder/rare→武器；defense→护甲；magnet→两者均可）。 */
+    /** 宝石是否匹配装备类型（attack/knockback/thunder/rare/doublejump→武器；defense→护甲；magnet→两者均可）。 */
     private boolean gemFitsEquip(ItemStack equip, String effect) {
         boolean weapon = isWeapon(equip);
         return switch (effect == null ? "" : effect.toLowerCase()) {
-            case "attack", "knockback", "thunder", "rare" -> weapon;
+            case "attack", "knockback", "thunder", "rare", "doublejump" -> weapon;
             case "defense" -> isArmor(equip);
             case "magnet" -> true;   // 磁力宝石：武器/护甲均可
             default -> true;
@@ -793,6 +793,7 @@ public class EliteEssenceUpgradeListener implements Listener {
                 case "knockback" -> "&7→ &f击退 Lv." + EliteGemFactory.knockbackLevel(lvs[i]);
                 case "thunder" -> "&7→ &e雷电 " + String.format("%.0f%%", EliteGemFactory.thunderChance(lvs[i]) * 100);
                 case "magnet" -> "&7→ &b磁力拾取 &f+" + EliteGemFactory.magnetRadius(lvs[i]) + " &7格";
+                case "doublejump" -> "&7→ &a二段跳 &f蓄力" + String.format("%.1f", EliteGemFactory.jumpCooldown(lvs[i]) / 1000.0) + "s";
                 case "rare" -> "&7→ &6稀有";
                 default -> "";
             };

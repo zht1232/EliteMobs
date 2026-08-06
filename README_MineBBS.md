@@ -256,8 +256,7 @@ amount-max: 1
 - ✅ 词缀/职业 PDC 持久化：区块卸载重载后不丢失
 - ✅ 领地保护兼容（WorldGuard/GriefPrevention/Towny/Factions）：破块 AI 不拆玩家建筑
 - ✅ 武器强化开关生效、广播文案可自定义（messages.yml）、雷电宝石真闪电不引燃方块
-- ✅ 击杀金币奖励提升（per-level 5 → 8，Boss ×3）
-- �🔧 编译脚本适配 paper-api 26.2.build.60-beta
+- ✅ 击杀金币奖励提升（per-level 5 → 8，Boss ×3）- ✅ **新增二段跳宝石**：空中双击空格二段跳，等级越高蓄力越快（冷却 3s → 0.4s）- �🔧 编译脚本适配 paper-api 26.2.build.60-beta
 
 ### v29.0.0
 - ✅ **宝石统一淬炼系统重构**（6 种宝石：攻击/防御/雷电/击退/磁力/稀有）
