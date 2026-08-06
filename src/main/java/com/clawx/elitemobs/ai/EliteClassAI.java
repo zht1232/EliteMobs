@@ -97,6 +97,12 @@ public class EliteClassAI implements Listener {
                     Location loc = e.getLocation();
                     World world = e.getWorld();
 
+                    // 坦克飞绕盾牌（每tick跟随旋转，无论是否锁定目标都显示）
+                    if (cls == EliteClass.TANK) {
+                        ensureTankDisplays(e);
+                        updateTankDisplays(e, tick);
+                    }
+
                     // 职业专属粒子特效（每3tick，绑定实体坐标）
                     if (tick % 3 == 0) {
                         switch (cls) {
@@ -177,9 +183,6 @@ public class EliteClassAI implements Listener {
                             }
                         }
                         case TANK -> {
-                            // 坦克：飞绕盾牌特效（ItemDisplay 真实可见、跟随旋转）
-                            ensureTankDisplays(e);
-                            updateTankDisplays(e, tick);
                             // 坦克：对附近玩家施加减速（嘲讽光环）
                             if (tick % 40 == 0) {
                                 for (Entity ent : e.getNearbyEntities(4, 4, 4)) {

@@ -123,8 +123,18 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
                 return;
             }
         }
-        spawnElite(p, t, lv, cls);
-        msg(s, ChatColor.GREEN + "\u2705 \u5df2\u751f\u6210\u7cbe\u82f1 " + fmt(t) + ChatColor.GRAY + " [Lv." + (lv > 0 ? lv : "\u968f\u673a") + "]"
+        // 可选第5参数：数量（批量生成）
+        int count = 1;
+        if (args.length >= 5) {
+            try { count = Math.max(1, Math.min(20, Integer.parseInt(args[4]))); }
+            catch (NumberFormatException ignored) {}
+        }
+        int spawned = 0;
+        for (int i = 0; i < count; i++) {
+            spawnElite(p, t, lv, cls);
+            spawned++;
+        }
+        msg(s, ChatColor.GREEN + "\u2705 \u5df2\u751f\u6210 " + spawned + " \u53ea\u7cbe\u82f1 " + fmt(t) + ChatColor.GRAY + " [Lv." + (lv > 0 ? lv : "\u968f\u673a") + "]"
                 + (cls != null ? ChatColor.AQUA + " \u804c\u4e1a: " + cls.name() : ""));
     }
 
@@ -567,6 +577,10 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","stealtest","boss","particle","gem","rune").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
         if(a.length==2&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")||a[0].equalsIgnoreCase("boss")))
             return plugin.getEliteConfig().getEnabledMobTypes().stream().map(x->x.name().toLowerCase()).filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
+        if(a.length==4&&a[0].equalsIgnoreCase("spawn"))
+            return Arrays.asList("tank","assassin","mage","summoner").stream().filter(x->x.startsWith(a[3].toLowerCase())).collect(Collectors.toList());
+        if(a.length==5&&a[0].equalsIgnoreCase("spawn"))
+            return Arrays.asList("1","2","3","5","10").stream().filter(x->x.startsWith(a[4].toLowerCase())).collect(Collectors.toList());
         if(a.length==2&&a[0].equalsIgnoreCase("particle"))
             return Arrays.asList("tank","assassin","mage","summoner","boss","pillar");
         if(a.length==2&&a[0].equalsIgnoreCase("gem"))
