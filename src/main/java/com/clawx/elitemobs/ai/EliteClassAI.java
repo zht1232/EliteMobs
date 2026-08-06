@@ -28,6 +28,10 @@ public class EliteClassAI implements Listener {
     private static final Random rng = new Random();
     // 坦克飞绕盾牌（原版 EliteMobs 风格：Item 掉落物实体 + velocity 平滑旋转，无朝向问题、不卡顿）
     private final Map<UUID, org.bukkit.entity.Item[]> tankDisplays = new java.util.concurrent.ConcurrentHashMap<>();
+    // 法师飞绕附魔书（Item 实体 + 随机目标，velocity 平滑飞舞）
+    private final Map<UUID, org.bukkit.entity.Item[]> mageBooks = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<UUID, org.bukkit.util.Vector[]> mageBookOffsets = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<UUID, int[]> mageBookTimers = new java.util.concurrent.ConcurrentHashMap<>();
 
     public EliteClassAI(EliteMobsPlugin plugin) {
         this.plugin = plugin;
@@ -88,7 +92,10 @@ public class EliteClassAI implements Listener {
                 for (EliteMobManager.EliteMobData data : plugin.getMobManager().getEliteMobs()) {
                     LivingEntity e = data.entity;
                     if (e == null || e.isDead() || !e.isValid()) {
-                        if (e != null) cleanupTankDisplays(e.getUniqueId());
+                        if (e != null) {
+                            cleanupTankDisplays(e.getUniqueId());
+                            cleanupMageBooks(e.getUniqueId());
+                        }
                         continue;
                     }
                     EliteClass cls = getEliteClass(e);
@@ -101,6 +108,11 @@ public class EliteClassAI implements Listener {
                     if (cls == EliteClass.TANK) {
                         ensureTankDisplays(e);
                         updateTankDisplays(e, tick);
+                    }
+                    // 法师飞绕附魔书（每tick随机飞舞）
+                    if (cls == EliteClass.MAGE) {
+                        ensureMageBooks(e);
+                        updateMageBooks(e, tick);
                     }
 
                     // 职业专属粒子特效（每3tick，绑定实体坐标）
@@ -345,10 +357,86 @@ public class EliteClassAI implements Listener {
         for (org.bukkit.entity.Item it : arr) if (it != null && it.isValid()) it.remove();
     }
 
-    /** 精英死亡时清理坦克飞绕盾牌 */
+    /** 精英死亡时清理坦克飞绕盾牌与法师飞绕附魔书 */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAnyEliteDeath(org.bukkit.event.entity.EntityDeathEvent event) {
         cleanupTankDisplays(event.getEntity().getUniqueId());
+        cleanupMageBooks(event.getEntity().getUniqueId());
+    }
+
+    // ==================== 法师飞绕附魔书（原版 Item 实体 + 随机轨迹） ====================
+
+    /** 随机一个环绕偏移（半径 0.8-1.8、高度 0.4-1.8 的圆柱范围内随机点） */
+    private org.bukkit.util.Vector randomBookOffset() {
+        double r = 0.8 + rng.nextDouble() * 1.0;
+        double a = rng.nextDouble() * Math.PI * 2;
+        double y = 0.4 + rng.nextDouble() * 1.4;
+        return new org.bukkit.util.Vector(Math.cos(a) * r, y, Math.sin(a) * r);
+    }
+
+    /** 为法师创建 5 本飞绕附魔书（不可拾取、无重力、无敌） */
+    private void ensureMageBooks(LivingEntity e) {
+        if (mageBooks.containsKey(e.getUniqueId())) return;
+        int n = 5;
+        org.bukkit.entity.Item[] arr = new org.bukkit.entity.Item[n];
+        org.bukkit.util.Vector[] off = new org.bukkit.util.Vector[n];
+        int[] tim = new int[n];
+        try {
+            for (int i = 0; i < n; i++) {
+                org.bukkit.inventory.ItemStack book = new org.bukkit.inventory.ItemStack(Material.ENCHANTED_BOOK);
+                var meta = book.getItemMeta();
+                meta.getPersistentDataContainer().set(new org.bukkit.NamespacedKey("elitemobs", "orb_id"),
+                        org.bukkit.persistence.PersistentDataType.INTEGER, i);
+                book.setItemMeta(meta);
+                org.bukkit.entity.Item it = e.getWorld().dropItem(e.getLocation().add(0, 1, 0), book);
+                it.setPickupDelay(Integer.MAX_VALUE);
+                it.setGravity(false);
+                it.setInvulnerable(true);
+                arr[i] = it;
+                off[i] = randomBookOffset();
+                tim[i] = rng.nextInt(40);
+            }
+        } catch (Exception ex) {
+            plugin.getLogger().warning("[EliteMobs] \u6cd5\u5e08\u98de\u7ed5\u9644\u9b54\u4e66\u521b\u5efa\u5931\u8d25: " + ex.getMessage());
+            for (org.bukkit.entity.Item it : arr) if (it != null) it.remove();
+            return;
+        }
+        mageBooks.put(e.getUniqueId(), arr);
+        mageBookOffsets.put(e.getUniqueId(), off);
+        mageBookTimers.put(e.getUniqueId(), tim);
+    }
+
+    /** 每 tick 更新法师附魔书：随机换目标 + velocity 平滑飞舞 */
+    private void updateMageBooks(LivingEntity e, int tick) {
+        org.bukkit.entity.Item[] arr = mageBooks.get(e.getUniqueId());
+        org.bukkit.util.Vector[] off = mageBookOffsets.get(e.getUniqueId());
+        int[] tim = mageBookTimers.get(e.getUniqueId());
+        if (arr == null || off == null || tim == null) return;
+        Location base = e.getLocation();
+        for (int i = 0; i < arr.length; i++) {
+            org.bukkit.entity.Item it = arr[i];
+            if (it == null || !it.isValid()) continue;
+            tim[i]--;
+            if (tim[i] <= 0) { // 每 1-2.5 秒换一个新随机目标，看起来随机飞舞
+                off[i] = randomBookOffset();
+                tim[i] = 20 + rng.nextInt(30);
+            }
+            Location target = base.clone().add(off[i]);
+            org.bukkit.util.Vector mv = target.toVector().subtract(it.getLocation().toVector());
+            if (mv.lengthSquared() > 9) {
+                it.teleport(target);
+            } else {
+                it.setVelocity(mv.multiply(0.25));
+            }
+        }
+    }
+
+    /** 清理法师飞绕附魔书 */
+    private void cleanupMageBooks(UUID uuid) {
+        org.bukkit.entity.Item[] arr = mageBooks.remove(uuid);
+        if (arr != null) for (org.bukkit.entity.Item it : arr) if (it != null && it.isValid()) it.remove();
+        mageBookOffsets.remove(uuid);
+        mageBookTimers.remove(uuid);
     }
 
     /** 刺客：暗影残影 */
