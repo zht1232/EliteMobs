@@ -106,7 +106,7 @@ public class EliteBossManager {
             + ChatColor.GRAY + " \u5750\u6807 ("
             + ChatColor.YELLOW + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
             + ChatColor.GRAY + ") \u964d\u751f\u4e86\uff01";
-        if (plugin.getEliteConfig().isSpawnAnnounceEnabled()) Bukkit.broadcastMessage(announce);
+        if (plugin.getEliteConfig().isBossAlertEnabled()) Bukkit.broadcastMessage(announce);
     }
 
     public static boolean isBoss(LivingEntity entity) {

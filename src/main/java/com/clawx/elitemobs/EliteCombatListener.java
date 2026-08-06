@@ -368,10 +368,10 @@ public class EliteCombatListener implements Listener {
         if (com.clawx.elitemobs.ai.EliteBossManager.isBoss(e)) {
             plugin.getBossManager().onBossDeath(e);
 
-            // Boss击杀广播（受 spawn-announce.enabled 控制）
+            // Boss击杀广播（受 general.spawn-announce.boss-alert 控制，默认开）
             int level = EliteMobManager.getEliteLevel(e);
             Player killer = e.getKiller();
-            if (killer != null && plugin.getEliteConfig().isSpawnAnnounceEnabled()) {
+            if (killer != null && plugin.getEliteConfig().isBossAlertEnabled()) {
                 Bukkit.broadcastMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "\u2620 "
                     + ChatColor.GREEN + killer.getName()
                     + ChatColor.GOLD + " \u51fb\u6740\u4e86 Boss "

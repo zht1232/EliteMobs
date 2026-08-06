@@ -87,6 +87,7 @@ public class EliteConfig {
     private boolean spawnAnnounceEnabled;
     private int spawnAnnounceMinLevel;
     private int spawnAnnounceRange;
+    private boolean bossAlertEnabled = true;   // Boss 生成/击杀全服广播（独立于普通精英广播）
     // 宝石掉落模式
     private String gemDropMode;
     // 宝石掉落总开关
@@ -97,9 +98,6 @@ public class EliteConfig {
     private int gemBossMin = 2, gemBossMax = 4;       // Boss 每次掉落宝石颗数范围
     // 保护符掉落概率（要求: 宝石概率 > 保护符 >>> 符文）
     private double charmDropChance = 0.08;
-    // 战利品袋
-    private boolean lootBagEnabled;
-    private double lootBagChance, lootBagBossChance;
     // custom 模式: 自定义掉落物
     private List<CustomDrop> customDrops = new ArrayList<>();
     // 击杀奖励 (Vault 金币 + PlayerPoints 点券)
@@ -262,6 +260,7 @@ public class EliteConfig {
         spawnAnnounceEnabled = config.getBoolean("general.spawn-announce.enabled", true);
         spawnAnnounceMinLevel = config.getInt("general.spawn-announce.min-level", 7);
         spawnAnnounceRange = config.getInt("general.spawn-announce.announce-range", -1);
+        bossAlertEnabled = config.getBoolean("general.spawn-announce.boss-alert", true);
 
         // 宝石掉落模式
         gemDropMode = config.getString("gem-drops.mode", "custom");
@@ -287,11 +286,6 @@ public class EliteConfig {
         gemBossMin = Math.max(1, config.getInt("gem-drops.gems.boss-min", 2));
         gemBossMax = Math.max(gemBossMin, config.getInt("gem-drops.gems.boss-max", 4));
         charmDropChance = config.getDouble("gem-drops.charm-drop-chance", 0.08);
-
-        // 战利品袋
-        lootBagEnabled = config.getBoolean("gem-drops.lootbag.enabled", true);
-        lootBagChance = config.getDouble("gem-drops.lootbag.chance", 0.10);
-        lootBagBossChance = config.getDouble("gem-drops.lootbag.boss-chance", 0.50);
 
         // custom 自定义掉落物（gem-drops.custom，向后兼容）
         customDrops = new ArrayList<>();
@@ -584,6 +578,8 @@ public class EliteConfig {
     public boolean isSpawnAnnounceEnabled() { return spawnAnnounceEnabled; }
     public int getSpawnAnnounceMinLevel() { return spawnAnnounceMinLevel; }
     public int getSpawnAnnounceRange() { return spawnAnnounceRange; }
+    /** Boss 生成/击杀全服广播开关（独立，默认开） */
+    public boolean isBossAlertEnabled() { return bossAlertEnabled; }
     public String getGemDropMode() { return gemDropMode; }
 
     // ========== 宝石掉落 (gem-drops) ==========
@@ -604,10 +600,6 @@ public class EliteConfig {
     public int getGemBossMin() { return gemBossMin; }
     public int getGemBossMax() { return gemBossMax; }
     public double getCharmDropChance() { return charmDropChance; }
-
-    public boolean isLootBagEnabled() { return lootBagEnabled; }
-    public double getLootBagChance() { return lootBagChance; }
-    public double getLootBagBossChance() { return lootBagBossChance; }
 
     /**
      * 加载 plugins/EliteMobs/gems/*.yml 目录下的宝石定义。

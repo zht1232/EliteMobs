@@ -1,7 +1,7 @@
 # ============================================
 #  EliteMobs v29.2.0 - 配置文件
 #  适用 Paper 1.21+ / Paper 26.x
-#  作者: zht
+#  作者: crystalkingdom团队
 # ============================================
 
 # --- 基本设置 ---
@@ -27,9 +27,10 @@ general:
 
   # 高等级精英生成时全服广播提示
   spawn-announce:
-    enabled: false
-    min-level: 10          # >= 此等级才广播
-    announce-range: 100   # -1=全服广播, >0=只通知该范围内(格)的玩家
+    enabled: false          # 普通精英生成广播（false=关闭）
+    boss-alert: true        # Boss 生成/击杀全服广播（独立开关，默认开）
+    min-level: 10           # >= 此等级才广播
+    announce-range: 100     # -1=全服广播, >0=只通知该范围内(格)的玩家
 
 # --- 怪物档案 ---
 # 怪物定义已拆分到独立文件: mobs.yml

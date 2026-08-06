@@ -406,7 +406,11 @@ public class EliteMobManager {
                 for (Entity ent : p.getNearbyEntities(16, 16, 16)) {
                     if (!(ent instanceof LivingEntity le)) continue;
                     if (le instanceof org.bukkit.entity.Player) continue;
-                    if (le instanceof Animals || le instanceof WaterMob || le instanceof Ambient || le instanceof Villager) continue;
+                    // 排除非敌对生物：动物/水生/环境/村民/铁傀儡雪傀儡/悦灵/盔甲架/驯服宠物
+                    if (le instanceof Animals || le instanceof WaterMob || le instanceof Ambient
+                            || le instanceof Villager || le instanceof AbstractVillager
+                            || le instanceof Golem || le instanceof Allay
+                            || le instanceof ArmorStand || le instanceof Tameable) continue;
                     if (isElite(le)) continue; // 精英已在 tickAllEliteMobs 处理
                     applyNightBoost(le);
                 }
