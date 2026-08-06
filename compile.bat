@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 set "JAVA25=C:\Users\Administrator\Downloads\MSLX-Daemon_v1.5.5.1_win-x64\DaemonData\Tools\Java\25\bin"
 set "PAPER=C:\Users\Administrator\Downloads\MSLX-Daemon_v1.5.5.1_win-x64\DaemonData\Servers\1"
 set "CP=%PAPER%\paper-26.2.jar"
-set "CP=!CP!;%PAPER%\libraries\io\papermc\paper\paper-api\26.2.build.71-beta\paper-api-26.2.build.71-beta.jar"
+set "CP=!CP!;%PAPER%\libraries\io\papermc\paper\paper-api\26.2.build.60-beta\paper-api-26.2.build.60-beta.jar"
 set "CP=!CP!;%PAPER%\libraries\net\kyori\adventure-api\5.2.0\adventure-api-5.2.0.jar"
 set "CP=!CP!;%PAPER%\libraries\net\kyori\adventure-key\5.2.0\adventure-key-5.2.0.jar"
 set "CP=!CP!;%PAPER%\libraries\com\google\guava\guava\33.6.0-jre\guava-33.6.0-jre.jar"

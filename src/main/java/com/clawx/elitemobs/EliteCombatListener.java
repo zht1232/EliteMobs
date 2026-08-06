@@ -552,28 +552,23 @@ public class EliteCombatListener implements Listener {
         EliteConfig cfg = plugin.getEliteConfig();
         if (!cfg.isGemDropsEnabled()) return;
 
-        // 1) 宝石掉落：先按等级段概率判定（宝石概率最高），成功则掉落多颗，每颗独立权重随机
-        double gemChance = cfg.getGemDropChance(level, boss);
-        if (gemChance > 0 && rng.nextDouble() < gemChance) {
-            EntityType mobType = event.getEntity().getType();
-            List<EliteConfig.CustomDrop> pool = new ArrayList<>();
-            for (EliteConfig.CustomDrop d : cfg.getCustomDrops()) {
-                if (d.allows(mobType) && d.getChance(level) > 0) pool.add(d);
-            }
-            if (!pool.isEmpty()) {
-                // 掉落颗数：普通精英 amount-min~max，Boss 更多（boss-min~max）
-                int min = boss ? cfg.getGemBossMin() : cfg.getGemAmountMin();
-                int max = boss ? cfg.getGemBossMax() : cfg.getGemAmountMax();
-                int count = randomInt(min, max);
-                for (int n = 0; n < count; n++) {
-                    // 每颗独立按权重随机选宝石（可同种也可不同种）
-                    EliteConfig.CustomDrop chosen = pickWeightedGem(pool, level);
-                    int amt = randomInt(chosen.amountMin, chosen.amountMax);
-                    // 宝石等级由精英等级决定（1 + level/3，上限为该宝石 max-level）
-                    int gemLevel = Math.max(1, Math.min(chosen.maxLevel, 1 + level / 3));
-                    ItemStack item = buildCustomDrop(chosen, gemLevel);
-                    if (item != null) { item.setAmount(amt); event.getDrops().add(item); }
-                }
+        // 1) 宝石掉落：必掉（只要 gems/*.yml 有可用宝石），颗数随精英等级提升，每颗独立权重随机（可不同种）
+        EntityType mobType = event.getEntity().getType();
+        List<EliteConfig.CustomDrop> pool = new ArrayList<>();
+        for (EliteConfig.CustomDrop d : cfg.getCustomDrops()) {
+            if (d.allows(mobType) && d.getChance(level) > 0) pool.add(d);
+        }
+        if (!pool.isEmpty()) {
+            // 颗数 = 1 + 精英等级/3（Lv1→1, Lv3→2, Lv6→3, Lv9→4, Lv12→5, Lv15→6, Lv18→7），Boss 额外 +1
+            int count = Math.min(1 + level / 3 + (boss ? 1 : 0), 10);
+            for (int n = 0; n < count; n++) {
+                // 每颗独立按权重随机选宝石（可同种也可不同种）
+                EliteConfig.CustomDrop chosen = pickWeightedGem(pool, level);
+                int amt = randomInt(chosen.amountMin, chosen.amountMax);
+                // 宝石等级由精英等级决定（1 + level/3，上限为该宝石 max-level）
+                int gemLevel = Math.max(1, Math.min(chosen.maxLevel, 1 + level / 3));
+                ItemStack item = buildCustomDrop(chosen, gemLevel);
+                if (item != null) { item.setAmount(amt); event.getDrops().add(item); }
             }
         }
 
