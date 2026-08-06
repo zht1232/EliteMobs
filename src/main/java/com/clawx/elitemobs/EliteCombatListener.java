@@ -254,8 +254,9 @@ public class EliteCombatListener implements Listener {
         if (event.getEntity() instanceof LivingEntity e && event.getDamager() instanceof Player p && EliteMobManager.isElite(e)) {
             int lv = EliteMobManager.getEliteLevel(e);
             double hp = e.getHealth();
-            double max = e.getAttribute(Attribute.MAX_HEALTH).getBaseValue();
-            double pct = Math.max(0, (hp / max) * 100);
+            org.bukkit.attribute.AttributeInstance maxAttr = e.getAttribute(Attribute.MAX_HEALTH);
+            double max = maxAttr != null ? maxAttr.getBaseValue() : Math.max(hp, 1.0);
+            double pct = Math.max(0, (hp / Math.max(max, 1.0)) * 100);
             StringBuilder bar = new StringBuilder();
             for (int i = 0; i < 10; i++) bar.append(i < (int) Math.ceil(pct / 10.0) ? ChatColor.DARK_RED + "\u2588" : ChatColor.GRAY + "\u2588");
             p.sendActionBar(ChatColor.RED + "[" + bar + ChatColor.RED + "] " + ChatColor.GOLD + fmt(e.getType()) + " Lv." + lv + ChatColor.GRAY + " | " + String.format("%.0f%%", pct));
@@ -342,15 +343,14 @@ public class EliteCombatListener implements Listener {
         return false;
     }
 
-    /** 掉落物耐火/岩浆/虚空：防止精英掉落物被火烧毁、掉岩浆/虚空消失。 */
+    /** 掉落物耐火/岩浆：防止精英掉落物被火烧毁、掉岩浆消失（虚空物品由 despawn 清理，不做处理避免堆积）。 */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onItemBurn(org.bukkit.event.entity.EntityDamageEvent event) {
         if (!(event.getEntity() instanceof org.bukkit.entity.Item)) return;
         org.bukkit.event.entity.EntityDamageEvent.DamageCause cause = event.getCause();
         if (cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE
                 || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE_TICK
-                || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.LAVA
-                || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.VOID) {
+                || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.LAVA) {
             event.setCancelled(true);
         }
     }
@@ -368,10 +368,10 @@ public class EliteCombatListener implements Listener {
         if (com.clawx.elitemobs.ai.EliteBossManager.isBoss(e)) {
             plugin.getBossManager().onBossDeath(e);
 
-            // Boss击杀广播
+            // Boss击杀广播（受 spawn-announce.enabled 控制）
             int level = EliteMobManager.getEliteLevel(e);
             Player killer = e.getKiller();
-            if (killer != null) {
+            if (killer != null && plugin.getEliteConfig().isSpawnAnnounceEnabled()) {
                 Bukkit.broadcastMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "\u2620 "
                     + ChatColor.GREEN + killer.getName()
                     + ChatColor.GOLD + " \u51fb\u6740\u4e86 Boss "
@@ -384,6 +384,8 @@ public class EliteCombatListener implements Listener {
         if (plugin.getEliteConfig().isReturnStolenItemsOnDeath()) {
             List<ItemStack> stolen = plugin.getMobManager().takeStolenItems(e.getUniqueId());
             if (stolen != null && !stolen.isEmpty()) {
+                // 先移除已捕获的死亡掉落中的被偷物品（装备 dropChance=1.0 已把物品加入 drops），避免一份变两份
+                event.getDrops().removeIf(drop -> drop != null && containsStolenRef(stolen, drop));
                 // 从怪身上移除被偷物品（同一对象引用），避免与装备掉落重复
                 org.bukkit.inventory.EntityEquipment geq = e.getEquipment();
                 if (geq != null) {

@@ -98,7 +98,7 @@ public class EliteBossManager {
                 loc.clone().add(rng.nextDouble() - 0.5, rng.nextDouble() * 2, rng.nextDouble() - 0.5), 1);
         }
 
-        // 全服广播（含坐标）
+        // 全服广播（含坐标；受 spawn-announce.enabled 控制，关掉后 Boss 警报也不播）
         String announce = ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
             + ChatColor.RED + "" + ChatColor.BOLD + "Boss\u8b66\u62a5\uff01"
             + ChatColor.GRAY + " \u2014 " + bossName + ChatColor.GRAY + " \u5728 "
@@ -106,7 +106,7 @@ public class EliteBossManager {
             + ChatColor.GRAY + " \u5750\u6807 ("
             + ChatColor.YELLOW + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
             + ChatColor.GRAY + ") \u964d\u751f\u4e86\uff01";
-        Bukkit.broadcastMessage(announce);
+        if (plugin.getEliteConfig().isSpawnAnnounceEnabled()) Bukkit.broadcastMessage(announce);
     }
 
     public static boolean isBoss(LivingEntity entity) {

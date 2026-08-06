@@ -185,7 +185,7 @@ general:
 compile.bat
 
 # 生成的 JAR 文件
-EliteMobs-29.1.0.jar
+EliteMobs-29.2.0.jar
 ```
 
 ## 依赖插件
@@ -205,7 +205,7 @@ EliteMobs-29.1.0.jar
 
 ## 开发历史
 
-### v29.1.0（当前版本）
+### v29.2.0（当前版本）
 - 修复精英怪不掉宝石：掉落改为必掉（颗数 = 1 + 精英等级/3，Boss +1，权重随机）
 - compile.bat 适配 paper-api 26.2.build.60-beta
 
@@ -267,7 +267,7 @@ EliteMobs-29.1.0.jar
 ## 联系信息
 
 - 作者：ClawX
-- 版本：29.1.0
+- 版本：29.2.0
 - 适用：Paper 1.21+ / Paper 26.x
 
 ---

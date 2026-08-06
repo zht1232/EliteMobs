@@ -55,11 +55,12 @@ public class EliteSpawnHandler implements Listener {
         int level = EliteMobManager.getEliteLevel(entity);
         relocateHighLevelElite(entity, level);
 
-        // 尝试晋升为Boss（Lv.15+）
-        plugin.getBossManager().tryPromoteToBoss(entity, level);
-
-        // 高等级精英生成广播
-        announceSpawn(entity);
+        // 尝试晋升为Boss（Lv.15+）；晋升成功由 Boss 逻辑自己广播（避免双重广播）
+        boolean promoted = plugin.getBossManager().tryPromoteToBoss(entity, level);
+        if (!promoted) {
+            // 高等级精英生成广播
+            announceSpawn(entity);
+        }
     }
 
     /**
