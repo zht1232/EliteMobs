@@ -92,8 +92,8 @@ public class EliteClassAI implements Listener {
                     Location loc = e.getLocation();
                     World world = e.getWorld();
 
-                    // 职业专属粒子特效（每3tick，绑定实体坐标）
-                    if (tick % 3 == 0) {
+                    // 职业专属粒子特效（每5tick，绑定实体坐标；频率降低减少移动拖尾）
+                    if (tick % 5 == 0) {
                         switch (cls) {
                             case MAGE -> drawHexagram(world, e, tick);
                             case TANK -> drawShieldRing(world, e, tick);
@@ -236,9 +236,9 @@ public class EliteClassAI implements Listener {
 
     // ==================== 粒子特效绘制（每tick获取实体最新位置） ====================
 
-    /** 法师：六芒星法阵（贴地固定朝向，不旋转） */
+    /** 法师：六芒星法阵（贴地固定朝向，不旋转；粒子少且贴地，避免移动拖尾） */
     public static void drawHexagram(World world, Entity entity, int tick) {
-        double radius = 1.2;
+        double radius = 1.0;
         Location loc = entity.getLocation();
         double cx = loc.getX(), cy = loc.getY() + 0.05, cz = loc.getZ();
 
@@ -249,13 +249,13 @@ public class EliteClassAI implements Listener {
             px[i] = cx + Math.cos(angle) * radius;
             pz[i] = cz + Math.sin(angle) * radius;
         }
-        // 正三角 + 倒三角
-        drawLine(world, cy, px[0], pz[0], px[2], pz[2], 10);
-        drawLine(world, cy, px[2], pz[2], px[4], pz[4], 10);
-        drawLine(world, cy, px[4], pz[4], px[0], pz[0], 10);
-        drawLine(world, cy, px[1], pz[1], px[3], pz[3], 10);
-        drawLine(world, cy, px[3], pz[3], px[5], pz[5], 10);
-        drawLine(world, cy, px[5], pz[5], px[1], pz[1], 10);
+        // 正三角 + 倒三角（每线 5 点，总粒子减半）
+        drawLine(world, cy, px[0], pz[0], px[2], pz[2], 5);
+        drawLine(world, cy, px[2], pz[2], px[4], pz[4], 5);
+        drawLine(world, cy, px[4], pz[4], px[0], pz[0], 5);
+        drawLine(world, cy, px[1], pz[1], px[3], pz[3], 5);
+        drawLine(world, cy, px[3], pz[3], px[5], pz[5], 5);
+        drawLine(world, cy, px[5], pz[5], px[1], pz[1], 5);
     }
 
     private static void drawLine(World world, double y, double x1, double z1, double x2, double z2, int points) {
@@ -266,21 +266,20 @@ public class EliteClassAI implements Listener {
         }
     }
 
-    /** 坦克：护盾环 */
+    /** 坦克：护盾环（粒子减少，避免移动拖尾） */
     public static void drawShieldRing(World world, Entity entity, int tick) {
-        double radius = 0.9;
+        double radius = 0.8;
         Location loc = entity.getLocation();
         double cx = loc.getX(), by = loc.getY(), cz = loc.getZ();
-        org.bukkit.Particle.DustOptions blue = new org.bukkit.Particle.DustOptions(org.bukkit.Color.fromRGB(60, 120, 255), 1.5f);
-        for (int i = 0; i < 16; i++) {
-            double a = (i * Math.PI * 2 / 16) + (tick * 0.05);
+        org.bukkit.Particle.DustOptions blue = new org.bukkit.Particle.DustOptions(org.bukkit.Color.fromRGB(60, 120, 255), 1.4f);
+        for (int i = 0; i < 8; i++) {
+            double a = (i * Math.PI * 2 / 8) + (tick * 0.05);
             world.spawnParticle(org.bukkit.Particle.DUST, cx + Math.cos(a) * radius, by + 1.0, cz + Math.sin(a) * radius, 1, 0, 0, 0, 0, blue);
         }
-        for (int i = 0; i < 10; i++) {
-            double a = (i * Math.PI * 2 / 10) - (tick * 0.04);
-            double r2 = radius * 0.7;
-            world.spawnParticle(org.bukkit.Particle.DUST, cx + Math.cos(a) * r2, by + 1.8, cz + Math.sin(a) * r2, 1, 0, 0, 0, 0, blue);
-            world.spawnParticle(org.bukkit.Particle.DUST, cx + Math.cos(a) * r2, by + 0.2, cz + Math.sin(a) * r2, 1, 0, 0, 0, 0, blue);
+        for (int i = 0; i < 5; i++) {
+            double a = (i * Math.PI * 2 / 5) - (tick * 0.04);
+            double r2 = radius * 0.6;
+            world.spawnParticle(org.bukkit.Particle.DUST, cx + Math.cos(a) * r2, by + 1.6, cz + Math.sin(a) * r2, 1, 0, 0, 0, 0, blue);
         }
     }
 
@@ -295,24 +294,24 @@ public class EliteClassAI implements Listener {
         }
     }
 
-    /** 召唤师：暗能漩涡 */
+    /** 召唤师：暗能漩涡（改用短命粒子，避免移动拖尾） */
     public static void drawDarkSwirl(World world, Entity entity, int tick) {
         Location loc = entity.getLocation();
         double cx = loc.getX(), by = loc.getY(), cz = loc.getZ();
-        for (int i = 0; i < 5; i++) {
-            double angle = (tick * 0.15 + i * Math.PI * 2 / 5);
-            double r = 0.5 + (tick % 30) / 30.0 * 0.5;
-            world.spawnParticle(org.bukkit.Particle.HAPPY_VILLAGER,
-                cx + Math.cos(angle) * r, by + 0.1 + (tick % 30) / 30.0 * 2.0, cz + Math.sin(angle) * r, 1, 0, 0, 0, 0);
+        for (int i = 0; i < 3; i++) {
+            double angle = (tick * 0.15 + i * Math.PI * 2 / 3);
+            double r = 0.5 + (tick % 30) / 30.0 * 0.4;
+            world.spawnParticle(org.bukkit.Particle.PORTAL,
+                cx + Math.cos(angle) * r, by + 0.1 + (tick % 30) / 30.0 * 1.6, cz + Math.sin(angle) * r, 1, 0, 0, 0, 0);
         }
     }
 
-    /** Boss：暗红光环（脉冲扩散） */
+    /** Boss：暗红光环（脉冲扩散，粒子减少） */
     public static void drawBossAura(World world, Entity entity, int tick) {
         Location loc = entity.getLocation();
         double pulse = (tick % 40) / 40.0;
-        double radius = 1.0 + pulse * 2.0;
-        int count = (int) (6 + pulse * 10);
+        double radius = 1.0 + pulse * 1.5;
+        int count = (int) (4 + pulse * 6);
         for (int i = 0; i < count; i++) {
             double angle = (i * Math.PI * 2 / count);
             EliteMobManager.spawnParticleSafe(world, org.bukkit.Particle.FLAME,

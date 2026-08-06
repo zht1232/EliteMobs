@@ -304,7 +304,14 @@ public class EliteCombatListener implements Listener {
                         if (ls != null) ls.setMetadata("elitemobs_lightning",
                                 new org.bukkit.metadata.FixedMetadataValue(plugin, true));
                         target.getWorld().playSound(target.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.0f, 1.0f);
-                        target.damage(2.0 + lv * 0.5, p);
+                        // 额外伤害延迟到下一 tick 执行：避免在伤害事件处理器内同步补刀，干扰 EntityDeathEvent 的掉落流程
+                        final LivingEntity ft = target;
+                        final Player fp = p;
+                        final int flv = lv;
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (ft.isDead() || !ft.isValid()) return;
+                            ft.damage(2.0 + flv * 0.5, fp);
+                        });
                     }
                 }
             }

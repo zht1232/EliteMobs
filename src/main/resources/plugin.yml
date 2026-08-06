@@ -2,7 +2,7 @@ name: EliteMobs
 version: '29.2.0'
 main: com.clawx.elitemobs.EliteMobsPlugin
 api-version: '1.21'
-author: ClawX
+author: crystalkingdom
 description: Highly customizable elite mob plugin with smart AI, wall-climbing, item stealing, block breaking, and scaling difficulty
 prefix: EliteMobs
 load: POSTWORLD
