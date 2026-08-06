@@ -298,20 +298,14 @@ public class EliteCombatListener implements Listener {
                     int lv = gemLvs[i];
                     double chance = com.clawx.elitemobs.essence.EliteGemFactory.thunderChance(lv);
                     if (rng.nextDouble() < chance) {
-                        // 真闪电（苦力怕可被充电成高压爬行者）+ 宝石等级额外伤害
-                        // 闪电实体打标记：由 onLightningIgnite 取消引燃，避免落点四处着火
-                        org.bukkit.entity.LightningStrike ls = target.getWorld().strikeLightning(target.getLocation());
-                        if (ls != null) ls.setMetadata("elitemobs_lightning",
-                                new org.bukkit.metadata.FixedMetadataValue(plugin, true));
+                        // 假闪电动画 + 手动伤害 + 手动给苦力怕充电：
+                        // 不产生真闪电实体（strikeLightning），彻底避免落雷爆炸/火焰摧毁掉落物
+                        target.getWorld().strikeLightningEffect(target.getLocation());
                         target.getWorld().playSound(target.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 1.0f, 1.0f);
-                        // 额外伤害延迟到下一 tick 执行：避免在伤害事件处理器内同步补刀，干扰 EntityDeathEvent 的掉落流程
-                        final LivingEntity ft = target;
-                        final Player fp = p;
-                        final int flv = lv;
-                        Bukkit.getScheduler().runTask(plugin, () -> {
-                            if (ft.isDead() || !ft.isValid()) return;
-                            ft.damage(2.0 + flv * 0.5, fp);
-                        });
+                        if (target instanceof Creeper c) {
+                            c.setPowered(true); // 苦力怕变高压爬行者
+                        }
+                        target.damage(2.0 + lv * 0.5, p);
                     }
                 }
             }
