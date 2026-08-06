@@ -26,6 +26,8 @@ import java.util.*;
 public class EliteClassAI implements Listener {
     private final EliteMobsPlugin plugin;
     private static final Random rng = new Random();
+    // 坦克飞绕盾牌（ItemDisplay 实体，跟随怪物旋转）
+    private final Map<UUID, org.bukkit.entity.ItemDisplay[]> tankDisplays = new java.util.concurrent.ConcurrentHashMap<>();
 
     public EliteClassAI(EliteMobsPlugin plugin) {
         this.plugin = plugin;
@@ -85,15 +87,18 @@ public class EliteClassAI implements Listener {
                 tick++;
                 for (EliteMobManager.EliteMobData data : plugin.getMobManager().getEliteMobs()) {
                     LivingEntity e = data.entity;
-                    if (e == null || e.isDead() || !e.isValid()) continue;
+                    if (e == null || e.isDead() || !e.isValid()) {
+                        if (e != null) cleanupTankDisplays(e.getUniqueId());
+                        continue;
+                    }
                     EliteClass cls = getEliteClass(e);
                     if (cls == null) continue;
 
                     Location loc = e.getLocation();
                     World world = e.getWorld();
 
-                    // 职业专属粒子特效（每4tick，短命粒子类型减少移动残留拖尾）
-                    if (tick % 4 == 0) {
+                    // 职业专属粒子特效（每3tick，绑定实体坐标）
+                    if (tick % 3 == 0) {
                         switch (cls) {
                             case MAGE -> drawHexagram(world, e, tick);
                             case TANK -> drawShieldRing(world, e, tick);
@@ -172,6 +177,9 @@ public class EliteClassAI implements Listener {
                             }
                         }
                         case TANK -> {
+                            // 坦克：飞绕盾牌特效（ItemDisplay 真实可见、跟随旋转）
+                            ensureTankDisplays(e);
+                            updateTankDisplays(e, tick);
                             // 坦克：对附近玩家施加减速（嘲讽光环）
                             if (tick % 40 == 0) {
                                 for (Entity ent : e.getNearbyEntities(4, 4, 4)) {
@@ -236,9 +244,9 @@ public class EliteClassAI implements Listener {
 
     // ==================== 粒子特效绘制（每tick获取实体最新位置） ====================
 
-    /** 法师：紫色六芒星法阵（DUST 紫色粒子，贴地不旋转） */
+    /** 法师：六芒星法阵（贴地固定朝向，不旋转） */
     public static void drawHexagram(World world, Entity entity, int tick) {
-        double radius = 1.1;
+        double radius = 1.2;
         Location loc = entity.getLocation();
         double cx = loc.getX(), cy = loc.getY() + 0.05, cz = loc.getZ();
 
@@ -249,39 +257,84 @@ public class EliteClassAI implements Listener {
             px[i] = cx + Math.cos(angle) * radius;
             pz[i] = cz + Math.sin(angle) * radius;
         }
-        // 正三角 + 倒三角（每线 8 点，饱满）
-        drawLine(world, cy, px[0], pz[0], px[2], pz[2], 8);
-        drawLine(world, cy, px[2], pz[2], px[4], pz[4], 8);
-        drawLine(world, cy, px[4], pz[4], px[0], pz[0], 8);
-        drawLine(world, cy, px[1], pz[1], px[3], pz[3], 8);
-        drawLine(world, cy, px[3], pz[3], px[5], pz[5], 8);
-        drawLine(world, cy, px[5], pz[5], px[1], pz[1], 8);
+        // 正三角 + 倒三角
+        drawLine(world, cy, px[0], pz[0], px[2], pz[2], 10);
+        drawLine(world, cy, px[2], pz[2], px[4], pz[4], 10);
+        drawLine(world, cy, px[4], pz[4], px[0], pz[0], 10);
+        drawLine(world, cy, px[1], pz[1], px[3], pz[3], 10);
+        drawLine(world, cy, px[3], pz[3], px[5], pz[5], 10);
+        drawLine(world, cy, px[5], pz[5], px[1], pz[1], 10);
     }
 
     private static void drawLine(World world, double y, double x1, double z1, double x2, double z2, int points) {
-        org.bukkit.Particle.DustOptions purple = new org.bukkit.Particle.DustOptions(org.bukkit.Color.fromRGB(180, 100, 255), 1.0f);
         for (int i = 0; i < points; i++) {
             double t = (double) i / points;
-            world.spawnParticle(org.bukkit.Particle.DUST, x1 + (x2 - x1) * t, y, z1 + (z2 - z1) * t, 1, 0, 0, 0, 0, purple);
+            world.spawnParticle(org.bukkit.Particle.DUST, x1 + (x2 - x1) * t, y, z1 + (z2 - z1) * t, 1, 0, 0, 0, 0,
+                new org.bukkit.Particle.DustOptions(org.bukkit.Color.fromRGB(180, 100, 255), 1.2f));
         }
     }
 
-    /** 坦克：飞绕的物品（ITEM 粒子环绕，像原版 EliteMobs 一样）+ 底部淡金色护盾环 */
+    /** 坦克：底部护盾环（配合 ItemDisplay 飞绕盾牌） */
     public static void drawShieldRing(World world, Entity entity, int tick) {
         Location loc = entity.getLocation();
         double cx = loc.getX(), by = loc.getY(), cz = loc.getZ();
-        // 6 个盾牌绕身体旋转（模拟原版精英怪飞绕物品）
-        org.bukkit.inventory.ItemStack shield = new org.bukkit.inventory.ItemStack(org.bukkit.Material.SHIELD);
-        for (int i = 0; i < 6; i++) {
-            double a = (tick * 0.12 + i * Math.PI * 2 / 6);
-            double r = 1.3;
-            world.spawnParticle(org.bukkit.Particle.ITEM, cx + Math.cos(a) * r, by + 1.1, cz + Math.sin(a) * r, 1, 0, 0, 0, 0, shield);
+        for (int i = 0; i < 12; i++) {
+            double a = (i * Math.PI * 2 / 12) + (tick * 0.05);
+            world.spawnParticle(org.bukkit.Particle.WAX_ON, cx + Math.cos(a) * 0.9, by + 0.15, cz + Math.sin(a) * 0.9, 1, 0, 0, 0, 0);
         }
-        // 底部淡金色护盾环
-        for (int i = 0; i < 10; i++) {
-            double a = (i * Math.PI * 2 / 10) + (tick * 0.05);
-            world.spawnParticle(org.bukkit.Particle.WAX_ON, cx + Math.cos(a) * 0.8, by + 0.1, cz + Math.sin(a) * 0.8, 1, 0, 0, 0, 0);
+    }
+
+    // ==================== 坦克飞绕盾牌（ItemDisplay 实体） ====================
+
+    /** 为坦克创建 6 个飞绕盾牌（真实物品显示，不可交互、无碰撞、跟随怪物） */
+    private void ensureTankDisplays(LivingEntity e) {
+        if (tankDisplays.containsKey(e.getUniqueId())) return;
+        int n = 6;
+        org.bukkit.entity.ItemDisplay[] arr = new org.bukkit.entity.ItemDisplay[n];
+        try {
+            for (int i = 0; i < n; i++) {
+                org.bukkit.entity.ItemDisplay id = (org.bukkit.entity.ItemDisplay)
+                        e.getWorld().spawnEntity(e.getLocation(), EntityType.ITEM_DISPLAY);
+                id.setItemStack(new org.bukkit.inventory.ItemStack(Material.SHIELD));
+                id.setDisplayWidth(0.45f);
+                id.setDisplayHeight(0.45f);
+                id.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+                id.setInvulnerable(true);
+                id.setGravity(false);
+                arr[i] = id;
+            }
+        } catch (Exception ex) {
+            for (org.bukkit.entity.ItemDisplay id : arr) if (id != null) id.remove();
+            return;
         }
+        tankDisplays.put(e.getUniqueId(), arr);
+    }
+
+    /** 每 tick 更新坦克飞绕盾牌位置（绕身体旋转 + 跟随怪物移动） */
+    private void updateTankDisplays(LivingEntity e, int tick) {
+        org.bukkit.entity.ItemDisplay[] arr = tankDisplays.get(e.getUniqueId());
+        if (arr == null) return;
+        Location loc = e.getLocation();
+        for (int i = 0; i < arr.length; i++) {
+            org.bukkit.entity.ItemDisplay id = arr[i];
+            if (id == null || !id.isValid()) continue;
+            double a = (tick * 0.12 + i * Math.PI * 2 / arr.length);
+            double r = 1.2;
+            id.teleport(loc.clone().add(Math.cos(a) * r, 1.05, Math.sin(a) * r));
+        }
+    }
+
+    /** 清理坦克飞绕盾牌（死亡/失效时移除实体） */
+    private void cleanupTankDisplays(UUID uuid) {
+        org.bukkit.entity.ItemDisplay[] arr = tankDisplays.remove(uuid);
+        if (arr == null) return;
+        for (org.bukkit.entity.ItemDisplay id : arr) if (id != null && id.isValid()) id.remove();
+    }
+
+    /** 精英死亡时清理坦克飞绕盾牌 */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onAnyEliteDeath(org.bukkit.event.entity.EntityDeathEvent event) {
+        cleanupTankDisplays(event.getEntity().getUniqueId());
     }
 
     /** 刺客：暗影残影 */
@@ -295,15 +348,15 @@ public class EliteClassAI implements Listener {
         }
     }
 
-    /** 召唤师：暗能漩涡（REVERSE_PORTAL 短命粒子，饱满不拖尾） */
+    /** 召唤师：暗能漩涡 */
     public static void drawDarkSwirl(World world, Entity entity, int tick) {
         Location loc = entity.getLocation();
         double cx = loc.getX(), by = loc.getY(), cz = loc.getZ();
         for (int i = 0; i < 5; i++) {
             double angle = (tick * 0.15 + i * Math.PI * 2 / 5);
-            double r = 0.5 + (tick % 30) / 30.0 * 0.4;
-            world.spawnParticle(org.bukkit.Particle.REVERSE_PORTAL,
-                cx + Math.cos(angle) * r, by + 0.1 + (tick % 30) / 30.0 * 1.6, cz + Math.sin(angle) * r, 1, 0, 0, 0, 0);
+            double r = 0.5 + (tick % 30) / 30.0 * 0.5;
+            world.spawnParticle(org.bukkit.Particle.HAPPY_VILLAGER,
+                cx + Math.cos(angle) * r, by + 0.1 + (tick % 30) / 30.0 * 2.0, cz + Math.sin(angle) * r, 1, 0, 0, 0, 0);
         }
     }
 
