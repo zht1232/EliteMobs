@@ -19,6 +19,10 @@ public class EliteConfig {
     private int minSpawnY;
     private int maxElitesPerChunk;
     private int targetRange = 16;   // 精英主动索敌范围（格），应对其他插件取消追击事件
+    // 精英生成距离：等级越高的精英生成离最近玩家越远（避免高级怪刷在玩家/基地旁边）
+    private double spawnDistBase = 8;
+    private double spawnDistPerLevel = 0.8;
+    private double spawnDistMax = 48;
     // 护甲套装加成（armor-set-bonus）
     private boolean setBonusEnabled = true;
     private double setBonusReductionPerLevel = 2.0;   // 每点套装等级减伤 %
@@ -134,6 +138,10 @@ public class EliteConfig {
         minSpawnY = config.getInt("general.min-spawn-y", 0);
         maxElitesPerChunk = config.getInt("general.max-elites-per-chunk", 2);
         targetRange = config.getInt("general.target-range", 16);
+        // 精英生成距离
+        spawnDistBase = config.getDouble("general.spawn-distance.min-dist-base", 8);
+        spawnDistPerLevel = config.getDouble("general.spawn-distance.dist-per-level", 0.8);
+        spawnDistMax = config.getDouble("general.spawn-distance.max-dist", 48);
         // 护甲套装加成
         setBonusEnabled = config.getBoolean("armor-set-bonus.enabled", true);
         setBonusReductionPerLevel = config.getDouble("armor-set-bonus.reduction-per-level", 2.0);
@@ -455,6 +463,9 @@ public class EliteConfig {
     public int getMinSpawnY() { return minSpawnY; }
     public int getMaxElitesPerChunk() { return maxElitesPerChunk; }
     public int getTargetRange() { return targetRange; }
+    public double getSpawnDistBase() { return spawnDistBase; }
+    public double getSpawnDistPerLevel() { return spawnDistPerLevel; }
+    public double getSpawnDistMax() { return spawnDistMax; }
     // ========== 护甲套装加成 ==========
     public boolean isSetBonusEnabled() { return setBonusEnabled; }
     public double getSetBonusReductionPerLevel() { return setBonusReductionPerLevel; }

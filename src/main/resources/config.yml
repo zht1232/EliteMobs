@@ -17,6 +17,14 @@ general:
   # 若对方插件连 setTarget 触发的追击事件也取消，需在对方插件中排除 EliteMobs 怪物。
   target-range: 16
 
+  # 精英生成距离：等级越高的精英生成离最近玩家越远（避免高级怪刷在玩家/基地旁边）
+  #   要求最小距离 = min-dist-base + 精英等级 * dist-per-level，封顶 max-dist 格
+  #   生成位置不足时自动沿"玩家→精英"方向外推传送到更远处
+  spawn-distance:
+    min-dist-base: 8        # 基础最小距离（格）
+    dist-per-level: 0.8     # 每级额外距离（格），如 Lv.10≈16 格 / Lv.20≈24 格
+    max-dist: 48            # 封顶距离（格）
+
   # 高等级精英生成时全服广播提示
   spawn-announce:
     enabled: false

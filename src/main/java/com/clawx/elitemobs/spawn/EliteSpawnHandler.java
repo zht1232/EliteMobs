@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -50,12 +51,63 @@ public class EliteSpawnHandler implements Listener {
         if (rng.nextDouble() >= chance) return;
         plugin.getMobManager().makeElite(entity);
 
-        // 尝试晋升为Boss（Lv.15+）
+        // 高等级精英生成到更远的地方（等级越高要求离玩家越远，避免刷在玩家/基地旁）
         int level = EliteMobManager.getEliteLevel(entity);
+        relocateHighLevelElite(entity, level);
+
+        // 尝试晋升为Boss（Lv.15+）
         plugin.getBossManager().tryPromoteToBoss(entity, level);
 
         // 高等级精英生成广播
         announceSpawn(entity);
+    }
+
+    /**
+     * 高等级精英生成到更远的地方：要求距最近玩家 >= min-dist-base + 等级*dist-per-level（封顶 max-dist）。
+     * 距离不足时沿"玩家→精英"方向外推并传送到安全位置，避免高级怪刷在玩家/基地旁。
+     */
+    private void relocateHighLevelElite(LivingEntity entity, int level) {
+        EliteConfig cfg = plugin.getEliteConfig();
+        double target = Math.min(cfg.getSpawnDistBase() + level * cfg.getSpawnDistPerLevel(), cfg.getSpawnDistMax());
+
+        Location loc = entity.getLocation();
+        Player nearest = null;
+        double nearestSq = Double.MAX_VALUE;
+        for (Player p : entity.getWorld().getPlayers()) {
+            double d = p.getLocation().distanceSquared(loc);
+            if (d < nearestSq) { nearestSq = d; nearest = p; }
+        }
+        if (nearest == null) return;
+        double current = Math.sqrt(nearestSq);
+        if (current >= target) return; // 已够远，无需移动
+
+        Location pl = nearest.getLocation();
+        double dx = loc.getX() - pl.getX();
+        double dz = loc.getZ() - pl.getZ();
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 0.05) { // 与玩家几乎重叠：随机取一个方向外推
+            dx = rng.nextDouble() - 0.5;
+            dz = rng.nextDouble() - 0.5;
+            len = Math.sqrt(dx * dx + dz * dz);
+            if (len < 0.05) return;
+        }
+        double nx = dx / len, nz = dz / len;
+        int tx = (int) Math.floor(pl.getX() + nx * target);
+        int tz = (int) Math.floor(pl.getZ() + nz * target);
+
+        Location spot = findSafeSpot(entity.getWorld(), tx, tz);
+        if (spot != null) entity.teleport(spot);
+    }
+
+    /** 在 (x,z) 附近找一个实体能站立的 2 格高空间，找不到返回 null */
+    private Location findSafeSpot(World world, int x, int z) {
+        int top = world.getHighestBlockYAt(x, z);
+        for (int y = top + 1; y >= Math.max(world.getMinHeight(), top - 6); y--) {
+            if (world.getBlockAt(x, y, z).isPassable() && world.getBlockAt(x, y + 1, z).isPassable()) {
+                return new Location(world, x + 0.5, y, z + 0.5);
+            }
+        }
+        return null;
     }
 
     private void announceSpawn(LivingEntity entity) {

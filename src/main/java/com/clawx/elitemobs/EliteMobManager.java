@@ -315,9 +315,8 @@ public class EliteMobManager {
                 default -> {
                     EliteConfig cfg = plugin.getEliteConfig();
                     if (cfg.isLightningEnabled() && level >= cfg.getLightningMinLevel()) {
-                        // Lv.10+ 闪电效果
-                        world.playSound(loc.clone(), org.bukkit.Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 2.0f, 0.5f);
-                        for (int i = 0; i < 3; i++) world.strikeLightning(loc.clone().add(random.nextDouble()-0.5, 0, random.nextDouble()-0.5));
+                        // Lv.10+ 登场特效：仅粒子+音效，不再召唤真实闪电
+                        // （真实闪电会破坏/引燃方块；闪电特效只保留给 Boss 晋升）
                         for (int i = 0; i < 50; i++) spawnParticleSafe(world, Particle.DRAGON_BREATH, loc.clone().add(random.nextDouble()-0.5, 1+random.nextDouble(), random.nextDouble()-0.5), 1);
                         for (int i = 0; i < 30; i++) spawnParticleSafe(world, Particle.SOUL, loc.clone().add(random.nextDouble()-0.5, random.nextDouble(), random.nextDouble()-0.5), 1);
                         world.playSound(loc.clone(), org.bukkit.Sound.ENTITY_WITHER_SPAWN, 2.0f, 0.6f);
