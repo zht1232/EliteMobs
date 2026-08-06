@@ -74,7 +74,9 @@ public class EliteMobManager {
 
     public void makeElite(LivingEntity entity) { makeElite(entity, -1); }
 
-    public void makeElite(LivingEntity entity, int forcedLevel) {
+    public void makeElite(LivingEntity entity, int forcedLevel) { makeElite(entity, forcedLevel, null); }
+
+    public void makeElite(LivingEntity entity, int forcedLevel, EliteClass forcedClass) {
         if (entity == null || isElite(entity)) return;
         EliteConfig config = plugin.getEliteConfig();
         EliteConfig.EliteMobProfile profile = config.getProfile(entity.getType());
@@ -124,8 +126,8 @@ public class EliteMobManager {
         entity.setMetadata("elite_level", new FixedMetadataValue(plugin, level));
         entity.setMetadata("elite_spawn_time", new FixedMetadataValue(plugin, spawnTime));
 
-        // 分配职业
-        EliteClass eliteClass = EliteClass.randomForLevel(level);
+        // 分配职业（指令可指定职业，否则按等级随机）
+        EliteClass eliteClass = forcedClass != null ? forcedClass : EliteClass.randomForLevel(level);
         plugin.getEliteClassAI().applyClass(entity, level, eliteClass);
         // 分配词缀（如火焰/冰霜/吸血等）
         if (plugin.getAffixHandler() != null) plugin.getAffixHandler().rollAndApply(entity);

@@ -50,7 +50,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,ChatColor.GOLD+"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
         msg(s,ChatColor.YELLOW+"/em reload"+ChatColor.GRAY+" \u2014 \u91cd\u65b0\u52a0\u8f7d\u914d\u7f6e\u6587\u4ef6");
         msg(s,ChatColor.YELLOW+"/em info"+ChatColor.GRAY+" \u2014 \u67e5\u770b\u63d2\u4ef6\u72b6\u6001");
-        msg(s,ChatColor.YELLOW+"/em spawn <\u7c7b\u578b> [\u7b49\u7ea7]"+ChatColor.GRAY+" \u2014 \u624b\u52a8\u751f\u6210\u7cbe\u82f1");
+        msg(s,ChatColor.YELLOW+"/em spawn <\u7c7b\u578b> [\u7b49\u7ea7] [\u804c\u4e1a]"+ChatColor.GRAY+" \u2014 \u624b\u52a8\u751f\u6210\u7cbe\u82f1\uff08\u804c\u4e1a: tank/assassin/mage/summoner\uff09");
         msg(s,ChatColor.YELLOW+"/em list"+ChatColor.GRAY+" \u2014 \u6d3b\u8dc3\u7cbe\u82f1\u6570\u91cf");
         msg(s,ChatColor.YELLOW+"/em toggle"+ChatColor.GRAY+" \u2014 \u542f\u505c\u7cbe\u82f1\u751f\u6210");
         msg(s,"");
@@ -114,8 +114,18 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
                 lv = -1;
             }
         }
-        spawnElite(p, t, lv);
-        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u751f\u6210\u7cbe\u82f1 "+fmt(t)+ChatColor.GRAY+" [Lv."+(lv>0?lv:"\u968f\u673a")+"]");
+        // 可选第4参数：指定职业 tank/assassin/mage/summoner
+        com.clawx.elitemobs.ai.EliteClass cls = null;
+        if (args.length >= 4) {
+            try { cls = com.clawx.elitemobs.ai.EliteClass.valueOf(args[3].toUpperCase()); }
+            catch (IllegalArgumentException ignored) {
+                msg(s, ChatColor.RED + "\u274c \u672a\u77e5\u804c\u4e1a: " + args[3] + " \uff08tank/assassin/mage/summoner\uff09");
+                return;
+            }
+        }
+        spawnElite(p, t, lv, cls);
+        msg(s, ChatColor.GREEN + "\u2705 \u5df2\u751f\u6210\u7cbe\u82f1 " + fmt(t) + ChatColor.GRAY + " [Lv." + (lv > 0 ? lv : "\u968f\u673a") + "]"
+                + (cls != null ? ChatColor.AQUA + " \u804c\u4e1a: " + cls.name() : ""));
     }
 
     // ---- \u6d4b\u8bd5\u6279\u91cf\u751f\u6210 ----
@@ -229,10 +239,14 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
 
     // ---- \u5de5\u5177\u65b9\u6cd5 ----
     private Entity spawnElite(Player p, EntityType type, int level) {
+        return spawnElite(p, type, level, null);
+    }
+
+    private Entity spawnElite(Player p, EntityType type, int level, com.clawx.elitemobs.ai.EliteClass cls) {
         Location loc = p.getLocation().clone();
         Entity e = p.getWorld().spawnEntity(loc, type);
         if (e instanceof LivingEntity le) {
-            plugin.getMobManager().makeElite(le, level);
+            plugin.getMobManager().makeElite(le, level, cls);
         }
         return e;
     }

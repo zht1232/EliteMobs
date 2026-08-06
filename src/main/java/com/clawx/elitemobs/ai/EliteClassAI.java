@@ -296,18 +296,20 @@ public class EliteClassAI implements Listener {
                 org.bukkit.entity.ItemDisplay id = (org.bukkit.entity.ItemDisplay)
                         e.getWorld().spawnEntity(e.getLocation(), EntityType.ITEM_DISPLAY);
                 id.setItemStack(new org.bukkit.inventory.ItemStack(Material.SHIELD));
-                id.setDisplayWidth(0.45f);
-                id.setDisplayHeight(0.45f);
+                id.setDisplayWidth(0.7f);
+                id.setDisplayHeight(0.7f);
                 id.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
                 id.setInvulnerable(true);
                 id.setGravity(false);
                 arr[i] = id;
             }
         } catch (Exception ex) {
+            plugin.getLogger().warning("[EliteMobs] \u5766\u514b\u98de\u7ed5\u76fe\u724c\u521b\u5efa\u5931\u8d25: " + ex.getMessage());
             for (org.bukkit.entity.ItemDisplay id : arr) if (id != null) id.remove();
             return;
         }
         tankDisplays.put(e.getUniqueId(), arr);
+        plugin.getLogger().info("[EliteMobs] \u5df2\u4e3a\u5766\u514b " + e.getType().name() + " \u521b\u5efa " + n + " \u4e2a\u98de\u7ed5\u76fe\u724c");
     }
 
     /** 每 tick 更新坦克飞绕盾牌位置（绕身体旋转 + 跟随怪物移动） */
