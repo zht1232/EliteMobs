@@ -88,9 +88,10 @@ public class EliteBossManager {
             }
         }
 
-        // 生成特效（真闪电：Boss 登场落雷，可对附近实体造成真实伤害/充电）
+        // 生成特效（真闪电：Boss 登场落雷，可对附近实体造成真实伤害/充电；打标记取消引燃，避免烧毁建筑/掉落物）
         Location loc = entity.getLocation();
-        loc.getWorld().strikeLightning(loc);
+        org.bukkit.entity.LightningStrike ls = loc.getWorld().strikeLightning(loc);
+        if (ls != null) ls.setMetadata("elitemobs_lightning", new FixedMetadataValue(plugin, true));
         loc.getWorld().playSound(loc, Sound.ENTITY_WITHER_SPAWN, 3.0f, 0.5f);
         for (int i = 0; i < 50; i++) {
             EliteMobManager.spawnParticleSafe(loc.getWorld(), Particle.SOUL_FIRE_FLAME,
@@ -244,9 +245,10 @@ public class EliteBossManager {
         boss.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 999999, 0, true, false));
         boss.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 999999, 1, true, false));
         boss.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 999999, 0, true, false));
-        // 特效：真闪电 + 粒子 + 音效
+        // 特效：真闪电 + 粒子 + 音效（打标记取消引燃，避免烧毁掉落物/建筑）
         Location loc = boss.getLocation();
-        loc.getWorld().strikeLightning(loc);
+        org.bukkit.entity.LightningStrike ls2 = loc.getWorld().strikeLightning(loc);
+        if (ls2 != null) ls2.setMetadata("elitemobs_lightning", new FixedMetadataValue(plugin, true));
         for (int i = 0; i < 40; i++) {
             EliteMobManager.spawnParticleSafe(loc.getWorld(), Particle.SOUL_FIRE_FLAME,
                 loc.clone().add(rng.nextDouble() - 0.5, rng.nextDouble() * 2, rng.nextDouble() - 0.5), 1);

@@ -125,12 +125,11 @@ public class EliteCombatListener implements Listener {
 
     // ==================== 二段跳宝石（等级越高蓄力越快/冷却越短） ====================
 
-    /** 计算玩家身上二段跳宝石的最高等级（主手 + 副手 + 全部护甲）。 */
+    /** 计算玩家武器上二段跳宝石的最高等级（只认主手/副手武器，不认护甲）。 */
     private int getDoubleJumpLevel(Player p) {
         int best = 0;
         var inv = p.getInventory();
-        ItemStack[] items = new ItemStack[]{inv.getItemInMainHand(), inv.getItemInOffHand(),
-                inv.getHelmet(), inv.getChestplate(), inv.getLeggings(), inv.getBoots()};
+        ItemStack[] items = new ItemStack[]{inv.getItemInMainHand(), inv.getItemInOffHand()};
         for (ItemStack it : items) {
             if (it == null || !it.hasItemMeta()) continue;
             String[] ids = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGems(it);
@@ -159,7 +158,13 @@ public class EliteCombatListener implements Listener {
         if (!p.isOnGround() && now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
             p.setFlying(false);
             p.setAllowFlight(false); // 消耗一次，落地后按冷却恢复
-            p.setVelocity(p.getVelocity().setY(com.clawx.elitemobs.essence.EliteGemFactory.jumpPower(lv)));
+            // 二段跳 = 向前冲 + 向上跳（玩家朝向水平方向，等级越高冲得越远）
+            org.bukkit.util.Vector dir = p.getLocation().getDirection();
+            dir.setY(0).normalize();
+            double forward = Math.min(0.5 + lv * 0.03, 1.0);
+            org.bukkit.util.Vector vel = dir.multiply(forward);
+            vel.setY(com.clawx.elitemobs.essence.EliteGemFactory.jumpPower(lv));
+            p.setVelocity(vel);
             p.getWorld().playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 0.9f);
             p.getWorld().spawnParticle(Particle.CLOUD, p.getLocation(), 12, 0.3, 0.1, 0.3, 0);
             lastDoubleJump.put(p.getUniqueId(), now);
@@ -335,6 +340,19 @@ public class EliteCombatListener implements Listener {
         if (slot == null) return false;
         for (ItemStack it : stolen) if (it == slot) return true;
         return false;
+    }
+
+    /** 掉落物耐火/岩浆/虚空：防止精英掉落物被火烧毁、掉岩浆/虚空消失。 */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onItemBurn(org.bukkit.event.entity.EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof org.bukkit.entity.Item)) return;
+        org.bukkit.event.entity.EntityDamageEvent.DamageCause cause = event.getCause();
+        if (cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE
+                || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE_TICK
+                || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.LAVA
+                || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.VOID) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
