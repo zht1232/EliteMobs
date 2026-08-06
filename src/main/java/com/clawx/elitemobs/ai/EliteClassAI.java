@@ -236,7 +236,7 @@ public class EliteClassAI implements Listener {
 
     // ==================== 粒子特效绘制（每tick获取实体最新位置） ====================
 
-    /** 法师：六芒星法阵（末地烛粒子，短命发光，贴地不拖尾） */
+    /** 法师：紫色六芒星法阵（DUST 紫色粒子，贴地不旋转） */
     public static void drawHexagram(World world, Entity entity, int tick) {
         double radius = 1.1;
         Location loc = entity.getLocation();
@@ -249,7 +249,7 @@ public class EliteClassAI implements Listener {
             px[i] = cx + Math.cos(angle) * radius;
             pz[i] = cz + Math.sin(angle) * radius;
         }
-        // 正三角 + 倒三角（每线 8 点，饱满且短命）
+        // 正三角 + 倒三角（每线 8 点，饱满）
         drawLine(world, cy, px[0], pz[0], px[2], pz[2], 8);
         drawLine(world, cy, px[2], pz[2], px[4], pz[4], 8);
         drawLine(world, cy, px[4], pz[4], px[0], pz[0], 8);
@@ -259,25 +259,28 @@ public class EliteClassAI implements Listener {
     }
 
     private static void drawLine(World world, double y, double x1, double z1, double x2, double z2, int points) {
+        org.bukkit.Particle.DustOptions purple = new org.bukkit.Particle.DustOptions(org.bukkit.Color.fromRGB(180, 100, 255), 1.0f);
         for (int i = 0; i < points; i++) {
             double t = (double) i / points;
-            world.spawnParticle(org.bukkit.Particle.END_ROD, x1 + (x2 - x1) * t, y, z1 + (z2 - z1) * t, 1, 0, 0, 0, 0);
+            world.spawnParticle(org.bukkit.Particle.DUST, x1 + (x2 - x1) * t, y, z1 + (z2 - z1) * t, 1, 0, 0, 0, 0, purple);
         }
     }
 
-    /** 坦克：金色护盾环（WAX_ON 短命粒子，饱满不拖尾） */
+    /** 坦克：飞绕的物品（ITEM 粒子环绕，像原版 EliteMobs 一样）+ 底部淡金色护盾环 */
     public static void drawShieldRing(World world, Entity entity, int tick) {
-        double radius = 0.85;
         Location loc = entity.getLocation();
         double cx = loc.getX(), by = loc.getY(), cz = loc.getZ();
-        for (int i = 0; i < 12; i++) {
-            double a = (i * Math.PI * 2 / 12) + (tick * 0.05);
-            world.spawnParticle(org.bukkit.Particle.WAX_ON, cx + Math.cos(a) * radius, by + 1.0, cz + Math.sin(a) * radius, 1, 0, 0, 0, 0);
+        // 6 个盾牌绕身体旋转（模拟原版精英怪飞绕物品）
+        org.bukkit.inventory.ItemStack shield = new org.bukkit.inventory.ItemStack(org.bukkit.Material.SHIELD);
+        for (int i = 0; i < 6; i++) {
+            double a = (tick * 0.12 + i * Math.PI * 2 / 6);
+            double r = 1.3;
+            world.spawnParticle(org.bukkit.Particle.ITEM, cx + Math.cos(a) * r, by + 1.1, cz + Math.sin(a) * r, 1, 0, 0, 0, 0, shield);
         }
-        for (int i = 0; i < 8; i++) {
-            double a = (i * Math.PI * 2 / 8) - (tick * 0.04);
-            double r2 = radius * 0.55;
-            world.spawnParticle(org.bukkit.Particle.WAX_ON, cx + Math.cos(a) * r2, by + 1.6, cz + Math.sin(a) * r2, 1, 0, 0, 0, 0);
+        // 底部淡金色护盾环
+        for (int i = 0; i < 10; i++) {
+            double a = (i * Math.PI * 2 / 10) + (tick * 0.05);
+            world.spawnParticle(org.bukkit.Particle.WAX_ON, cx + Math.cos(a) * 0.8, by + 0.1, cz + Math.sin(a) * 0.8, 1, 0, 0, 0, 0);
         }
     }
 
