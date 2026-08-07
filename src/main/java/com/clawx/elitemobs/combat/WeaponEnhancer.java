@@ -97,10 +97,7 @@ public class WeaponEnhancer {
             pool.add(Enchantment.LOOTING);
             addIfNotNull(pool, get("SWEEPING_EDGE"));
         }
-        // ???
-        if (isAxe) {
-            pool.add(Enchantment.FIRE_ASPECT);
-        }
+        // 斧头：原版不支持 FIRE_ASPECT（仅限剑），不添加
         // ???
         if (isBow) {
             pool.add(Enchantment.POWER);

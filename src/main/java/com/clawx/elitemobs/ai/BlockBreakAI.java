@@ -162,7 +162,7 @@ public class BlockBreakAI implements Listener {
                             World bw = Bukkit.getWorld(parts[0]);
                             if (bw != null) {
                                 Block b = bw.getBlockAt(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
-                                if (b.getType() == Material.AIR && !GRAVITY_BLOCKS.contains(r.data.getMaterial())) {
+                                if (!b.getType().isSolid() && !GRAVITY_BLOCKS.contains(r.data.getMaterial())) {
                                     b.setBlockData(r.data);
                                     b.getWorld().spawnParticle(Particle.BLOCK,
                                         b.getLocation().add(0.5, 0.5, 0.5), 10, 0.2, 0.2, 0.2, 0, r.data);
@@ -197,7 +197,10 @@ public class BlockBreakAI implements Listener {
         if (dist < 0.1) return null;
         dir.normalize();
 
-        for (double d = 1.0; d < dist; d += 0.5) {
+        // 只破坏紧邻/非常近的方块（默认 1.8 格内，破墙开路），
+        // 不再沿整条射线搜索，避免挖掉远处玩家建筑（如铁机玻璃）
+        double maxDist = Math.min(dist, 1.8);
+        for (double d = 0.5; d <= maxDist; d += 0.5) {
             Block b = ml.clone().add(dir.clone().multiply(d)).getBlock();
             if (breakable.contains(b.getType()) && b.getType().isSolid()
                 && b.getType() != Material.BEDROCK && b.getType() != Material.SPAWNER) {

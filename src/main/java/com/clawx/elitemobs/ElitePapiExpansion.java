@@ -57,7 +57,8 @@ public class ElitePapiExpansion extends PlaceholderExpansion {
             case "drop_mode":
                 return plugin.getEliteConfig().getGemDropMode();
             case "player_combo":
-                if (player != null) return String.valueOf(plugin.getCombatListener().getPlayerCombo(player.getUniqueId()));
+                if (player != null && plugin.getCombatListener() != null)
+                    return String.valueOf(plugin.getCombatListener().getPlayerCombo(player.getUniqueId()));
                 return "0";
             case "player_money":
                 if (player != null) return String.format("%.2f", EconomyHook.getMoney(player));

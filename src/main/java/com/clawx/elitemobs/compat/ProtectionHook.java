@@ -16,6 +16,11 @@ public final class ProtectionHook {
 
     private ProtectionHook() {}
 
+    /** 重置检测状态，使下次调用 isProtected 时重新检测已安装的领地插件（用于 /elitemobs reload 后重新检测后加载的插件） */
+    public static void reset() {
+        checked = false;
+    }
+
     /** 惰性检测已安装的领地插件（只检测一次） */
     private static void ensureChecked() {
         if (checked) return;

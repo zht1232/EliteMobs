@@ -11,10 +11,11 @@ import com.clawx.elitemobs.EliteMobsPlugin;
 import com.clawx.elitemobs.EliteMobManager;
 import com.clawx.elitemobs.EliteConfig;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class DamageScaler implements Listener {
     private final EliteMobsPlugin plugin;
-    private final Map<String, Location> spawns = new HashMap<>();
+    private final Map<String, Location> spawns = new ConcurrentHashMap<>();
 
     public DamageScaler(EliteMobsPlugin plugin) { this.plugin = plugin; reload(); }
 

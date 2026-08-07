@@ -10,6 +10,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.inventory.ItemStack;
 import com.clawx.elitemobs.EliteMobsPlugin;
 import com.clawx.elitemobs.EliteMobManager;
+import com.clawx.elitemobs.utils.StringUtil;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -570,7 +571,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
 
         private void msg(CommandSender s,String m){s.sendMessage(m);}
     private String icon(boolean b){return b?ChatColor.GREEN+"\u2705":ChatColor.RED+"\u274c";}
-    private String fmt(EntityType t){String n=t.name().toLowerCase().replace('_',' ');StringBuilder sb=new StringBuilder();for(String w:n.split(" "))sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1)).append(' ');return sb.toString().trim();}
+    private String fmt(EntityType t){return StringUtil.formatName(t.name());}
 
     @Override
     public List<String> onTabComplete(CommandSender s,Command c,String l,String[] a){

@@ -465,9 +465,9 @@ public class EliteEssenceUpgradeListener implements Listener {
     private boolean gemFitsEquip(ItemStack equip, String effect) {
         boolean weapon = isWeapon(equip);
         return switch (effect == null ? "" : effect.toLowerCase()) {
-            case "attack", "knockback", "thunder", "rare", "doublejump" -> weapon;
+            case "attack", "knockback", "thunder", "rare", "doublejump", "lifesteal", "fire_aspect" -> weapon;
             case "defense" -> isArmor(equip);
-            case "magnet" -> true;   // 磁力宝石：武器/护甲均可
+            case "magnet", "unbreaking" -> true;   // 磁力/耐久宝石：武器/护甲均可
             default -> true;
         };
     }
@@ -617,15 +617,14 @@ public class EliteEssenceUpgradeListener implements Listener {
     private void removePluginAttributeModifiers(ItemStack item) {
         ItemAttributeModifiers existing = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
         if (existing == null) return;
-        Set<NamespacedKey> keys = Set.of(
-                new NamespacedKey(plugin, "elite_damage"),
-                new NamespacedKey(plugin, "elite_armor"),
-                new NamespacedKey(plugin, "elite_speed"),
-                new NamespacedKey(plugin, "elite_rune_health"),
-                new NamespacedKey(plugin, "elite_rune_speed"));
+        Set<String> keyPrefixes = Set.of(
+                "elite_damage", "elite_armor", "elite_speed",
+                "elite_rune_health", "elite_rune_speed");
         ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.itemAttributes();
         for (ItemAttributeModifiers.Entry e : existing.modifiers()) {
-            if (keys.contains(e.modifier().getKey())) continue;
+            String k = e.modifier().getKey().getKey();
+            // 精确匹配或前缀匹配（含带后缀的新版 key，如 elite_rune_health_head）
+            if (keyPrefixes.stream().anyMatch(prefix -> k.equals(prefix) || k.startsWith(prefix + "_"))) continue;
             builder.addModifier(e.attribute(), e.modifier(), e.getGroup());
         }
         item.setData(DataComponentTypes.ATTRIBUTE_MODIFIERS, builder.build());
@@ -695,14 +694,9 @@ public class EliteEssenceUpgradeListener implements Listener {
         armor.setData(DataComponentTypes.ATTRIBUTE_MODIFIERS, builder.build());
     }
 
-    /** 根据宝石 id 返回效果类型（通过 CustomDrop 定义；找不到返回 null）。 */
+    /** 根据宝石 id 返回效果类型（委托到 EliteConfig 缓存）。 */
     private String gemEffectFor(String gemId) {
-        for (var d : plugin.getEliteConfig().getCustomDrops()) {
-            if (d.id != null && d.id.equalsIgnoreCase(gemId) && d.effect != null) {
-                return d.effect.toLowerCase();
-            }
-        }
-        return null;
+        return plugin.getEliteConfig().gemEffectFor(gemId);
     }
 
     /** 重建装备 Lore：核心属性 + 宝石槽 + 符文槽（保留原美感）。 */

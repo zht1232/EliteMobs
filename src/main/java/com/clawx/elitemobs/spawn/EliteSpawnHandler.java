@@ -35,6 +35,15 @@ public class EliteSpawnHandler implements Listener {
         if (entity.getLocation().getBlockY() < config.getMinSpawnY()) return;
         Chunk chunk = entity.getLocation().getChunk();
         if (plugin.getMobManager().countElitesInChunk(chunk) >= config.getMaxElitesPerChunk()) return;
+        // 生成前距离检查：离玩家太近的区块不精英化（保护刷怪塔/铁机/基地）
+        double minPlayerDist = config.getSpawnMinPlayerDist();
+        if (minPlayerDist > 0) {
+            double minDistSq = minPlayerDist * minPlayerDist;
+            Location loc = entity.getLocation();
+            for (Player p : entity.getWorld().getPlayers()) {
+                if (p.getLocation().distanceSquared(loc) < minDistSq) return;
+            }
+        }
         if (entity instanceof Animals || entity instanceof WaterMob || entity instanceof Ambient || entity instanceof Allay || entity instanceof Villager) return;
         if (entity instanceof Wither || entity instanceof EnderDragon) return;
         double chance = config.getEliteSpawnChance();
@@ -45,6 +54,11 @@ public class EliteSpawnHandler implements Listener {
         long time = entity.getWorld().getTime() % 24000;
         if (time >= 13000 && time < 23000 && config.isNightEnhancementEnabled()) {
             chance *= config.getNightSpawnMultiplier();
+        }
+        // 满月夜生成率额外提升（月相系统，借鉴原版 MoonPhaseDetector）
+        if (time >= 13000 && time < 23000 && config.isMoonPhaseEnabled()
+                && com.clawx.elitemobs.utils.MoonPhaseDetector.isFullMoon(entity.getWorld())) {
+            chance *= config.getFullMoonSpawnMultiplier();
         }
         double dist = entity.getLocation().distance(entity.getWorld().getSpawnLocation());
         chance += Math.min(dist * 0.0001, 0.05);
@@ -143,6 +157,6 @@ public class EliteSpawnHandler implements Listener {
 
     @EventHandler
     public void onEntityDeath(EntityDeathEvent event) {
-        if (event.getEntity() instanceof LivingEntity le && EliteMobManager.isElite(le)) plugin.getMobManager().handleEliteDeath(le.getUniqueId());
+        // handleEliteDeath 已在 EliteCombatListener.onEliteDeath 中调用，此处不再重复
     }
 }

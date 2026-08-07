@@ -224,7 +224,9 @@ public class EliteRuneListener implements Listener {
 
     // ==================== 效果应用 ====================
 
-    /** 属性符文（生命/移速）直接写 AttributeModifier；药水符文由定时任务施加。 */
+    /** 属性符文（生命/移速）直接写 AttributeModifier；药水符文由定时任务施加。
+     * 修饰符 key 按装备槽位独立（elite_rune_health_head/_chest/_hand...），
+     * 避免不同装备同 key 稳定 UUID 互相覆盖（如武器生命符文覆盖护甲生命符文）。 */
     private void applyAttributeRunes(ItemStack equip) {
         if (equip == null || !equip.hasItemMeta()) return;
         String[] runes = EliteRuneFactory.getInstalledRunes(equip);
@@ -236,12 +238,58 @@ public class EliteRuneListener implements Listener {
             if ("HEALTH".equals(r)) hp += com.clawx.elitemobs.rune.EliteRuneFactory.healthBonus(lv);
             if ("SPEED".equals(r)) speed += com.clawx.elitemobs.rune.EliteRuneFactory.speedBonus(lv);
         }
-        // 生命
-        applyModifier(equip, Attribute.MAX_HEALTH, hp, new NamespacedKey(plugin, "elite_rune_health"),
-                EquipmentSlotGroup.ANY);
-        // 移速
-        applyModifier(equip, Attribute.MOVEMENT_SPEED, speed, new NamespacedKey(plugin, "elite_rune_speed"),
-                EquipmentSlotGroup.ANY);
+        // 先移除该物品上的旧符文修饰符（含旧版 ANY 槽位的无后缀 key），再按物品槽位写入
+        EquipmentSlotGroup group = slotGroupFor(equip.getType());
+        String suffix = runeKeySuffix(group);
+        removeRuneModifiers(equip, Attribute.MAX_HEALTH, "elite_rune_health");
+        removeRuneModifiers(equip, Attribute.MOVEMENT_SPEED, "elite_rune_speed");
+        if (hp != 0) applyModifier(equip, Attribute.MAX_HEALTH, hp,
+                new NamespacedKey(plugin, "elite_rune_health_" + suffix), group);
+        if (speed != 0) applyModifier(equip, Attribute.MOVEMENT_SPEED, speed,
+                new NamespacedKey(plugin, "elite_rune_speed_" + suffix), group);
+    }
+
+    /** 物品类型 → 装备槽位组（生命/速度符文按槽位独立 key，不同装备叠加互不覆盖）。 */
+    private EquipmentSlotGroup slotGroupFor(Material mat) {
+        String n = mat.name();
+        if (n.endsWith("_HELMET") || n.contains("SKULL") || n.equals("CARVED_PUMPKIN")) return EquipmentSlotGroup.HEAD;
+        if (n.endsWith("_CHESTPLATE") || n.equals("ELYTRA")) return EquipmentSlotGroup.CHEST;
+        if (n.endsWith("_LEGGINGS")) return EquipmentSlotGroup.LEGS;
+        if (n.endsWith("_BOOTS")) return EquipmentSlotGroup.FEET;
+        return EquipmentSlotGroup.HAND; // 武器/工具/副手物品
+    }
+
+    private String runeKeySuffix(EquipmentSlotGroup group) {
+        if (group == EquipmentSlotGroup.HEAD) return "head";
+        if (group == EquipmentSlotGroup.CHEST) return "chest";
+        if (group == EquipmentSlotGroup.LEGS) return "legs";
+        if (group == EquipmentSlotGroup.FEET) return "feet";
+        return "hand";
+    }
+
+    /** 移除物品上 key 前缀匹配的修饰符（兼容旧版 ANY 槽位的无后缀 key）。 */
+    private void removeRuneModifiers(ItemStack item, Attribute attr, String keyPrefix) {
+        ItemAttributeModifiers existing = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (existing == null) return;
+        ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.itemAttributes();
+        boolean changed = false;
+        for (ItemAttributeModifiers.Entry e : existing.modifiers()) {
+            if (e.attribute() == attr && e.modifier().getKey().getKey().startsWith(keyPrefix)) { changed = true; continue; }
+            builder.addModifier(e.attribute(), e.modifier(), e.getGroup());
+        }
+        if (changed) item.setData(DataComponentTypes.ATTRIBUTE_MODIFIERS, builder.build());
+    }
+
+    /** 检测物品上是否残留旧版无后缀 key 的符文修饰符（用于穿戴时一次性规范化）。 */
+    private boolean hasLegacyRuneModifiers(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        ItemAttributeModifiers mods = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (mods == null) return false;
+        for (ItemAttributeModifiers.Entry e : mods.modifiers()) {
+            String k = e.modifier().getKey().getKey();
+            if (k.equals("elite_rune_health") || k.equals("elite_rune_speed")) return true;
+        }
+        return false;
     }
 
     /** 读取装备符文槽的等级数组（与 getInstalledRunes 对应；旧数据无等级键按 1）。 */
@@ -280,8 +328,8 @@ public class EliteRuneListener implements Listener {
                 if (p.isDead() || !p.isOnline()) continue;
                 for (ItemStack armor : new ItemStack[]{p.getInventory().getHelmet(),
                         p.getInventory().getChestplate(), p.getInventory().getLeggings(), p.getInventory().getBoots()}) {
-                    if (armor == null || !armor.hasItemMeta()) continue;
-                    String[] runes = EliteRuneFactory.getInstalledRunes(armor);
+                    if (armor == null || !armor.hasItemMeta()) continue;                // 旧版 ANY 槽位符文修饰符一次性规范化为按槽位 key（避免与其他装备互相覆盖）
+                if (hasLegacyRuneModifiers(armor)) applyAttributeRunes(armor);                    String[] runes = EliteRuneFactory.getInstalledRunes(armor);
                     int[] levels = getInstalledRuneLevels(armor);
                     for (int i = 0; i < runes.length; i++) {
                         String r = runes[i];
@@ -292,6 +340,8 @@ public class EliteRuneListener implements Listener {
                 // 主手武器上的符文也生效
                 ItemStack main = p.getInventory().getItemInMainHand();
                 if (main != null && main.hasItemMeta()) {
+                    // 旧版 ANY 槽位符文修饰符一次性规范化
+                    if (hasLegacyRuneModifiers(main)) applyAttributeRunes(main);
                     String[] runes = EliteRuneFactory.getInstalledRunes(main);
                     int[] levels = getInstalledRuneLevels(main);
                     for (int i = 0; i < runes.length; i++) {

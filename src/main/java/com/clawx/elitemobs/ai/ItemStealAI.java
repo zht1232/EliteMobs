@@ -12,6 +12,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.configuration.file.FileConfiguration;
 import com.clawx.elitemobs.EliteMobsPlugin;
 import com.clawx.elitemobs.EliteMobManager;
+import com.clawx.elitemobs.utils.StringUtil;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -101,10 +102,6 @@ public class ItemStealAI implements Listener {
     private boolean isAir(ItemStack i) { return i == null || i.getType().isAir(); }
 
     private String formatMaterial(String name) {
-        StringBuilder sb = new StringBuilder();
-        for (String w : name.toLowerCase().split("_")) {
-            sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1)).append(' ');
-        }
-        return sb.toString().trim();
+        return StringUtil.formatName(name);
     }
 }

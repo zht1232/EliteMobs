@@ -23,6 +23,7 @@ public class EliteConfig {
     private double spawnDistBase = 8;
     private double spawnDistPerLevel = 0.8;
     private double spawnDistMax = 48;
+    private double spawnMinPlayerDist = 48;   // 生成前距离检查：离玩家太近不精英化（0=禁用）
     // 护甲套装加成（armor-set-bonus）
     private boolean setBonusEnabled = true;
     private double setBonusReductionPerLevel = 2.0;   // 每点套装等级减伤 %
@@ -32,6 +33,31 @@ public class EliteConfig {
     // Boss 第二阶段（boss-phase2）
     private boolean bossPhase2Enabled = true;
     private double bossPhase2HpRatio = 0.5;           // 血量低于该比例触发第二阶段
+    // Boss 体型放大（boss-scale）
+    private double bossScale = 1.5;                    // 1.0=不放大
+    // Boss 技能：跳跃扑击落地震击（ground-pound，借鉴原版 ground_pound）
+    private boolean groundPoundEnabled = true;
+    private double groundPoundChance = 0.10;           // 被玩家击中时触发概率
+    private int groundPoundCooldownTicks = 200;        // 触发冷却（tick）
+    private double groundPoundLaunchY = 1.5;           // 起跳初速度（y）
+    private int groundPoundFallDelay = 20;             // 跳起后多久开始检测落地
+    private double groundPoundRadius = 10;             // 落地震击影响半径
+    private double groundPoundKnockback = 2.0;         // 击飞水平速度
+    private double groundPoundKnockbackY = 1.5;        // 击飞垂直速度
+    private int groundPoundSlowness = 60;              // 命中目标减速时长
+    // Boss 技能：引导治疗（channel-healing，完整版：暂停AI+光束引导，借鉴原版 channel_healing）
+    private boolean channelHealingEnabled = true;
+    private int channelHealingScanInterval = 40;       // 扫描间隔（tick）
+    private double channelHealingSearchRadius = 20;    // 治疗目标搜索半径
+    private double channelHealingMaxDistance = 25;     // 引导最远距离（超出中断）
+    private double channelHealingHealThreshold = 0.8;  // 目标血量低于该比例才治疗
+    private double channelHealingHealFactor = 0.5;     // 每10tick回复 boss等级×该值 血量
+    private int channelHealingLocalCooldown = 20;      // 引导结束后冷却
+    // Boss 技能：封印（seal，仅二阶段后短时封印玩家淬炼加成）
+    private boolean sealEnabled = true;
+    private int sealDuration = 5;                      // 封印时长（秒）
+    private double sealChance = 0.5;                   // 触发概率
+    private double sealRadius = 12;                    // 影响半径
     private Set<EntityType> enabledMobTypes;
     private Map<EntityType, EliteMobProfile> mobProfiles;
     private boolean wallClimbEnabled, blockBreakEnabled, itemStealEnabled, damageScalingEnabled, weaponEnhancementEnabled;
@@ -83,6 +109,11 @@ public class EliteConfig {
     private double nightDamageMultiplier;
     private double nightSpawnMultiplier;
     private boolean vanillaNightBoostEnabled = true;
+    // 月相系统（满月夜增强，借鉴原版 MoonPhaseDetector）
+    private boolean moonPhaseEnabled = true;
+    private double fullMoonSpawnMultiplier = 2.0;      // 满月夜生成率额外倍率
+    private boolean fullMoonStrength = true;           // 满月夜精英额外获得力量/抗性
+    private int fullMoonStrengthLevel = 1;             // 满月额外力量等级
     // 生成广播
     private boolean spawnAnnounceEnabled;
     private int spawnAnnounceMinLevel;
@@ -100,6 +131,8 @@ public class EliteConfig {
     private double charmDropChance = 0.08;
     // custom 模式: 自定义掉落物
     private List<CustomDrop> customDrops = new ArrayList<>();
+    // 宝石效果缓存：gemId → effect（loadGemFiles 后构建，避免每次线性查找）
+    private Map<String, String> gemEffectCache = new HashMap<>();
     // 击杀奖励 (Vault 金币 + PlayerPoints 点券)
     private boolean moneyRewardEnabled;
     private double moneyRewardBase, moneyRewardPerLevel, moneyRewardBossMult;
@@ -141,6 +174,7 @@ public class EliteConfig {
         spawnDistBase = config.getDouble("general.spawn-distance.min-dist-base", 8);
         spawnDistPerLevel = config.getDouble("general.spawn-distance.dist-per-level", 0.8);
         spawnDistMax = config.getDouble("general.spawn-distance.max-dist", 48);
+        spawnMinPlayerDist = config.getDouble("general.spawn-min-player-distance", 48);
         // 护甲套装加成
         setBonusEnabled = config.getBoolean("armor-set-bonus.enabled", true);
         setBonusReductionPerLevel = config.getDouble("armor-set-bonus.reduction-per-level", 2.0);
@@ -150,6 +184,29 @@ public class EliteConfig {
         // Boss 第二阶段
         bossPhase2Enabled = config.getBoolean("boss-phase2.enabled", true);
         bossPhase2HpRatio = config.getDouble("boss-phase2.hp-ratio", 0.5);
+        // Boss 体型放大与技能
+        bossScale = Math.max(1.0, config.getDouble("boss-scale", 1.5));
+        groundPoundEnabled = config.getBoolean("boss-skills.ground-pound.enabled", true);
+        groundPoundChance = Math.max(0.0, Math.min(1.0, config.getDouble("boss-skills.ground-pound.trigger-chance", 0.10)));
+        groundPoundCooldownTicks = config.getInt("boss-skills.ground-pound.global-cooldown", 200);
+        groundPoundLaunchY = config.getDouble("boss-skills.ground-pound.launch-y", 1.5);
+        groundPoundFallDelay = config.getInt("boss-skills.ground-pound.fall-delay", 20);
+        groundPoundRadius = config.getDouble("boss-skills.ground-pound.radius", 10);
+        groundPoundKnockback = config.getDouble("boss-skills.ground-pound.knockback", 2.0);
+        groundPoundKnockbackY = config.getDouble("boss-skills.ground-pound.knockback-y", 1.5);
+        groundPoundSlowness = config.getInt("boss-skills.ground-pound.slowness", 60);
+        channelHealingEnabled = config.getBoolean("boss-skills.channel-healing.enabled", true);
+        channelHealingScanInterval = Math.max(5, config.getInt("boss-skills.channel-healing.scan-interval", 40));
+        channelHealingSearchRadius = config.getDouble("boss-skills.channel-healing.search-radius", 20);
+        channelHealingMaxDistance = config.getDouble("boss-skills.channel-healing.max-channel-distance", 25);
+        channelHealingHealThreshold = config.getDouble("boss-skills.channel-healing.heal-threshold", 0.8);
+        channelHealingHealFactor = config.getDouble("boss-skills.channel-healing.heal-per-10ticks", 0.5);
+        channelHealingLocalCooldown = config.getInt("boss-skills.channel-healing.local-cooldown", 20);
+        // Boss 技能：封印
+        sealEnabled = config.getBoolean("boss-skills.seal.enabled", true);
+        sealDuration = Math.max(1, config.getInt("boss-skills.seal.duration", 5));
+        sealChance = Math.max(0.0, Math.min(1.0, config.getDouble("boss-skills.seal.trigger-chance", 0.5)));
+        sealRadius = config.getDouble("boss-skills.seal.radius", 12);
         enabledMobTypes = new HashSet<>();
         List<String> typeList = config.getStringList("general.enabled-mob-types");
         if (typeList.isEmpty()) {
@@ -255,6 +312,11 @@ public class EliteConfig {
         nightDamageMultiplier = config.getDouble("features.night-enhancement.damage-multiplier", 1.2);
         nightSpawnMultiplier = config.getDouble("features.night-enhancement.spawn-multiplier", 1.5);
         vanillaNightBoostEnabled = config.getBoolean("features.night-enhancement.vanilla-mobs", true);
+        // 月相系统（满月夜增强）
+        moonPhaseEnabled = config.getBoolean("features.night-enhancement.moon-phase.enabled", true);
+        fullMoonSpawnMultiplier = Math.max(1.0, config.getDouble("features.night-enhancement.moon-phase.full-moon-spawn-multiplier", 2.0));
+        fullMoonStrength = config.getBoolean("features.night-enhancement.moon-phase.full-moon-strength", true);
+        fullMoonStrengthLevel = Math.max(0, config.getInt("features.night-enhancement.moon-phase.full-moon-strength-level", 1));
 
         // 生成广播
         spawnAnnounceEnabled = config.getBoolean("general.spawn-announce.enabled", true);
@@ -303,6 +365,14 @@ public class EliteConfig {
 
         // gems/*.yml 目录：每颗宝石一个文件，方便增删（推荐的宝石配置方式）
         loadGemFiles();
+
+        // 构建宝石效果缓存（gemId → effect），供 gemEffectFor 快速查找
+        gemEffectCache.clear();
+        for (CustomDrop d : customDrops) {
+            if (d.id != null && d.effect != null) {
+                gemEffectCache.put(d.id.toLowerCase(), d.effect.toLowerCase());
+            }
+        }
 
         // 击杀奖励 (Vault 金币 + PlayerPoints 点券)
         moneyRewardEnabled = config.getBoolean("loot.rewards.money.enabled", true);
@@ -462,6 +532,7 @@ public class EliteConfig {
     public double getSpawnDistBase() { return spawnDistBase; }
     public double getSpawnDistPerLevel() { return spawnDistPerLevel; }
     public double getSpawnDistMax() { return spawnDistMax; }
+    public double getSpawnMinPlayerDist() { return spawnMinPlayerDist; }
     // ========== 护甲套装加成 ==========
     public boolean isSetBonusEnabled() { return setBonusEnabled; }
     public double getSetBonusReductionPerLevel() { return setBonusReductionPerLevel; }
@@ -471,8 +542,32 @@ public class EliteConfig {
     // ========== Boss 第二阶段 ==========
     public boolean isBossPhase2Enabled() { return bossPhase2Enabled; }
     public double getBossPhase2HpRatio() { return bossPhase2HpRatio; }
+
+    // ========== Boss 体型与技能 ==========
+    public double getBossScale() { return bossScale; }
+    public boolean isGroundPoundEnabled() { return groundPoundEnabled; }
+    public double getGroundPoundChance() { return groundPoundChance; }
+    public int getGroundPoundCooldownTicks() { return groundPoundCooldownTicks; }
+    public double getGroundPoundLaunchY() { return groundPoundLaunchY; }
+    public int getGroundPoundFallDelay() { return groundPoundFallDelay; }
+    public double getGroundPoundRadius() { return groundPoundRadius; }
+    public double getGroundPoundKnockback() { return groundPoundKnockback; }
+    public double getGroundPoundKnockbackY() { return groundPoundKnockbackY; }
+    public int getGroundPoundSlowness() { return groundPoundSlowness; }
+    public boolean isChannelHealingEnabled() { return channelHealingEnabled; }
+    public int getChannelHealingScanInterval() { return channelHealingScanInterval; }
+    public double getChannelHealingSearchRadius() { return channelHealingSearchRadius; }
+    public double getChannelHealingMaxDistance() { return channelHealingMaxDistance; }
+    public double getChannelHealingHealThreshold() { return channelHealingHealThreshold; }
+    public double getChannelHealingHealFactor() { return channelHealingHealFactor; }
+    public int getChannelHealingLocalCooldown() { return channelHealingLocalCooldown; }
+    // 封印技能
+    public boolean isSealEnabled() { return sealEnabled; }
+    public int getSealDuration() { return sealDuration; }
+    public double getSealChance() { return sealChance; }
+    public double getSealRadius() { return sealRadius; }
     public Set<EntityType> getEnabledMobTypes() { return enabledMobTypes; }
-    public EliteMobProfile getProfile(EntityType type) { return mobProfiles.getOrDefault(type, new EliteMobProfile()); }
+    public EliteMobProfile getProfile(EntityType type) { return mobProfiles.getOrDefault(type, DEFAULT_PROFILE); }
     public boolean isWallClimbEnabled() { return wallClimbEnabled; }
     public boolean isBlockBreakEnabled() { return blockBreakEnabled; }
     public boolean isItemStealEnabled() { return itemStealEnabled; }
@@ -573,6 +668,11 @@ public class EliteConfig {
     public double getNightSpawnMultiplier() { return nightSpawnMultiplier; }
     /** 原版怪物夜间是否也获得与精英一致的力量/速度强化 */
     public boolean isVanillaNightBoostEnabled() { return vanillaNightBoostEnabled; }
+    // 月相系统
+    public boolean isMoonPhaseEnabled() { return moonPhaseEnabled; }
+    public double getFullMoonSpawnMultiplier() { return fullMoonSpawnMultiplier; }
+    public boolean isFullMoonStrength() { return fullMoonStrength; }
+    public int getFullMoonStrengthLevel() { return fullMoonStrengthLevel; }
 
     // 生成广播
     public boolean isSpawnAnnounceEnabled() { return spawnAnnounceEnabled; }
@@ -631,6 +731,15 @@ public class EliteConfig {
     /** custom 模式: 自定义掉落物列表 */
     public List<CustomDrop> getCustomDrops() { return customDrops; }
 
+    /** 根据宝石 id 返回效果类型（通过缓存 O(1) 查找；找不到返回 null）。
+     *  提取自 EliteCombatListener / EliteEssenceUpgradeListener 的重复方法。 */
+    public String gemEffectFor(String gemId) {
+        return gemId != null ? gemEffectCache.get(gemId.toLowerCase()) : null;
+    }
+
+    /** 宝石效果缓存（gemId → effect），O(1) 查找 */
+    public Map<String, String> getGemEffectCache() { return gemEffectCache; }
+
     /** 加载插件数据目录下的独立 YAML 文件（不存在返回 null）。 */
     private org.bukkit.configuration.file.FileConfiguration loadYaml(String name) {
         File f = new File(plugin.getDataFolder(), name);
@@ -657,26 +766,11 @@ public class EliteConfig {
     public double getAffixChance() { return affixChance; }
     public int getAffixMin() { return affixMin; }
     public int getAffixMax() { return affixMax; }
+    public Map<EliteAffix, Integer> getAffixWeights() { return affixWeights; }
 
-    /** 按权重随机抽取 count 个不重复词缀 */
+    /** 按权重随机抽取 count 个不重复词缀（统一走 WeightedProbability 加权抽取） */
     public List<EliteAffix> rollAffixes(Random rng, int count) {
-        List<EliteAffix> pool = new ArrayList<>(affixWeights.keySet());
-        List<EliteAffix> result = new ArrayList<>();
-        for (int i = 0; i < count && !pool.isEmpty(); i++) {
-            int total = 0;
-            for (EliteAffix a : pool) total += affixWeights.getOrDefault(a, 1);
-            int roll = rng.nextInt(total);
-            EliteAffix picked = null;
-            int acc = 0;
-            for (EliteAffix a : pool) {
-                acc += affixWeights.getOrDefault(a, 1);
-                if (roll < acc) { picked = a; break; }
-            }
-            if (picked == null) picked = pool.get(pool.size() - 1);
-            result.add(picked);
-            pool.remove(picked);
-        }
-        return result;
+        return com.clawx.elitemobs.utils.WeightedProbability.pickMultiple(affixWeights, count);
     }
 
     public void setPluginLogger(java.util.logging.Logger logger) {
@@ -692,6 +786,9 @@ public class EliteConfig {
         public boolean canClimbWalls = false, canBreakBlocks = false, canStealItems = true;
         public int priority = 5;
     }
+
+    /** 未配置 mob type 的默认 profile（常量，避免每次 new） */
+    private static final EliteMobProfile DEFAULT_PROFILE = new EliteMobProfile();
 
     /**
      * 自定义掉落物 (gem-drops.custom 列表条目)。

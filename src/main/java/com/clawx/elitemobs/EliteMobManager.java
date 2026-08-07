@@ -22,18 +22,15 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 
 public class EliteMobManager {
     private final EliteMobsPlugin plugin;
     private final Map<UUID, EliteMobData> eliteMobs = new ConcurrentHashMap<>();
     private final NamespacedKey eliteKey, eliteLevelKey, eliteTypeKey, spawnTimestampKey;
     private final Random random = new Random();
-    private static final Map<Particle, MethodHandle> PARTICLE_HANDLES = new ConcurrentHashMap<>();
 
-    /** 精英护甲淬炼等级键：写入玩家可穿戴的护甲 PDC，用于套装加成判定 */
-    public static final NamespacedKey ARMOR_LV_KEY = new NamespacedKey("elitemobs", "armor_lv");
+    /** 精英护甲淬炼等级键：写入玩家可穿戴的护甲 PDC，用于套装加成判定。延迟初始化，避免静态初始化时 plugin 为 null */
+    public static NamespacedKey ARMOR_LV_KEY;
 
     // Performance: capability-based tracking sets for AI iteration
     private final Set<UUID> wallClimbers = ConcurrentHashMap.newKeySet();
@@ -41,18 +38,6 @@ public class EliteMobManager {
     private final Set<UUID> itemStealers = ConcurrentHashMap.newKeySet();
 
     public static void spawnParticleSafe(World world, Particle particle, Location loc, int count) {
-        try {
-            MethodHandle handle = PARTICLE_HANDLES.computeIfAbsent(particle, p -> {
-                try {
-                    return MethodHandles.publicLookup().findVirtual(World.class, "spawnParticle",
-                        java.lang.invoke.MethodType.methodType(void.class, Particle.class, Location.class, int.class));
-                } catch (Exception e) { return null; }
-            });
-            if (handle != null) {
-                handle.invoke(world, particle, loc, count);
-                return;
-            }
-        } catch (Throwable ignored) {}
         try { world.spawnParticle(particle, loc, count); } catch (Exception ignored) {}
     }
 
@@ -70,6 +55,7 @@ public class EliteMobManager {
         this.eliteLevelKey = new NamespacedKey(plugin, "elite_level");
         this.eliteTypeKey = new NamespacedKey(plugin, "elite_type");
         this.spawnTimestampKey = new NamespacedKey(plugin, "elite_spawn_time");
+        ARMOR_LV_KEY = new NamespacedKey(plugin, "armor_lv");
     }
 
     public void makeElite(LivingEntity entity) { makeElite(entity, -1); }
@@ -318,11 +304,11 @@ public class EliteMobManager {
                 default -> {
                     EliteConfig cfg = plugin.getEliteConfig();
                     if (cfg.isLightningEnabled() && level >= cfg.getLightningMinLevel()) {
-                        // Lv.10+ 登场特效：仅粒子+音效，不再召唤真实闪电
-                        // （真实闪电会破坏/引燃方块；闪电特效只保留给 Boss 晋升）
-                        for (int i = 0; i < 50; i++) spawnParticleSafe(world, Particle.DRAGON_BREATH, loc.clone().add(random.nextDouble()-0.5, 1+random.nextDouble(), random.nextDouble()-0.5), 1);
+                        // Lv.10+ 登场特效：真实闪电（打标记取消引燃，保留落雷视觉/音效/伤害但不烧建筑）
+                        org.bukkit.entity.LightningStrike ls = world.strikeLightning(loc.clone());
+                        if (ls != null) ls.setMetadata("elitemobs_lightning", new FixedMetadataValue(plugin, true));
                         for (int i = 0; i < 30; i++) spawnParticleSafe(world, Particle.SOUL, loc.clone().add(random.nextDouble()-0.5, random.nextDouble(), random.nextDouble()-0.5), 1);
-                        world.playSound(loc.clone(), org.bukkit.Sound.ENTITY_WITHER_SPAWN, 2.0f, 0.6f);
+                        world.playSound(loc.clone(), org.bukkit.Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 2.0f, 0.8f);
                     } else {
                         for (int i = 0; i < 10; i++) spawnParticleSafe(world, Particle.FLAME, loc.clone().add(random.nextDouble()-0.5, random.nextDouble(), random.nextDouble()-0.5), 1);
                     }
@@ -395,6 +381,13 @@ public class EliteMobManager {
         int speed = Math.max(0, Math.min((int) Math.round(cfg.getNightSpeedBonus() / 0.1), 4));
         if (strength > 0) e.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 80, strength - 1, true, false));
         if (speed > 0) e.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 80, speed - 1, true, false));
+        // 满月夜额外强化（月相系统，借鉴原版 MoonPhaseDetector）
+        if (cfg.isMoonPhaseEnabled() && cfg.isFullMoonStrength()
+                && com.clawx.elitemobs.utils.MoonPhaseDetector.isFullMoon(e.getWorld())) {
+            int lvl = cfg.getFullMoonStrengthLevel();
+            if (lvl > 0) e.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 80, lvl, true, false));
+            e.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 80, 0, true, false));
+        }
     }
 
     /** 原版怪物夜间加强：夜间给在线玩家附近的原版怪物施加力量/速度（与精英一致），可配置关闭。 */
@@ -448,10 +441,40 @@ public class EliteMobManager {
                 org.bukkit.persistence.PersistentDataType.INTEGER);
         return lv == null ? 0 : lv;
     }
-    public static long getSpawnTime(LivingEntity e) { return (e != null && e.hasMetadata("elite_spawn_time")) ? e.getMetadata("elite_spawn_time").get(0).asLong() : 0; }
+    public static long getSpawnTime(LivingEntity e) {
+        if (e == null) return 0;
+        if (e.hasMetadata("elite_spawn_time")) return e.getMetadata("elite_spawn_time").get(0).asLong();
+        Long st = e.getPersistentDataContainer().get(
+                new NamespacedKey("elitemobs", "elite_spawn_time"),
+                org.bukkit.persistence.PersistentDataType.LONG);
+        return st == null ? 0 : st;
+    }
     public int countElitesInChunk(org.bukkit.Chunk chunk) { int c = 0; for (Entity e : chunk.getEntities()) if (e instanceof LivingEntity le && isElite(le)) c++; return c; }
     public int getEliteCount() { return eliteMobs.size(); }
     public Collection<EliteMobData> getEliteMobs() { return eliteMobs.values(); }
+
+    /**
+     * 区块加载时重新注册精英：区块卸载重载后内存 map 丢失（metadata 不持久化），
+     * 从实体 PDC 恢复等级/出生时间等管理状态，并恢复 Boss 血条。
+     * 由 EliteClassAI.onChunkLoad 调用。
+     */
+    public void revalidateChunk(org.bukkit.Chunk chunk) {
+        if (chunk == null) return;
+        for (Entity ent : chunk.getEntities()) {
+            if (!(ent instanceof LivingEntity le)) continue;
+            if (!isElite(le)) continue;
+            if (eliteMobs.containsKey(le.getUniqueId())) continue; // 已在管理中
+            int level = getEliteLevel(le);
+            long spawnTime = getSpawnTime(le);
+            if (spawnTime <= 0) spawnTime = System.currentTimeMillis();
+            double dmgMult = Math.min(1.5 + level * 0.04, 2.5);
+            eliteMobs.put(le.getUniqueId(), new EliteMobData(le, level, dmgMult, spawnTime));
+            // 恢复 Boss 血条/技能管理
+            if (com.clawx.elitemobs.ai.EliteBossManager.isBoss(le)) {
+                plugin.getBossManager().revalidateBoss(le);
+            }
+        }
+    }
     private int randomInt(int min, int max) { return (min >= max) ? min : random.nextInt(max - min + 1) + min; }
     private final Map<UUID, List<ItemStack>> stolenItems = new ConcurrentHashMap<>();
 
@@ -465,7 +488,7 @@ public class EliteMobManager {
 
     private void registerCapabilities(UUID uuid, EliteConfig.EliteMobProfile profile) {
         if (profile.canClimbWalls) wallClimbers.add(uuid);
-        if (profile.canBreakBlocks) blockBreakers.add(uuid);
+        // 破块能力已改为词缀驱动（BLOCK_BREAK），不再由 mob profile 控制
         if (profile.canStealItems) itemStealers.add(uuid);
     }
 

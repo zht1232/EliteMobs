@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.attribute.Attribute;
@@ -17,10 +18,14 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import io.papermc.paper.datacomponent.DataComponentTypes;
+import io.papermc.paper.datacomponent.item.ItemAttributeModifiers;
+import com.clawx.elitemobs.utils.StringUtil;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -31,7 +36,8 @@ public class EliteCombatListener implements Listener {
     private final Map<UUID, Integer> comboKills = new HashMap<>();
     /** 二段跳宝石：上次二段跳时间戳（毫秒） */
     private final Map<UUID, Long> lastDoubleJump = new HashMap<>();
-    /** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem */
+    /** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem。
+     *  仅限主线程使用（Bukkit 事件处理均在主线程），无需 ThreadLocal。 */
     private boolean processingGemAttack = false;
 
     public EliteCombatListener(EliteMobsPlugin plugin) {
@@ -69,6 +75,8 @@ public class EliteCombatListener implements Listener {
         if (!(event.getEntity() instanceof Player p)) return;
         EliteConfig cfg = plugin.getEliteConfig();
         if (!cfg.isSetBonusEnabled()) return;
+        // 封印：套装减伤暂时失效
+        if (plugin.getBossManager().isSealedPlayer(p)) return;
         int setLevel = getEliteSetLevel(p);
         if (setLevel <= 0) return;
 
@@ -76,6 +84,62 @@ public class EliteCombatListener implements Listener {
         double setBonus = Math.min(setLevel * cfg.getSetBonusReductionPerLevel(),
                 cfg.getSetBonusMaxReduction()) / 100.0;
         event.setDamage(event.getDamage() * (1.0 - setBonus));
+    }
+
+    // ==================== 封印（Seal）：淬炼加成暂时失效 ====================
+
+    /** 封印：玩家攻击精英时，抵消武器淬炼攻击力（elite_damage 加成） */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onSealedPlayerAttack(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player p)) return;
+        if (!(event.getEntity() instanceof LivingEntity le) || !EliteMobManager.isElite(le)) return;
+        if (!plugin.getBossManager().isSealedPlayer(p)) return;
+        double bonus = getWeaponEssenceBonus(p);
+        if (bonus > 0) event.setDamage(Math.max(1.0, event.getDamage() - bonus));
+    }
+
+    /** 封印：玩家受到伤害时，抵消护甲淬炼减伤（elite_armor 带来的护甲减伤） */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onSealedPlayerHurt(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player p)) return;
+        if (!plugin.getBossManager().isSealedPlayer(p)) return;
+        double armorBonus = getArmorEssenceBonus(p);
+        if (armorBonus <= 0) return;
+        double reduction = Math.min(20, armorBonus) / 25.0; // MC 护甲减伤近似：armor/25，封顶 20
+        if (reduction > 0 && reduction < 1) event.setDamage(event.getDamage() / (1.0 - reduction));
+    }
+
+    /** 读取主手武器上的淬炼攻击力加成（elite_damage modifier 值）。 */
+    private double getWeaponEssenceBonus(Player p) {
+        ItemStack hand = p.getInventory().getItemInMainHand();
+        if (hand == null || !hand.hasItemMeta()) return 0;
+        NamespacedKey key = new NamespacedKey(plugin, "elite_damage");
+        ItemAttributeModifiers mods = hand.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (mods == null) return 0;
+        for (ItemAttributeModifiers.Entry e : mods.modifiers()) {
+            if (e.attribute() == Attribute.ATTACK_DAMAGE && e.modifier().getKey().equals(key)) {
+                return Math.max(0, e.modifier().getAmount());
+            }
+        }
+        return 0;
+    }
+
+    /** 读取玩家所有护甲上的淬炼护甲值加成总和（elite_armor modifier）。 */
+    private double getArmorEssenceBonus(Player p) {
+        double bonus = 0;
+        NamespacedKey key = new NamespacedKey(plugin, "elite_armor");
+        for (ItemStack a : new ItemStack[]{p.getInventory().getHelmet(), p.getInventory().getChestplate(),
+                p.getInventory().getLeggings(), p.getInventory().getBoots()}) {
+            if (a == null || !a.hasItemMeta()) continue;
+            ItemAttributeModifiers mods = a.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+            if (mods == null) continue;
+            for (ItemAttributeModifiers.Entry e : mods.modifiers()) {
+                if (e.attribute() == Attribute.ARMOR && e.modifier().getKey().equals(key)) {
+                    bonus += Math.max(0, e.modifier().getAmount());
+                }
+            }
+        }
+        return bonus;
     }
 
     // 套装效果粒子（每2秒检测一次，阈值由 config 控制）
@@ -234,7 +298,7 @@ public class EliteCombatListener implements Listener {
                     else if (cp.getLocation().distance(e.getLocation()) > range) need = true;
                 }
                 if (!need) continue;
-                // 寻找范围内最近的非豁免玩家
+                // 寻找范围内最近的非豁免玩家（找到即锁定，无需遍历全部）
                 Player best = null;
                 double bestDist = range;
                 Location loc = e.getLocation();
@@ -242,7 +306,7 @@ public class EliteCombatListener implements Listener {
                     if (!(ent instanceof Player p) || p.isDead() || !p.isOnline()) continue;
                     if (p.hasPermission("elitemobs.bypass")) continue;
                     double d = p.getLocation().distance(loc);
-                    if (d <= bestDist) { bestDist = d; best = p; }
+                    if (d <= bestDist) { bestDist = d; best = p; break; }
                 }
                 if (best != null) mob.setTarget(best);
             }
@@ -270,6 +334,8 @@ public class EliteCombatListener implements Listener {
         if (!(event.getDamager() instanceof Player p)) return;
         if (!(event.getEntity() instanceof LivingEntity target)) return;
         if (target.isDead()) return;
+        // 封印：宝石效果（雷电/击退/吸血/火焰附加）暂时失效
+        if (plugin.getBossManager().isSealedPlayer(p)) return;
         ItemStack hand = p.getInventory().getItemInMainHand();
         if (hand == null || !hand.hasItemMeta()) return;
 
@@ -309,19 +375,54 @@ public class EliteCombatListener implements Listener {
                     }
                 }
             }
+            // 吸血 + 火焰附加宝石（攻击时效果，对任意目标生效）
+            for (int i = 0; i < com.clawx.elitemobs.essence.EliteGemFactory.MAX_GEM_SLOTS; i++) {
+                if (gemIds[i] == null) continue;
+                String eff = gemEffectFor(gemIds[i]);
+                int lv = gemLvs[i];
+                if ("lifesteal".equals(eff)) {
+                    double heal = 1.0 + lv * 0.5; // 吸血：基础 1 + 每级 0.5 颗心
+                    org.bukkit.attribute.AttributeInstance maxHp = p.getAttribute(Attribute.MAX_HEALTH);
+                    if (maxHp != null) {
+                        p.setHealth(Math.min(p.getHealth() + heal, maxHp.getValue()));
+                    }
+                    EliteMobManager.spawnParticleSafe(p.getWorld(), org.bukkit.Particle.HEART,
+                            p.getLocation().add(0, 1, 0), 3);
+                }
+                if ("fire_aspect".equals(eff)) {
+                    target.setFireTicks(20 * (2 + lv / 2)); // 火焰附加：燃烧 2 + 等级/2 秒
+                }
+            }
         } finally {
             processingGemAttack = false;
         }
     }
 
-    /** 根据宝石 id 返回效果类型（通过 CustomDrop 定义）。 */
-    private String gemEffectFor(String gemId) {
-        for (var d : plugin.getEliteConfig().getCustomDrops()) {
-            if (d.id != null && d.id.equalsIgnoreCase(gemId) && d.effect != null) {
-                return d.effect.toLowerCase();
+    /** 耐久宝石：装备上每级减免 10% 耐久损耗；Lv.10 后装备无法破坏。 */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onItemDamage(PlayerItemDamageEvent event) {
+        ItemStack item = event.getItem();
+        if (item == null || !item.hasItemMeta()) return;
+        String[] ids = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGems(item);
+        int[] lvs = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGemLevels(item);
+        int lv = 0;
+        for (int i = 0; i < com.clawx.elitemobs.essence.EliteGemFactory.MAX_GEM_SLOTS; i++) {
+            if (ids[i] != null && "unbreaking".equals(gemEffectFor(ids[i]))) {
+                lv = Math.max(lv, lvs[i]);
             }
         }
-        return null;
+        if (lv <= 0) return;
+        if (lv >= 10) {
+            event.setCancelled(true); // 无限耐久
+        } else {
+            int reduced = (int) Math.max(0, Math.round(event.getDamage() * (1.0 - lv * 0.1)));
+            event.setDamage(reduced);
+        }
+    }
+
+    /** 根据宝石 id 返回效果类型（委托到 EliteConfig 缓存）。 */
+    private String gemEffectFor(String gemId) {
+        return plugin.getEliteConfig().gemEffectFor(gemId);
     }
 
     /**
@@ -344,15 +445,23 @@ public class EliteCombatListener implements Listener {
         return false;
     }
 
-    /** 掉落物耐火/岩浆：防止精英掉落物被火烧毁、掉岩浆消失（虚空物品由 despawn 清理，不做处理避免堆积）。 */
+    /** 掉落物耐火/岩浆：防止精英掉落物被火烧毁、掉岩浆消失（只保护带 elitemobs 标记的掉落物）。 */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onItemBurn(org.bukkit.event.entity.EntityDamageEvent event) {
-        if (!(event.getEntity() instanceof org.bukkit.entity.Item)) return;
+        if (!(event.getEntity() instanceof org.bukkit.entity.Item item)) return;
         org.bukkit.event.entity.EntityDamageEvent.DamageCause cause = event.getCause();
-        if (cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE
-                || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE_TICK
-                || cause == org.bukkit.event.entity.EntityDamageEvent.DamageCause.LAVA) {
-            event.setCancelled(true);
+        if (cause != org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE
+                && cause != org.bukkit.event.entity.EntityDamageEvent.DamageCause.FIRE_TICK
+                && cause != org.bukkit.event.entity.EntityDamageEvent.DamageCause.LAVA) return;
+        // 只保护本插件标记的掉落物（宝石/符文/淬炼装备），避免全局改动其他掉落物
+        ItemStack stack = item.getItemStack();
+        if (stack == null || !stack.hasItemMeta()) return;
+        var pdc = stack.getItemMeta().getPersistentDataContainer();
+        for (NamespacedKey key : pdc.getKeys()) {
+            if (key.getNamespace().equals("elitemobs")) {
+                event.setCancelled(true);
+                return;
+            }
         }
     }
 
@@ -360,9 +469,6 @@ public class EliteCombatListener implements Listener {
     public void onEliteDeath(EntityDeathEvent event) {
         LivingEntity e = event.getEntity();
         boolean elite = EliteMobManager.isElite(e);
-        plugin.getLogger().info("[EliteMobs-DEBUG] onEliteDeath " + e.getType().name()
-                + " isElite=" + elite + " level=" + EliteMobManager.getEliteLevel(e)
-                + " dropsInEvent=" + event.getDrops().size());
         if (!elite) return;
 
         // Boss死亡：清理血条（掉落统一走末尾 rollGemDrops，Boss 加成由 isBoss 判定，避免双倍掉落）
@@ -687,10 +793,7 @@ public class EliteCombatListener implements Listener {
     }
 
     private String fmt(org.bukkit.entity.EntityType t) {
-        String n = t.name().toLowerCase().replace('_', ' ');
-        StringBuilder sb = new StringBuilder();
-        for (String w : n.split(" ")) sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1)).append(' ');
-        return sb.toString().trim();
+        return StringUtil.formatName(t.name());
     }
 
     /**
@@ -712,8 +815,6 @@ public class EliteCombatListener implements Listener {
     private void rollGemDrops(EntityDeathEvent event, int level, boolean boss) {
         EliteConfig cfg = plugin.getEliteConfig();
         boolean enabled = cfg.isGemDropsEnabled();
-        plugin.getLogger().info("[EliteMobs-DEBUG] rollGemDrops level=" + level + " boss=" + boss
-                + " enabled=" + enabled + " dropsInEvent=" + event.getDrops().size());
         if (!enabled) return;
 
         // 1) 宝石掉落：必掉（只要 gems/*.yml 有可用宝石），颗数随精英等级提升，每颗独立权重随机（可不同种）
@@ -722,12 +823,9 @@ public class EliteCombatListener implements Listener {
         for (EliteConfig.CustomDrop d : cfg.getCustomDrops()) {
             if (d.allows(mobType) && d.getChance(level) > 0) pool.add(d);
         }
-        plugin.getLogger().info("[EliteMobs-DEBUG] gem pool size=" + pool.size()
-                + " (customDrops=" + cfg.getCustomDrops().size() + ")");
         if (!pool.isEmpty()) {
             // 颗数 = 1 + 精英等级/3（Lv1→1, Lv3→2, Lv6→3, Lv9→4, Lv12→5, Lv15→6, Lv18→7），Boss 额外 +1
             int count = Math.min(1 + level / 3 + (boss ? 1 : 0), 10);
-            plugin.getLogger().info("[EliteMobs-DEBUG] dropping gems count=" + count);
             for (int n = 0; n < count; n++) {
                 // 每颗独立按权重随机选宝石（可同种也可不同种）
                 EliteConfig.CustomDrop chosen = pickWeightedGem(pool, level);
@@ -738,9 +836,6 @@ public class EliteCombatListener implements Listener {
                 if (item != null) {
                     item.setAmount(amt);
                     event.getDrops().add(item);
-                    plugin.getLogger().info("[EliteMobs-DEBUG] +gem " + chosen.id + " amt=" + amt + " gemLv=" + gemLevel);
-                } else {
-                    plugin.getLogger().warning("[EliteMobs-DEBUG] gem build FAILED for " + chosen.id);
                 }
             }
         }

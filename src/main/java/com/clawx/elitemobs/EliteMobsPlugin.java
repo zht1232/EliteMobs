@@ -53,6 +53,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
         itemStealAI = new ItemStealAI(this);
         eliteClassAI = new EliteClassAI(this);
         bossManager = new EliteBossManager(this);
+        getServer().getPluginManager().registerEvents(bossManager, this); // Boss 技能事件（跳跃扑击等）
         affixHandler = new EliteAffixHandler(this);
         essenceListener = new EliteEssenceUpgradeListener(this);
         getServer().getPluginManager().registerEvents(essenceListener, this);
@@ -90,7 +91,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
         getLogger().info("  掉落模式: " + eliteConfig.getGemDropMode());
         getLogger().info("  经济: Vault " + (EconomyHook.isVaultReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装")
                 + ChatColor.RESET + " | PlayerPoints " + (EconomyHook.isPlayerPointsReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装"));
-        getLogger().info("  作者: ClawX | Paper 1.21+ | JDK 21");
+        getLogger().info("  作者: crystalkingdom团队 | Paper 1.21+ | JDK 21");
         getLogger().info("==================================================");
     }
 
@@ -103,7 +104,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
         }, 20L, eliteConfig.getAITickInterval());
     }
 
-    public void reload() { reloadConfig(); loadMessages(); EconomyHook.init(); eliteConfig = new EliteConfig(this); damageScaler.reload(); weaponEnhancer.reload(); }
+    public void reload() { reloadConfig(); loadMessages(); EconomyHook.init(); eliteConfig = new EliteConfig(this); damageScaler.reload(); weaponEnhancer.reload(); com.clawx.elitemobs.compat.ProtectionHook.reset(); }
 
     private void loadMessages() {
         saveResource("messages.yml", true);
@@ -115,7 +116,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private void saveDefaultGems() {
         File dir = new File(getDataFolder(), "gems");
         if (!dir.isDirectory() && !dir.mkdirs()) return;
-        for (String name : new String[]{"attack_gem.yml", "defense_gem.yml", "rare_skull.yml", "magnet_gem.yml", "thunder_gem.yml", "knockback_gem.yml", "double_jump_gem.yml"}) {
+        for (String name : new String[]{"attack_gem.yml", "defense_gem.yml", "rare_skull.yml", "magnet_gem.yml", "thunder_gem.yml", "knockback_gem.yml", "double_jump_gem.yml", "lifesteal_gem.yml", "unbreaking_gem.yml", "fire_aspect_gem.yml"}) {
             File f = new File(dir, name);
             if (!f.exists()) saveResource("gems/" + name, false);
         }

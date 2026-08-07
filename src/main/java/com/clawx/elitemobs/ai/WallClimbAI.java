@@ -50,6 +50,9 @@ public class WallClimbAI implements Listener {
         double boost = nearWall ? speed * 1.5 : speed;
 
         Vector velocity = mob.getVelocity();
+        // 直接覆盖 X/Z 分量以驱动爬墙移动，保留 Y 分量（跳跃/重力）。
+        // 注意：这会覆盖其他插件在同一 tick 设置的水平速度，
+        // 但改为累加模式会削弱爬墙效果（怪物无法稳定贴墙攀爬），故保持覆盖。
         velocity.setX(dir.getX() * boost);
         velocity.setZ(dir.getZ() * boost);
         if (heightDiff > 0.5) velocity.setY(0.35);

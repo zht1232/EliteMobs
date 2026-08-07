@@ -8,6 +8,7 @@ set "CP=!CP!;%PAPER%\libraries\net\kyori\adventure-api\5.2.0\adventure-api-5.2.0
 set "CP=!CP!;%PAPER%\libraries\net\kyori\adventure-key\5.2.0\adventure-key-5.2.0.jar"
 set "CP=!CP!;%PAPER%\libraries\com\google\guava\guava\33.6.0-jre\guava-33.6.0-jre.jar"
 set "CP=!CP!;%PAPER%\libraries\net\md-5\bungeecord-chat\1.21-R0.2-deprecated+build.21\bungeecord-chat-1.21-R0.2-deprecated+build.21.jar"
+set "CP=!CP!;%PAPER%\libraries\org\joml\joml\1.10.9\joml-1.10.9.jar"
 set "CP=!CP!;%~dp0libs\PlaceholderAPI-2.12.3.jar"
 set "SRC=%~dp0src\main\java"
 set "OUT=%~dp0classes"

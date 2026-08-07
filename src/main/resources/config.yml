@@ -1,5 +1,5 @@
 # ============================================
-#  EliteMobs v29.2.0 - 配置文件
+#  EliteMobs v29.8.0 - 配置文件
 #  适用 Paper 1.21+ / Paper 26.x
 #  作者: crystalkingdom团队
 # ============================================
@@ -10,7 +10,7 @@ general:
   ai-tick-interval: 10
   elite-spawn-chance: 0.01
   min-spawn-y: 0
-  max-elites-per-chunk: 2
+  max-elites-per-chunk: 1
   enabled-mob-types: []
   # 精英主动索敌范围（格）。插件每1秒让精英锁定范围内最近的非豁免玩家，
   # 即使其他插件取消了原版追击事件，精英仍能追击玩家。
@@ -24,6 +24,11 @@ general:
     min-dist-base: 8        # 基础最小距离（格）
     dist-per-level: 0.8     # 每级额外距离（格），如 Lv.10≈16 格 / Lv.20≈24 格
     max-dist: 48            # 封顶距离（格）
+
+  # 精英生成前距离检查：离玩家太近的区块不生成精英（保护刷怪塔/铁机/基地）
+  # 0 = 禁用此检查（仅依赖生成后的 relocate 逻辑）
+  # 建议值：32-64（保护基地周围的机器）
+  spawn-min-player-distance: 48
 
   # 高等级精英生成时全服广播提示
   spawn-announce:
@@ -53,6 +58,13 @@ features:
     speed-bonus: 0.12        # 夜间额外速度
     damage-multiplier: 1.2   # 夜间伤害倍率
     spawn-multiplier: 1.5    # 夜间生成倍率
+    vanilla-mobs: true       # 原版怪物夜间是否也获得同等强化
+    # 月相系统（借鉴原版 MoonPhaseDetector）：满月夜精英生成率/强度额外提升
+    moon-phase:
+      enabled: true
+      full-moon-spawn-multiplier: 2.0   # 满月夜生成率额外倍率
+      full-moon-strength: true          # 满月夜精英额外获得力量/抗性
+      full-moon-strength-level: 1       # 满月额外力量等级（0=一级）
 
   wall-climb:
     enabled: true
@@ -115,6 +127,40 @@ boss-phase2:
   enabled: true
   hp-ratio: 0.5              # 血量低于该比例触发（0.5 = 50%）
 
+# --- Boss 体型放大 ---
+# Boss 体型放大倍数（scale）。1.0=不放大，1.5=放大50%，2.0=两倍。
+# 会同步放大模型与碰撞体积（含飞绕盾牌/附魔书的环绕半径）。
+boss-scale: 1.5
+
+# --- Boss 特殊技能（借鉴原版 EliteMobs 技能） ---
+boss-skills:
+  # 跳跃扑击落地震击：Boss 被玩家击中时概率跳起，落地对周围实体击飞+减速
+  ground-pound:
+    enabled: true
+    trigger-chance: 0.10    # 被玩家击中时触发概率 (0.0-1.0)
+    global-cooldown: 200    # 触发冷却（tick，200=10秒）
+    launch-y: 1.5           # 起跳初速度（y 方向）
+    fall-delay: 20          # 跳起后多久开始检测落地（tick）
+    radius: 10              # 落地震击影响半径（格）
+    knockback: 2.0          # 击飞水平速度
+    knockback-y: 1.5        # 击飞垂直速度
+    slowness: 60            # 命中目标减速时长（tick）
+  # 引导治疗（完整版）：Boss 扫描范围内低血量的其他精英，暂停AI+光束引导为其回血
+  channel-healing:
+    enabled: true
+    scan-interval: 40       # 扫描间隔（tick）
+    search-radius: 20       # 治疗目标搜索半径（格）
+    max-channel-distance: 25  # 引导最远距离（格，超出中断）
+    heal-threshold: 0.8     # 目标血量低于该比例才会被治疗
+    heal-per-10ticks: 0.5   # 每10tick回复 boss等级 × 该值 的血量
+    local-cooldown: 20      # 引导结束后冷却（tick）
+  # 封印：Boss 进入二阶段后，短时间封印附近玩家的淬炼加成（武器攻击/护甲减伤/套装减伤暂时失效）
+  seal:
+    enabled: true
+    duration: 5             # 封印时长（秒，建议不要太长）
+    trigger-chance: 0.5     # 二阶段 Boss 释放技能时对附近玩家施加封印的概率 (0.0-1.0)
+    radius: 12              # 影响半径（格）
+
 # --- 精英词缀系统 ---
 # 精英怪随机获得词缀，改变战斗行为与外观（名字后缀 + 专属粒子）
 elite-affixes:
@@ -132,6 +178,7 @@ elite-affixes:
     SPLIT: 5         # 分裂: 死亡时分裂出小精英
     BLINK: 6         # 瞬移: 周期闪现到玩家身后
     CHAIN: 8         # 雷链: 周期电击附近玩家
+    BLOCK_BREAK: 4   # 破块: 破坏路径上的方块（受领地保护插件限制）
 
 # --- 视觉效果 ---
 visuals:
@@ -140,7 +187,7 @@ visuals:
     min-level: 15          # >= 此等级发高亮光效（改小让更多怪发光）
   lightning:
     enabled: true
-    min-level: 10          # >= 此等级生成时产生闪电效果
+    min-level: 15          # >= 此等级生成时产生闪电效果
   name-tag:
     enabled: true
     format: "&c\u2620 &6{type} &7[&4Lv.{level}&7] &e{stars}"

@@ -14,7 +14,8 @@ public enum EliteAffix {
     BERSERK("狂暴", ChatColor.GOLD),
     SPLIT("分裂", ChatColor.DARK_PURPLE),
     BLINK("瞬移", ChatColor.LIGHT_PURPLE),
-    CHAIN("雷链", ChatColor.YELLOW);
+    CHAIN("雷链", ChatColor.YELLOW),
+    BLOCK_BREAK("破块", ChatColor.DARK_GRAY);
 
     private final String display;
     private final ChatColor color;

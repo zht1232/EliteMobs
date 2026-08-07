@@ -66,6 +66,13 @@ public class EliteAffixHandler implements Listener {
         // PDC 持久化：metadata 不跨 chunk 持久化，区块重载后词缀会丢失，写 PDC 兜底
         e.getPersistentDataContainer().set(new org.bukkit.NamespacedKey("elitemobs", "elite_affix"),
                 org.bukkit.persistence.PersistentDataType.STRING, sb.toString());
+        // 破块词缀：注册到 blockBreakers 集合（替代旧的 mob profile canBreakBlocks）
+        for (EliteAffix a : chosen) {
+            if (a == EliteAffix.BLOCK_BREAK && plugin.getEliteConfig().isBlockBreakEnabled()) {
+                plugin.getMobManager().getBlockBreakers().add(e.getUniqueId());
+                break;
+            }
+        }
     }
 
     /** 读取精英怪携带的词缀（metadata 优先 + PDC 兜底） */
@@ -87,11 +94,44 @@ public class EliteAffixHandler implements Listener {
         return set;
     }
 
-    /** 在名字末尾追加词缀标记（配合应用时的名字后缀） */
+    /**
+     * 为 Boss 额外授予多个词缀（Boss 晋升时调用，比普通精英多几个）。
+     * 在已有词缀基础上追加不重复的新词缀，并刷新名字后缀。
+     */
+    public void grantBossAffixes(LivingEntity e, int extraCount) {
+        if (e == null || extraCount <= 0) return;
+        EliteConfig cfg = plugin.getEliteConfig();
+        if (!cfg.isAffixEnabled()) return;
+        Set<EliteAffix> existing = getAffixes(e);
+        // 从权重池排除已有的，额外抽取
+        Map<EliteAffix, Integer> pool = new LinkedHashMap<>(cfg.getAffixWeights());
+        for (EliteAffix a : existing) pool.remove(a);
+        if (pool.isEmpty()) return;
+        List<EliteAffix> extra = com.clawx.elitemobs.utils.WeightedProbability.pickMultiple(pool, extraCount);
+        if (extra.isEmpty()) return;
+        Set<EliteAffix> merged = new LinkedHashSet<>(existing);
+        merged.addAll(extra);
+        StringBuilder sb = new StringBuilder();
+        for (EliteAffix a : merged) {
+            if (sb.length() > 0) sb.append(',');
+            sb.append(a.name());
+        }
+        e.setMetadata(META_AFFIX, new FixedMetadataValue(plugin, sb.toString()));
+        e.getPersistentDataContainer().set(new org.bukkit.NamespacedKey("elitemobs", "elite_affix"),
+                org.bukkit.persistence.PersistentDataType.STRING, sb.toString());
+        appendAffixSuffix(e);
+    }
+
+    /** 在名字末尾追加词缀标记（先剥离已有词缀后缀再重建，避免 Boss 晋升后重复追加） */
     public static void appendAffixSuffix(LivingEntity e) {
         Set<EliteAffix> affixes = getAffixes(e);
         if (affixes.isEmpty() || e.getCustomName() == null) return;
-        StringBuilder sb = new StringBuilder(e.getCustomName());
+        String base = e.getCustomName();
+        // 剥离已有的词缀后缀（" [颜色][名字]"）
+        for (EliteAffix a : EliteAffix.values()) {
+            base = base.replace(" " + a.getColor() + "[" + a.getDisplay() + "]", "");
+        }
+        StringBuilder sb = new StringBuilder(base);
         for (EliteAffix a : affixes) {
             sb.append(' ').append(a.getColor()).append('[').append(a.getDisplay()).append(']');
         }
