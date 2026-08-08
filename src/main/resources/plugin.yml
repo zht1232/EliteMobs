@@ -1,5 +1,5 @@
 name: EliteMobs
-version: '29.8.0'
+version: '29.13.3'
 main: com.clawx.elitemobs.EliteMobsPlugin
 api-version: '1.21'
 author: crystalkingdom
@@ -43,4 +43,8 @@ commands:
     description: EliteMobs main command
     usage: /<command> <reload|info|spawn|list|toggle>
     aliases: [em, emobs]
+  emmenu:
+    description: 打开精英强化菜单（宝石商城/符文商城等）
+    usage: /emmenu
+    aliases: [emruneshop, emrune, emgem, runeshop]
     permission: elitemobs.use

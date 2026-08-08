@@ -495,6 +495,12 @@ public class EliteClassAI implements Listener {
         for (org.bukkit.entity.Item it : arr) if (it != null && it.isValid()) it.remove();
     }
 
+    /** 清理指定归属者的全部装饰物（坦克图腾/法师书），供 /em clear 等命令使用 */
+    public void cleanupDisplaysFor(java.util.UUID owner) {
+        cleanupTankDisplays(owner);
+        cleanupMageBooks(owner);
+    }
+
     /** 读取实体 SCALE 属性（Boss 放大后环绕半径/高度随之放大） */
     private double getEntityScale(LivingEntity e) {
         try {

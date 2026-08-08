@@ -863,7 +863,8 @@ public class EliteBossManager implements Listener {
         }
     }
 
-    private void cleanupFreezeIces(UUID uuid) {
+    /** 清理指定 UUID 关联的冰冻冰块实体（冻结结束/封印登出/ /em clear 等使用） */
+    public void cleanupFreezeIces(UUID uuid) {
         org.bukkit.entity.Item[] arr = freezeIces.remove(uuid);
         if (arr == null) return;
         for (org.bukkit.entity.Item it : arr) if (it != null && it.isValid()) it.remove();

@@ -90,6 +90,26 @@ public class EliteEssenceUpgradeListener implements Listener {
         ItemStack second = inv.getItem(1);  // 宝石
         if (first == null || second == null) return;
 
+        // 宝石 + 宝石：同类型同级合成高一级
+        if (plugin.getEliteConfig().isGemCombineEnabled()
+                && EliteGemFactory.isGem(first) && EliteGemFactory.isGem(second)) {
+            String g0 = EliteGemFactory.getGemId(first);
+            String g1 = EliteGemFactory.getGemId(second);
+            int l0 = EliteGemFactory.getGemLevel(first);
+            int l1 = EliteGemFactory.getGemLevel(second);
+            if (g0 != null && g0.equalsIgnoreCase(g1) && l0 == l1 && l0 < 10) {
+                ItemStack result = buildGemOfLevel(g0, l0 + 1);
+                if (result != null) {
+                    event.setResult(result);
+                    inv.setItem(2, result);
+                    inv.setRepairCost(1);
+                    return;
+                }
+            }
+            clearHint(inv);
+            return;
+        }
+
         // 武器/护甲 + 任意宝石
         if ((isWeapon(first) || isArmor(first)) && EliteGemFactory.isGem(second)) {
             event.setResult(createHintPaper());
@@ -127,6 +147,15 @@ public class EliteEssenceUpgradeListener implements Listener {
         ItemStack gem = inv.getItem(1);
         if (equip == null || gem == null) return;
 
+        // 宝石 + 宝石：合成高一级
+        if (plugin.getEliteConfig().isGemCombineEnabled()
+                && EliteGemFactory.isGem(equip) && EliteGemFactory.isGem(gem)) {
+            event.setCancelled(true);
+            inv.setItem(2, null);
+            doCombineGems(p, inv, equip, gem);
+            return;
+        }
+
         boolean hasCharm = playerHasCharm(p);
 
         if ((isWeapon(equip) || isArmor(equip)) && EliteGemFactory.isGem(gem)) {
@@ -152,6 +181,44 @@ public class EliteEssenceUpgradeListener implements Listener {
     }
 
     // ==================== 统一宝石淬炼 ====================
+
+    /** 宝石合成：消耗 2 个同类型同级宝石，返还 1 个高一级。 */
+    private void doCombineGems(Player p, AnvilInventory inv, ItemStack a, ItemStack b) {
+        String g0 = EliteGemFactory.getGemId(a);
+        String g1 = EliteGemFactory.getGemId(b);
+        int l0 = EliteGemFactory.getGemLevel(a);
+        int l1 = EliteGemFactory.getGemLevel(b);
+        if (g0 == null || !g0.equalsIgnoreCase(g1) || l0 != l1 || l0 >= 10) {
+            p.sendMessage(ChatColor.RED + "✘ 需要两个相同类型且相同等级的宝石才能合成！");
+            return;
+        }
+        consumeOne(inv, 0);
+        consumeOne(inv, 1);
+        ItemStack result = buildGemOfLevel(g0, l0 + 1);
+        if (result == null) return;
+        p.getInventory().addItem(result).values()
+            .forEach(drop -> p.getWorld().dropItemNaturally(p.getLocation(), drop));
+        p.sendMessage(ChatColor.GREEN + "✦ 合成成功！宝石 Lv." + (l0 + 1));
+        p.getWorld().playSound(p.getLocation(), org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f);
+    }
+
+    /** 消耗铁砧某个输入槽的 1 个物品。 */
+    private void consumeOne(AnvilInventory inv, int slot) {
+        ItemStack it = inv.getItem(slot);
+        if (it == null) return;
+        if (it.getAmount() > 1) { it.setAmount(it.getAmount() - 1); inv.setItem(slot, it); }
+        else inv.setItem(slot, null);
+    }
+
+    /** 按等级构建宝石物品（用于合成/发放）。 */
+    private ItemStack buildGemOfLevel(String gemId, int level) {
+        for (var d : plugin.getEliteConfig().getCustomDrops()) {
+            if (d.id != null && d.id.equalsIgnoreCase(gemId)) {
+                return d.build(level);
+            }
+        }
+        return null;
+    }
 
     /**
      * 统一宝石淬炼：任意宝石（gems/*.yml）淬炼到装备。
@@ -506,10 +573,13 @@ public class EliteEssenceUpgradeListener implements Listener {
                 }
             }
         }
-        // 第三层：仍读不到时回退到原版伤害表（最后手段）
-        if (!found) dmg = getVanillaBaseDamage(item.getType());
-        // 基础 1.0（工具条总攻击 = 基础 1 + 修饰符之和）
-        dmg += 1.0;
+        // 第三层：仍读不到时回退到原版伤害表（表值已含基础 1，无需再加）
+        if (found) {
+            // 工具条总攻击 = 基础 1 + 修饰符之和
+            dmg += 1.0;
+        } else {
+            dmg = getVanillaBaseDamage(item.getType());
+        }
         // 加上已装攻击宝石加成
         String[] ids = EliteGemFactory.getInstalledGems(item);
         int[] lvs = EliteGemFactory.getInstalledGemLevels(item);
@@ -633,6 +703,8 @@ public class EliteEssenceUpgradeListener implements Listener {
     /** 安全写入属性 modifier（按 key 全量替换，避免累积）。 */
     private void applyModifierSafe(ItemStack item, Attribute attr, double value, NamespacedKey key) {
         ItemAttributeModifiers existing = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        // 无现成 modifier 可保留且无写入值时不动，避免空组件覆盖原生/默认属性
+        if (value == 0 && (existing == null || existing.modifiers().isEmpty())) return;
         ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.itemAttributes();
         if (existing != null) {
             for (ItemAttributeModifiers.Entry e : existing.modifiers()) {
@@ -652,6 +724,8 @@ public class EliteEssenceUpgradeListener implements Listener {
     private void setWeaponAttack(ItemStack weapon, double bonus) {
         NamespacedKey eliteDamageKey = new NamespacedKey(plugin, "elite_damage");
         ItemAttributeModifiers existing = weapon.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        // 无现成 modifier 可保留且无加成时不动，避免写入空组件覆盖原生/默认属性（指令/自定义装备）
+        if (bonus <= 0 && (existing == null || existing.modifiers().isEmpty())) return;
         ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.itemAttributes();
         if (existing != null) {
             for (ItemAttributeModifiers.Entry e : existing.modifiers()) {
@@ -676,6 +750,8 @@ public class EliteEssenceUpgradeListener implements Listener {
         EquipmentSlotGroup group = slotGroupFor(armor.getType());
         NamespacedKey eliteArmorKey = new NamespacedKey(plugin, "elite_armor");
         ItemAttributeModifiers existing = armor.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        // 无现成 modifier 可保留且无加成时不动，避免写入空组件覆盖原生/默认属性（指令/自定义装备）
+        if (bonus <= 0 && (existing == null || existing.modifiers().isEmpty())) return;
         ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.itemAttributes();
         if (existing != null) {
             for (ItemAttributeModifiers.Entry e : existing.modifiers()) {
@@ -742,8 +818,9 @@ public class EliteEssenceUpgradeListener implements Listener {
         equip.setItemMeta(meta);
     }
 
-    /** 装备上防御宝石提供的总减伤。 */
+    /** 护甲 Lore 显示的总体减伤：原版护甲减伤 + 防御宝石减伤（装非防御宝石也显示原版减伤，不再为 0）。 */
     private double gemDefenseTotal(ItemStack equip) {
+        double vanilla = Math.min(20, vanillaArmorPoints(equip.getType())) / 25.0 * 100.0;
         String[] ids = EliteGemFactory.getInstalledGems(equip);
         int[] lvs = EliteGemFactory.getInstalledGemLevels(equip);
         double sum = 0;
@@ -752,7 +829,22 @@ public class EliteEssenceUpgradeListener implements Listener {
                 sum += EliteGemFactory.defenseBonus(lvs[i]);
             }
         }
-        return sum;
+        return Math.min(80.0, vanilla + sum);
+    }
+
+    /** 原版护甲点的护甲值（armor points），非护甲返回 0。 */
+    private static int vanillaArmorPoints(Material m) {
+        return switch (m) {
+            case LEATHER_HELMET, LEATHER_BOOTS, GOLDEN_BOOTS, CHAINMAIL_BOOTS -> 1;
+            case GOLDEN_HELMET, IRON_HELMET, TURTLE_HELMET, LEATHER_LEGGINGS, IRON_BOOTS -> 2;
+            case CHAINMAIL_HELMET, DIAMOND_HELMET, NETHERITE_HELMET, LEATHER_CHESTPLATE,
+                 GOLDEN_LEGGINGS, DIAMOND_BOOTS, NETHERITE_BOOTS -> 3;
+            case CHAINMAIL_LEGGINGS -> 4;
+            case GOLDEN_CHESTPLATE, CHAINMAIL_CHESTPLATE, IRON_LEGGINGS -> 5;
+            case IRON_CHESTPLATE, DIAMOND_LEGGINGS, NETHERITE_LEGGINGS -> 6;
+            case DIAMOND_CHESTPLATE, NETHERITE_CHESTPLATE -> 8;
+            default -> 0;
+        };
     }
 
     /** 向 Lore 追加宝石槽显示：标题(已用/总数) + 每颗宝石一行（名称+等级+效果）。 */
@@ -1110,6 +1202,16 @@ public class EliteEssenceUpgradeListener implements Listener {
             case COPPER_AXE -> 8.0;
             case IRON_AXE, DIAMOND_AXE -> 9.0;
             case NETHERITE_AXE -> 10.0;
+            case WOODEN_PICKAXE, GOLDEN_PICKAXE -> 2.0;
+            case STONE_PICKAXE, COPPER_PICKAXE -> 3.0;
+            case IRON_PICKAXE -> 4.0;
+            case DIAMOND_PICKAXE -> 5.0;
+            case NETHERITE_PICKAXE -> 6.0;
+            case WOODEN_SHOVEL, GOLDEN_SHOVEL -> 2.5;
+            case STONE_SHOVEL, COPPER_SHOVEL -> 3.5;
+            case IRON_SHOVEL -> 4.5;
+            case DIAMOND_SHOVEL -> 5.5;
+            case NETHERITE_SHOVEL -> 6.5;
             case WOODEN_HOE, STONE_HOE, COPPER_HOE -> 5.0;
             case IRON_HOE -> 6.0;
             case DIAMOND_HOE -> 7.0;

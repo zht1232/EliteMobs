@@ -209,13 +209,29 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         if (!(s instanceof Player p)) { msg(s,ChatColor.RED+"\u274c \u4ec5\u9650\u73a9\u5bb6\u4f7f\u7528\u3002"); return; }
         if (!has(s,"elitemobs.admin")) return;
         int cleared = 0;
+        int decor = 0;
+        java.util.Set<java.util.UUID> owners = new java.util.HashSet<>();
+        org.bukkit.NamespacedKey decorKey = new org.bukkit.NamespacedKey(plugin, "decor_owner");
+        org.bukkit.NamespacedKey bossDecorKey = new org.bukkit.NamespacedKey(plugin, "boss_decor");
         for (Entity e : p.getWorld().getNearbyEntities(p.getLocation(), 50, 50, 50)) {
             if (e instanceof LivingEntity le && EliteMobManager.isElite(le)) {
+                owners.add(le.getUniqueId());
                 le.remove();
                 cleared++;
+            } else if (e instanceof org.bukkit.entity.Item it
+                    && (it.getPersistentDataContainer().has(decorKey, org.bukkit.persistence.PersistentDataType.STRING)
+                        || it.getPersistentDataContainer().has(bossDecorKey, org.bukkit.persistence.PersistentDataType.BOOLEAN))) {
+                it.remove(); // 坦克图腾/法师书/Boss 装饰物：一并移除，不再残留掉落物
+                decor++;
             }
         }
-        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u6e05\u9664\u5468\u8fb9 50 \u683c\u5185 "+cleared+" \u53ea\u7cbe\u82f1");
+        // 同步清理这些归属者的内存装饰物映射（坦克图腾/法师书/冻结冰块）
+        for (java.util.UUID uid : owners) {
+            plugin.getEliteClassAI().cleanupDisplaysFor(uid);
+            plugin.getBossManager().cleanupFreezeIces(uid);
+        }
+        msg(s,ChatColor.GREEN+"\u2705 \u5df2\u6e05\u9664\u5468\u8fb9 50 \u683c\u5185 "+cleared+" \u53ea\u7cbe\u82f1"
+            +(decor>0?ChatColor.GRAY+"\uff08\u987a\u5e26\u6e05\u9664 "+decor+" \u4e2a\u88c5\u9970\u7269\uff09":""));
     }
 
     // ---- \u5c5e\u6027\u9884\u89c8 ----

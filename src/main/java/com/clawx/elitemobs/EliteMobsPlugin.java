@@ -75,6 +75,9 @@ public final class EliteMobsPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(damageScaler, this);
         mobManager.startVanillaNightBoostTask();
         Objects.requireNonNull(getCommand("elitemobs")).setExecutor(new EliteMobsCommand(this));
+        com.clawx.elitemobs.gui.EliteMenu eliteMenu = new com.clawx.elitemobs.gui.EliteMenu(this);
+        getServer().getPluginManager().registerEvents(eliteMenu, this);
+        Objects.requireNonNull(getCommand("emmenu")).setExecutor(eliteMenu);
         startAITask();
         registerPapi();
         long elapsed = System.currentTimeMillis() - start;

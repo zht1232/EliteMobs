@@ -60,8 +60,8 @@ public class EliteSpawnHandler implements Listener {
                 && com.clawx.elitemobs.utils.MoonPhaseDetector.isFullMoon(entity.getWorld())) {
             chance *= config.getFullMoonSpawnMultiplier();
         }
-        double dist = entity.getLocation().distance(entity.getWorld().getSpawnLocation());
-        chance += Math.min(dist * 0.0001, 0.05);
+        // 注意：不再按"距世界出生点"加距离加成——它会盖过 elite-spawn-chance（+0.05 封顶远超 0.01），
+        // 导致玩家调低概率后野外精英依然很多。概率严格由 elite-spawn-chance × 难度 × 夜间 × 满月决定。
         if (rng.nextDouble() >= chance) return;
         plugin.getMobManager().makeElite(entity);
 

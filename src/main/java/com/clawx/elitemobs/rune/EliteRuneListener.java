@@ -60,6 +60,23 @@ public class EliteRuneListener implements Listener {
         ItemStack equip = inv.getItem(0);
         ItemStack rune = inv.getItem(1);
         if (equip == null || rune == null) return;
+        // 符文 + 符文：同类型同级合成高一级
+        if (plugin.getEliteConfig().isRuneCombineEnabled()
+                && EliteRuneFactory.isRune(equip) && EliteRuneFactory.isRune(rune)) {
+            String t0 = EliteRuneFactory.getRuneType(equip);
+            String t1 = EliteRuneFactory.getRuneType(rune);
+            int l0 = EliteRuneFactory.getRuneLevel(equip);
+            int l1 = EliteRuneFactory.getRuneLevel(rune);
+            if (t0 != null && t0.equals(t1) && l0 == l1 && l0 < 10) {
+                ItemStack result = EliteRuneFactory.createRune(t0, l0 + 1, plugin.getMessages());
+                event.setResult(result);
+                inv.setItem(2, result);
+                inv.setRepairCost(1);
+                return;
+            }
+            inv.setItem(2, null);
+            return;
+        }
         // 装备必须是已淬炼的（有升级等级），且槽位未满
         if (!isUpgraded(equip) || !EliteRuneFactory.isRune(rune)) return;
         // 符文类型必须与装备匹配（武器符文只能上武器，护甲符文只能上护甲）
@@ -77,14 +94,23 @@ public class EliteRuneListener implements Listener {
         if (!(event.getInventory() instanceof AnvilInventory inv)) return;
         if (!(event.getWhoClicked() instanceof Player p)) return;
         if (event.getRawSlot() == 2) {
-            ItemStack equip = inv.getItem(0);
-            ItemStack rune = inv.getItem(1);
-            if (equip == null || rune == null) return;
-            if (!isUpgraded(equip) || !EliteRuneFactory.isRune(rune)) return;
-            if (!hasFreeSlot(equip)) { p.sendMessage(ChatColor.RED + "✘ 符文槽已满！"); return; }
+            ItemStack a = inv.getItem(0);
+            ItemStack b = inv.getItem(1);
+            if (a == null || b == null) return;
+            // 符文 + 符文：合成高一级
+            if (plugin.getEliteConfig().isRuneCombineEnabled()
+                    && EliteRuneFactory.isRune(a) && EliteRuneFactory.isRune(b)) {
+                event.setCancelled(true);
+                inv.setItem(2, null);
+                doCombineRunes(p, inv, a, b);
+                return;
+            }
+            // 装备 + 符文：镶嵌
+            if (!isUpgraded(a) || !EliteRuneFactory.isRune(b)) return;
+            if (!hasFreeSlot(a)) { p.sendMessage(ChatColor.RED + "✘ 符文槽已满！"); return; }
             event.setCancelled(true);
             inv.setItem(2, null);
-            doInstallRune(p, inv, equip, rune);
+            doInstallRune(p, inv, a, b);
         }
     }
 
@@ -147,6 +173,35 @@ public class EliteRuneListener implements Listener {
                         "&e&l✦ &f已镶嵌 &b{rune}&f！"))
                 .replace("{rune}", runeType));
         p.getWorld().playSound(p.getLocation(), org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f);
+    }
+
+    /** 符文合成：消耗 2 个同类型同级符文，返还 1 个高一级。 */
+    private void doCombineRunes(Player p, AnvilInventory inv, ItemStack a, ItemStack b) {
+        String t0 = EliteRuneFactory.getRuneType(a);
+        String t1 = EliteRuneFactory.getRuneType(b);
+        int l0 = EliteRuneFactory.getRuneLevel(a);
+        int l1 = EliteRuneFactory.getRuneLevel(b);
+        if (t0 == null || !t0.equals(t1) || l0 != l1 || l0 >= 10) {
+            p.sendMessage(ChatColor.RED + "✘ 需要两个相同类型且相同等级的符文才能合成！");
+            return;
+        }
+        consumeOne(inv, 0);
+        consumeOne(inv, 1);
+        ItemStack result = EliteRuneFactory.createRune(t0, l0 + 1, plugin.getMessages());
+        p.getInventory().addItem(result).values()
+            .forEach(drop -> p.getWorld().dropItemNaturally(p.getLocation(), drop));
+        p.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                "&e&l✦ &f合成成功！&b" + EliteRuneFactory.TYPES.get(t0).coloredName
+                + " &7Lv." + (l0 + 1)));
+        p.getWorld().playSound(p.getLocation(), org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f);
+    }
+
+    /** 消耗铁砧某个输入槽的 1 个物品。 */
+    private void consumeOne(AnvilInventory inv, int slot) {
+        ItemStack it = inv.getItem(slot);
+        if (it == null) return;
+        if (it.getAmount() > 1) { it.setAmount(it.getAmount() - 1); inv.setItem(slot, it); }
+        else inv.setItem(slot, null);
     }
 
     /** 刷新装备 Lore 中的符文槽行（替换旧符文槽行，无则追加）。 */

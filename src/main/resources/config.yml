@@ -1,5 +1,5 @@
 # ============================================
-#  EliteMobs v29.8.0 - 配置文件
+#  EliteMobs v29.13.3 - 配置文件
 #  适用 Paper 1.21+ / Paper 26.x
 #  作者: crystalkingdom团队
 # ============================================
@@ -325,6 +325,8 @@ essence-upgrade:
   weapon-damage-multiplier: 0.5    # 武器淬炼攻击力系数（攻击力 = 等级² × 系数）
   armor-bonus-per-level: 1.5       # 护甲淬炼每级减伤
   armor-max-bonus: 15.0            # 护甲减伤上限
+  # 铁砧宝石合成：2 个同类型同级宝石（gems/*.yml）合成高一级（Lv.10 满级不可合成）
+  gem-combine-enabled: true
 
 # --- 符文系统（独立于淬炼，铁砧镶嵌） ---
 # 符文效果比淬炼更高级（生命/移速/药水效果），槽位数量由装备淬炼等级决定：
@@ -344,6 +346,39 @@ rune:
     level-base: 1
     level-divisor: 3
     max-level: 10
+  # 铁砧符文合成：2 个同类型同级符文合成高一级（Lv.10 满级不可合成）
+  combine:
+    enabled: true
+
+# --- 强化菜单 / 商城（/emmenu 主界面 → 二级菜单；含宝石商城 + 符文商城） ---
+# 价格 = 基础价 × 等级（Lv.1=基础价，Lv.2=2倍……）
+# 两种货币任选其一支付（金币优先，金币不足/不可用时自动用点券，无需两种都付）
+shop:
+  enabled: true
+  # 宝石价格：格式 "<id>: 金币 点券"（实际价格 = 基础 × 等级，Lv.1=基础价）
+  gem-prices:
+    attack_gem: "2000 600"
+    defense_gem: "2000 600"
+    magnet_gem: "2000 600"
+    double_jump_gem: "2000 600"
+    unbreaking_gem: "2000 600"
+    thunder_gem: "3000 900"
+    knockback_gem: "3000 900"
+    lifesteal_gem: "3000 900"
+    fire_aspect_gem: "3000 900"
+    rare_skull: "5000 1500"
+  # 符文价格（Lv.1 起点：金币 20000 / 点券 5000）
+  rune-prices:
+    HEALTH: "20000 5000"
+    SPEED: "20000 5000"
+    STRENGTH: "25000 7000"
+    REGEN: "25000 7000"
+    RESIST: "30000 9000"
+    FIRE: "30000 9000"
+  # 消耗品价格（淬炼保护符 / 宝石拆卸器）
+  utility-prices:
+    protection-charm: "1000 300"
+    gem-remover: "5000 1500"
 
 # ============================================
 #  宝石/掉落物配置

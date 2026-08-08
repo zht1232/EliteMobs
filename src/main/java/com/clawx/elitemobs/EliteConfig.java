@@ -159,6 +159,14 @@ public class EliteConfig {
     private int runeDropLevelBase = 1;
     private int runeDropLevelDivisor = 3;
     private int runeDropMaxLevel = 10;
+    // 符文合成（铁砧 2 个同级合成高一级）+ 强化菜单/商城
+    private boolean runeCombineEnabled = true;
+    private boolean shopEnabled = true;
+    private final Map<String, double[]> gemShopPrices = new LinkedHashMap<>();
+    private final Map<String, double[]> runeShopPrices = new LinkedHashMap<>();
+    private final Map<String, double[]> utilityPrices = new LinkedHashMap<>();
+    // 宝石合成（铁砧 2 个同级宝石合成高一级）
+    private boolean gemCombineEnabled = true;
 
     public EliteConfig(JavaPlugin plugin) { this.plugin = plugin; this.config = plugin.getConfig(); load(); }
 
@@ -507,6 +515,38 @@ public class EliteConfig {
         runeDropLevelBase = config.getInt("rune.drops.level-base", 1);
         runeDropLevelDivisor = Math.max(1, config.getInt("rune.drops.level-divisor", 3));
         runeDropMaxLevel = Math.max(1, config.getInt("rune.drops.max-level", 10));
+        runeCombineEnabled = config.getBoolean("rune.combine.enabled", true);
+        gemCombineEnabled = config.getBoolean("essence-upgrade.gem-combine-enabled", true);
+        // 强化菜单/商城（顶层 shop 段）
+        shopEnabled = config.getBoolean("shop.enabled", true);
+        loadPriceMap(config, "shop.gem-prices", gemShopPrices);
+        loadPriceMap(config, "shop.rune-prices", runeShopPrices);
+        loadPriceMap(config, "shop.utility-prices", utilityPrices);
+        // 未配置时使用内置默认价（保证商城可直接使用）
+        if (gemShopPrices.isEmpty()) {
+            gemShopPrices.put("ATTACK_GEM", new double[]{2000, 600});
+            gemShopPrices.put("DEFENSE_GEM", new double[]{2000, 600});
+            gemShopPrices.put("MAGNET_GEM", new double[]{2000, 600});
+            gemShopPrices.put("DOUBLE_JUMP_GEM", new double[]{2000, 600});
+            gemShopPrices.put("UNBREAKING_GEM", new double[]{2000, 600});
+            gemShopPrices.put("THUNDER_GEM", new double[]{3000, 900});
+            gemShopPrices.put("KNOCKBACK_GEM", new double[]{3000, 900});
+            gemShopPrices.put("LIFESTEAL_GEM", new double[]{3000, 900});
+            gemShopPrices.put("FIRE_ASPECT_GEM", new double[]{3000, 900});
+            gemShopPrices.put("RARE_SKULL", new double[]{5000, 1500});
+        }
+        if (runeShopPrices.isEmpty()) {
+            runeShopPrices.put("HEALTH", new double[]{20000, 5000});
+            runeShopPrices.put("SPEED", new double[]{20000, 5000});
+            runeShopPrices.put("STRENGTH", new double[]{25000, 7000});
+            runeShopPrices.put("REGEN", new double[]{25000, 7000});
+            runeShopPrices.put("RESIST", new double[]{30000, 9000});
+            runeShopPrices.put("FIRE", new double[]{30000, 9000});
+        }
+        if (utilityPrices.isEmpty()) {
+            utilityPrices.put("PROTECTION-CHARM", new double[]{1000, 300});
+            utilityPrices.put("GEM-REMOVER", new double[]{5000, 1500});
+        }
 
         // LuckPerms
         luckPermsEnabled = config.getBoolean("luckperms.enabled", false);
@@ -526,6 +566,21 @@ public class EliteConfig {
     public boolean isEnabled() { return enabled; }
     public int getAITickInterval() { return aiTickInterval; }
     public double getEliteSpawnChance() { return eliteSpawnChance; }
+
+    // ========== 运行时配置调整（/emmenu 管理 → 配置设置） ==========
+    public void setEnabled(boolean v) { enabled = v; plugin.getConfig().set("general.enabled", v); plugin.saveConfig(); }
+    public void setEliteSpawnChance(double v) {
+        eliteSpawnChance = Math.max(0, Math.min(1, v));
+        plugin.getConfig().set("general.elite-spawn-chance", eliteSpawnChance); plugin.saveConfig();
+    }
+    public void setNightEnhancementEnabled(boolean v) {
+        nightEnhancementEnabled = v;
+        plugin.getConfig().set("features.night-enhancement.enabled", v); plugin.saveConfig();
+    }
+    public void setAffixChance(double v) {
+        affixChance = Math.max(0, Math.min(1, v));
+        plugin.getConfig().set("elite-affixes.chance", affixChance); plugin.saveConfig();
+    }
     public int getMinSpawnY() { return minSpawnY; }
     public int getMaxElitesPerChunk() { return maxElitesPerChunk; }
     public int getTargetRange() { return targetRange; }
@@ -656,6 +711,31 @@ public class EliteConfig {
     public int getRuneDropLevelBase() { return runeDropLevelBase; }
     public int getRuneDropLevelDivisor() { return runeDropLevelDivisor; }
     public int getRuneDropMaxLevel() { return runeDropMaxLevel; }
+    public boolean isRuneCombineEnabled() { return runeCombineEnabled; }
+    public boolean isShopEnabled() { return shopEnabled; }
+    /** 宝石商城价格（[金币, 点券]），未配置返回 null。 */
+    public double[] getGemShopPrice(String gemId) { return gemShopPrices.get(gemId.toUpperCase()); }
+    /** 符文商城价格（[金币, 点券]），未配置返回 null。 */
+    public double[] getRuneShopPrice(String type) { return runeShopPrices.get(type.toUpperCase()); }
+    /** 消耗品价格（protection-charm / gem-remover）。 */
+    public double[] getUtilityPrice(String key) { return utilityPrices.get(key.toUpperCase()); }
+    public boolean isGemCombineEnabled() { return gemCombineEnabled; }
+
+    /** 加载价格 map（"金币 点券" → double[]{money, points}）。 */
+    private void loadPriceMap(FileConfiguration cfg, String path, Map<String, double[]> out) {
+        out.clear();
+        org.bukkit.configuration.ConfigurationSection sec = cfg.getConfigurationSection(path);
+        if (sec == null) return;
+        for (String key : sec.getKeys(false)) {
+            String v = sec.getString(key);
+            if (v == null) continue;
+            String[] parts = v.trim().split("\\s+");
+            double money = 0, pts = 0;
+            if (parts.length > 0) { try { money = Double.parseDouble(parts[0]); } catch (NumberFormatException ignored) {} }
+            if (parts.length > 1) { try { pts = Double.parseDouble(parts[1]); } catch (NumberFormatException ignored) {} }
+            out.put(key.toUpperCase(), new double[]{money, pts});
+        }
+    }
 
     // ????
     public boolean isLevelScalingEnabled() { return levelScalingEnabled; }

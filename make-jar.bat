@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-set JAR=EliteMobs-29.8.0.jar
+set JAR=EliteMobs-29.13.3.jar
 set TEMP=jar-temp
 del /q "%JAR%" 2>nul
 rmdir /s /q "%TEMP%" 2>nul
