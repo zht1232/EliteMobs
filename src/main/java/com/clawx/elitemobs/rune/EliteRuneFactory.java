@@ -179,7 +179,7 @@ public final class EliteRuneFactory {
             case "STRENGTH" -> "穿戴时获得 &c力量 " + roman(potionAmplifier(level) + 1) + " &7效果";
             case "REGEN" -> "穿戴时获得 &d再生 " + roman(potionAmplifier(level) + 1) + " &7效果";
             case "RESIST" -> "穿戴时获得 &7抗性提升 " + roman(potionAmplifier(level) + 1) + " &7效果";
-            case "FIRE" -> "穿戴时获得 &6抗火 &7效果";
+            case "FIRE" -> "着火时获得 &6抗火 &f" + level + " &7秒（冷却后再次触发）";
             default -> t.desc;
         };
     }
@@ -192,7 +192,7 @@ public final class EliteRuneFactory {
             case "STRENGTH" -> "力量 &c" + roman(potionAmplifier(level) + 1);
             case "REGEN" -> "再生 &d" + roman(potionAmplifier(level) + 1);
             case "RESIST" -> "抗性 &7" + roman(potionAmplifier(level) + 1);
-            case "FIRE" -> "抗火 &6";
+            case "FIRE" -> "抗火 &6" + level + "秒";
             default -> t.effect;
         };
     }

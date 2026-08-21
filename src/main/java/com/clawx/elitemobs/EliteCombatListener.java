@@ -295,6 +295,8 @@ public class EliteCombatListener implements Listener {
                     need = true;
                 } else if (cur instanceof Player cp) {
                     if (cp.hasPermission("elitemobs.bypass")) need = true;
+                    // 跨世界目标（Bukkit 不允许跨世界测距）→ 视为失效重新索敌
+                    else if (!cp.getWorld().equals(e.getWorld())) need = true;
                     else if (cp.getLocation().distance(e.getLocation()) > range) need = true;
                 }
                 if (!need) continue;

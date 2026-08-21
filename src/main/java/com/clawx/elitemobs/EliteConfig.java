@@ -105,13 +105,29 @@ public class EliteConfig {
     private boolean debugEnchant;
     // ????
     private boolean nightEnhancementEnabled;
+    // 世界 AI（原版怪物行为增强）
+    private boolean worldAIEnabled = true;
+    private boolean attractOnHurt = true;
+    private int attractRadius = 12;
+    private int maxAttractPerTrigger = 10;
+    private int attractCooldown = 5;
+    private boolean attractOnLowHp = true;
+    private double lowHpThreshold = 0.3;
+    private boolean attractOnHunger = true;
+    private int hungerThreshold = 6;
+    private boolean attractOnBreak = true;
+    private int breakAttractRadius = 16;
+    private boolean zombieLightExplore = true;
+    private int lightSearchRadius = 16;
+    private boolean mobGathering = false;
+    private int gatherRadius = 10;
     private double nightSpeedBonus;
     private double nightDamageMultiplier;
     private double nightSpawnMultiplier;
     private boolean vanillaNightBoostEnabled = true;
     // 月相系统（满月夜增强，借鉴原版 MoonPhaseDetector）
     private boolean moonPhaseEnabled = true;
-    private double fullMoonSpawnMultiplier = 2.0;      // 满月夜生成率额外倍率
+    private double fullMoonSpawnMultiplier = 1.3;      // 满月夜生成率额外倍率
     private boolean fullMoonStrength = true;           // 满月夜精英额外获得力量/抗性
     private int fullMoonStrengthLevel = 1;             // 满月额外力量等级
     // 生成广播
@@ -152,6 +168,7 @@ public class EliteConfig {
     private double runeMoneyCost = 1000.0;
     private int runePointsCost = 50;
     private int runeXpCost = 30;
+    private boolean runeCostLevelScaling = true;   // 金币/经验是否随符文等级增长
     // 符文掉落（极难）
     private boolean runeDropsEnabled = true;
     private double runeDropChance = 0.02;
@@ -162,6 +179,7 @@ public class EliteConfig {
     // 符文合成（铁砧 2 个同级合成高一级）+ 强化菜单/商城
     private boolean runeCombineEnabled = true;
     private boolean shopEnabled = true;
+    private int gemDailyLimit = 10;   // 宝石每日每人限购（所有宝石合计）
     private final Map<String, double[]> gemShopPrices = new LinkedHashMap<>();
     private final Map<String, double[]> runeShopPrices = new LinkedHashMap<>();
     private final Map<String, double[]> utilityPrices = new LinkedHashMap<>();
@@ -316,13 +334,28 @@ public class EliteConfig {
         debugEnchant = config.getBoolean("equipment.debug-enchant", false);
         // ????
         nightEnhancementEnabled = config.getBoolean("features.night-enhancement.enabled", true);
+        worldAIEnabled = config.getBoolean("features.world-ai.enabled", true);
+        attractOnHurt = config.getBoolean("features.world-ai.attract-on-hurt", true);
+        attractRadius = config.getInt("features.world-ai.attract-radius", 12);
+        maxAttractPerTrigger = config.getInt("features.world-ai.max-attract-per-trigger", 10);
+        attractCooldown = config.getInt("features.world-ai.attract-cooldown", 5);
+        attractOnLowHp = config.getBoolean("features.world-ai.attract-on-low-hp", true);
+        lowHpThreshold = config.getDouble("features.world-ai.low-hp-threshold", 0.3);
+        attractOnHunger = config.getBoolean("features.world-ai.attract-on-hunger", true);
+        hungerThreshold = config.getInt("features.world-ai.hunger-threshold", 6);
+        attractOnBreak = config.getBoolean("features.world-ai.attract-on-break", true);
+        breakAttractRadius = config.getInt("features.world-ai.break-attract-radius", 16);
+        zombieLightExplore = config.getBoolean("features.world-ai.zombie-light-explore", true);
+        lightSearchRadius = config.getInt("features.world-ai.light-search-radius", 16);
+        mobGathering = config.getBoolean("features.world-ai.mob-gathering", false);
+        gatherRadius = config.getInt("features.world-ai.gather-radius", 10);
         nightSpeedBonus = config.getDouble("features.night-enhancement.speed-bonus", 0.12);
         nightDamageMultiplier = config.getDouble("features.night-enhancement.damage-multiplier", 1.2);
-        nightSpawnMultiplier = config.getDouble("features.night-enhancement.spawn-multiplier", 1.5);
+        nightSpawnMultiplier = config.getDouble("features.night-enhancement.spawn-multiplier", 1.2);
         vanillaNightBoostEnabled = config.getBoolean("features.night-enhancement.vanilla-mobs", true);
         // 月相系统（满月夜增强）
         moonPhaseEnabled = config.getBoolean("features.night-enhancement.moon-phase.enabled", true);
-        fullMoonSpawnMultiplier = Math.max(1.0, config.getDouble("features.night-enhancement.moon-phase.full-moon-spawn-multiplier", 2.0));
+        fullMoonSpawnMultiplier = Math.max(1.0, config.getDouble("features.night-enhancement.moon-phase.full-moon-spawn-multiplier", 1.3));
         fullMoonStrength = config.getBoolean("features.night-enhancement.moon-phase.full-moon-strength", true);
         fullMoonStrengthLevel = Math.max(0, config.getInt("features.night-enhancement.moon-phase.full-moon-strength-level", 1));
 
@@ -510,6 +543,7 @@ public class EliteConfig {
         runeMoneyCost = config.getDouble("rune.install-cost.money", 1000.0);
         runePointsCost = config.getInt("rune.install-cost.points", 50);
         runeXpCost = config.getInt("rune.install-cost.xp-levels", 30);
+        runeCostLevelScaling = config.getBoolean("rune.install-cost.level-scaling", true);
         runeDropsEnabled = config.getBoolean("rune.drops.enabled", true);
         runeDropChance = config.getDouble("rune.drops.chance", 0.02);
         runeDropLevelBase = config.getInt("rune.drops.level-base", 1);
@@ -519,33 +553,34 @@ public class EliteConfig {
         gemCombineEnabled = config.getBoolean("essence-upgrade.gem-combine-enabled", true);
         // 强化菜单/商城（顶层 shop 段）
         shopEnabled = config.getBoolean("shop.enabled", true);
+        gemDailyLimit = Math.max(0, config.getInt("shop.gem-daily-limit", 10));
         loadPriceMap(config, "shop.gem-prices", gemShopPrices);
         loadPriceMap(config, "shop.rune-prices", runeShopPrices);
         loadPriceMap(config, "shop.utility-prices", utilityPrices);
         // 未配置时使用内置默认价（保证商城可直接使用）
         if (gemShopPrices.isEmpty()) {
-            gemShopPrices.put("ATTACK_GEM", new double[]{2000, 600});
-            gemShopPrices.put("DEFENSE_GEM", new double[]{2000, 600});
-            gemShopPrices.put("MAGNET_GEM", new double[]{2000, 600});
-            gemShopPrices.put("DOUBLE_JUMP_GEM", new double[]{2000, 600});
-            gemShopPrices.put("UNBREAKING_GEM", new double[]{2000, 600});
-            gemShopPrices.put("THUNDER_GEM", new double[]{3000, 900});
-            gemShopPrices.put("KNOCKBACK_GEM", new double[]{3000, 900});
-            gemShopPrices.put("LIFESTEAL_GEM", new double[]{3000, 900});
-            gemShopPrices.put("FIRE_ASPECT_GEM", new double[]{3000, 900});
-            gemShopPrices.put("RARE_SKULL", new double[]{5000, 1500});
+            gemShopPrices.put("ATTACK_GEM", new double[]{5000, 200});
+            gemShopPrices.put("DEFENSE_GEM", new double[]{5000, 200});
+            gemShopPrices.put("MAGNET_GEM", new double[]{5000, 200});
+            gemShopPrices.put("DOUBLE_JUMP_GEM", new double[]{5000, 200});
+            gemShopPrices.put("UNBREAKING_GEM", new double[]{5000, 200});
+            gemShopPrices.put("THUNDER_GEM", new double[]{5000, 200});
+            gemShopPrices.put("KNOCKBACK_GEM", new double[]{5000, 200});
+            gemShopPrices.put("LIFESTEAL_GEM", new double[]{5000, 200});
+            gemShopPrices.put("FIRE_ASPECT_GEM", new double[]{5000, 200});
+            gemShopPrices.put("RARE_SKULL", new double[]{5000, 200});
         }
         if (runeShopPrices.isEmpty()) {
-            runeShopPrices.put("HEALTH", new double[]{20000, 5000});
-            runeShopPrices.put("SPEED", new double[]{20000, 5000});
-            runeShopPrices.put("STRENGTH", new double[]{25000, 7000});
-            runeShopPrices.put("REGEN", new double[]{25000, 7000});
-            runeShopPrices.put("RESIST", new double[]{30000, 9000});
-            runeShopPrices.put("FIRE", new double[]{30000, 9000});
+            runeShopPrices.put("HEALTH", new double[]{200000, 1500});
+            runeShopPrices.put("SPEED", new double[]{200000, 1500});
+            runeShopPrices.put("STRENGTH", new double[]{200000, 1500});
+            runeShopPrices.put("REGEN", new double[]{200000, 1500});
+            runeShopPrices.put("RESIST", new double[]{200000, 1500});
+            runeShopPrices.put("FIRE", new double[]{200000, 1500});
         }
         if (utilityPrices.isEmpty()) {
-            utilityPrices.put("PROTECTION-CHARM", new double[]{1000, 300});
-            utilityPrices.put("GEM-REMOVER", new double[]{5000, 1500});
+            utilityPrices.put("PROTECTION-CHARM", new double[]{1000, 100});
+            utilityPrices.put("GEM-REMOVER", new double[]{5000, 200});
         }
 
         // LuckPerms
@@ -706,6 +741,7 @@ public class EliteConfig {
     public double getRuneMoneyCost() { return runeMoneyCost; }
     public int getRunePointsCost() { return runePointsCost; }
     public int getRuneXpCost() { return runeXpCost; }
+    public boolean isRuneCostLevelScaling() { return runeCostLevelScaling; }
     public boolean isRuneDropsEnabled() { return runeDropsEnabled; }
     public double getRuneDropChance() { return runeDropChance; }
     public int getRuneDropLevelBase() { return runeDropLevelBase; }
@@ -714,12 +750,31 @@ public class EliteConfig {
     public boolean isRuneCombineEnabled() { return runeCombineEnabled; }
     public boolean isShopEnabled() { return shopEnabled; }
     /** 宝石商城价格（[金币, 点券]），未配置返回 null。 */
+    public int getGemDailyLimit() { return gemDailyLimit; }
     public double[] getGemShopPrice(String gemId) { return gemShopPrices.get(gemId.toUpperCase()); }
     /** 符文商城价格（[金币, 点券]），未配置返回 null。 */
     public double[] getRuneShopPrice(String type) { return runeShopPrices.get(type.toUpperCase()); }
     /** 消耗品价格（protection-charm / gem-remover）。 */
     public double[] getUtilityPrice(String key) { return utilityPrices.get(key.toUpperCase()); }
     public boolean isGemCombineEnabled() { return gemCombineEnabled; }
+
+    /** 更新商城价格（金币/点券）并即时保存。path: shop.gem-prices / shop.rune-prices / shop.utility-prices。 */
+    public void setShopPrice(String path, String id, double money, double points) {
+        Map<String, double[]> map;
+        if (path.endsWith("gem-prices")) map = gemShopPrices;
+        else if (path.endsWith("rune-prices")) map = runeShopPrices;
+        else map = utilityPrices;
+        map.put(id.toUpperCase(), new double[]{money, points});
+        String key = id;
+        org.bukkit.configuration.ConfigurationSection sec = config.getConfigurationSection(path);
+        if (sec != null) {
+            for (String k : sec.getKeys(false)) {
+                if (k.equalsIgnoreCase(id)) { key = k; break; }
+            }
+        }
+        config.set(path + "." + key, Math.round(money) + " " + Math.round(points));
+        plugin.saveConfig();
+    }
 
     /** 加载价格 map（"金币 点券" → double[]{money, points}）。 */
     private void loadPriceMap(FileConfiguration cfg, String path, Map<String, double[]> out) {
@@ -743,6 +798,22 @@ public class EliteConfig {
     public double getLevelScalingMultiplier() { return levelScalingMultiplier; }
     public boolean isDebugEnchant() { return debugEnchant; }
     public boolean isNightEnhancementEnabled() { return nightEnhancementEnabled; }
+    // ========== 世界 AI ==========
+    public boolean isWorldAIEnabled() { return worldAIEnabled; }
+    public boolean isAttractOnHurt() { return attractOnHurt; }
+    public int getAttractRadius() { return attractRadius; }
+    public int getMaxAttractPerTrigger() { return maxAttractPerTrigger; }
+    public int getAttractCooldown() { return attractCooldown; }
+    public boolean isAttractOnLowHp() { return attractOnLowHp; }
+    public double getLowHpThreshold() { return lowHpThreshold; }
+    public boolean isAttractOnHunger() { return attractOnHunger; }
+    public int getHungerThreshold() { return hungerThreshold; }
+    public boolean isAttractOnBreak() { return attractOnBreak; }
+    public int getBreakAttractRadius() { return breakAttractRadius; }
+    public boolean isZombieLightExplore() { return zombieLightExplore; }
+    public int getLightSearchRadius() { return lightSearchRadius; }
+    public boolean isMobGathering() { return mobGathering; }
+    public int getGatherRadius() { return gatherRadius; }
     public double getNightSpeedBonus() { return nightSpeedBonus; }
     public double getNightDamageMultiplier() { return nightDamageMultiplier; }
     public double getNightSpawnMultiplier() { return nightSpawnMultiplier; }

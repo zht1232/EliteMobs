@@ -135,7 +135,7 @@ public class EliteClassAI implements Listener {
                     // 骷髅/流浪者精英：主动速射（每 1 秒射击，远程压制）
                     if ((e.getType() == EntityType.SKELETON || e.getType() == EntityType.STRAY)
                             && tick % 20 == 0) {
-                        double d = e.getLocation().distance(mob.getTarget().getLocation());
+                        double d = safeDistance(e.getLocation(), mob.getTarget().getLocation());
                         if (d >= 4 && d <= 24) rapidFireSkeleton(e, mob.getTarget());
                     }
 
@@ -157,7 +157,7 @@ public class EliteClassAI implements Listener {
                             // 法师：每3秒发射火球或扔药水
                             if (tick % 60 == 0 && mob.getTarget() != null) {
                                 LivingEntity target = mob.getTarget();
-                                double dist = target.getLocation().distance(loc);
+                                double dist = safeDistance(target.getLocation(), loc);
                                 if (dist < 20 && dist > 3) {
                                     if (rng.nextBoolean()) {
                                         // 小火球（设置shooter归属法师）
@@ -279,13 +279,23 @@ public class EliteClassAI implements Listener {
             org.bukkit.entity.Arrow arrow = e.launchProjectile(org.bukkit.entity.Arrow.class);
             arrow.setShooter(e);
             org.bukkit.util.Vector dir = to.toVector().subtract(from.toVector()).normalize();
-            double dist = from.distance(to);
+            double dist = safeDistance(from, to);
             // 抛物线补偿 + 等级伤害加成
             arrow.setVelocity(dir.multiply(1.9).setY(dir.getY() + dist * 0.03));
             arrow.setDamage(arrow.getDamage() + EliteMobManager.getEliteLevel(e) * 0.3);
             arrow.setKnockbackStrength(1);
             e.getWorld().playSound(from, org.bukkit.Sound.ENTITY_ARROW_SHOOT, 1.0f, 0.9f);
         } catch (Exception ignored) {}
+    }
+
+    /**
+     * 安全距离：Bukkit 不允许对不同世界的 Location 测距（会抛 IllegalArgumentException），
+     * 跨世界（如怪在下界、目标在主城）时返回极大值，避免异常刷屏。
+     */
+    private static double safeDistance(Location a, Location b) {
+        if (a == null || b == null) return Double.MAX_VALUE;
+        if (!a.getWorld().equals(b.getWorld())) return Double.MAX_VALUE;
+        return a.distance(b);
     }
 
     // ==================== 怪物专属技能（按类型特征） ====================
@@ -296,7 +306,9 @@ public class EliteClassAI implements Listener {
         LivingEntity target = mob.getTarget();
         if (target == null) return;
         boolean bypass = target instanceof Player p && p.hasPermission("elitemobs.bypass");
-        double dist = e.getLocation().distance(target.getLocation());
+        // 跨世界目标（如怪在下界、目标在主城）视为极远，跳过技能逻辑，避免跨世界测距异常
+        if (!e.getWorld().equals(target.getWorld())) return;
+        double dist = safeDistance(e.getLocation(), target.getLocation());
         switch (t) {
             case SPIDER, CAVE_SPIDER -> { // 蜘蛛：蛛网困敌 + 投毒
                 if (tick % 120 == 0) {
@@ -462,7 +474,6 @@ public class EliteClassAI implements Listener {
             return;
         }
         tankDisplays.put(e.getUniqueId(), arr);
-        plugin.getLogger().info("[EliteMobs] \u5df2\u4e3a\u5766\u514b " + e.getType().name() + " \u521b\u5efa " + n + " \u4e2a\u98de\u7ed5\u56fe\u817e");
     }
 
     /** 每 tick 更新坦克飞绕图腾（绕身体平滑旋转 + 跟随怪物移动，velocity 推进防卡顿） */

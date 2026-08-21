@@ -1,5 +1,5 @@
 # ============================================
-#  EliteMobs v29.13.3 - 配置文件
+#  EliteMobs v29.16.0 - 配置文件
 #  适用 Paper 1.21+ / Paper 26.x
 #  作者: crystalkingdom团队
 # ============================================
@@ -57,12 +57,12 @@ features:
     enabled: true
     speed-bonus: 0.12        # 夜间额外速度
     damage-multiplier: 1.2   # 夜间伤害倍率
-    spawn-multiplier: 1.5    # 夜间生成倍率
+    spawn-multiplier: 1.2    # 夜间生成倍率
     vanilla-mobs: true       # 原版怪物夜间是否也获得同等强化
     # 月相系统（借鉴原版 MoonPhaseDetector）：满月夜精英生成率/强度额外提升
     moon-phase:
       enabled: true
-      full-moon-spawn-multiplier: 2.0   # 满月夜生成率额外倍率
+      full-moon-spawn-multiplier: 1.3   # 满月夜生成率额外倍率
       full-moon-strength: true          # 满月夜精英额外获得力量/抗性
       full-moon-strength-level: 1       # 满月额外力量等级（0=一级）
 
@@ -84,6 +84,32 @@ features:
     cooldown-ticks: 80
     return-on-death: true
     max-stolen-items: 3
+
+  # 世界AI增强（原版怪物行为增强）
+  world-ai:
+    enabled: true
+    # 玩家受伤时附近怪物索敌
+    attract-on-hurt: true
+    attract-radius: 12
+    # 单次最多吸引的怪物数量（范围内随机挑选，避免全部围过来）
+    max-attract-per-trigger: 10
+    # 吸引冷却（秒）：受伤/低血/饥饿共享，防反复拉怪
+    attract-cooldown: 5
+    # 玩家低血量时吸引怪物（血量低于阈值比例）
+    attract-on-low-hp: true
+    low-hp-threshold: 0.3
+    # 玩家严重饥饿时吸引怪物（饥饿值低于阈值）
+    attract-on-hunger: true
+    hunger-threshold: 6
+    # 挖掘方块声音吸引怪物
+    attract-on-break: true
+    break-attract-radius: 12
+    # 僵尸发现光源并去探索
+    zombie-light-explore: true
+    light-search-radius: 10
+    # 怪物聚集（默认关闭，避免扎堆“洪水感”）
+    mob-gathering: false
+    gather-radius: 10
 
   damage-scaling:
     enabled: true
@@ -337,6 +363,7 @@ rune:
     money: 1000.0
     points: 50
     xp-levels: 30
+    level-scaling: true   # 金币/经验随符文等级增长（Lv.N = 基础 × N），点券固定
   # 精英怪极难掉落（Boss 概率 ×2）
   drops:
     enabled: true
@@ -351,34 +378,35 @@ rune:
     enabled: true
 
 # --- 强化菜单 / 商城（/emmenu 主界面 → 二级菜单；含宝石商城 + 符文商城） ---
-# 价格 = 基础价 × 等级（Lv.1=基础价，Lv.2=2倍……）
+# 宝石价格 = 基础价 × 等级系数（系数 = 1 + 等级×(等级-1)/10，越高级越贵，Lv.10 = 10 倍基础价）
 # 两种货币任选其一支付（金币优先，金币不足/不可用时自动用点券，无需两种都付）
 shop:
   enabled: true
-  # 宝石价格：格式 "<id>: 金币 点券"（实际价格 = 基础 × 等级，Lv.1=基础价）
+  gem-daily-limit: 10   # 宝石每日每人限购（所有宝石合计，0=不限）
+  # 宝石价格：格式 "<id>: 金币 点券"（Lv.1=基础价，Lv.N = 基础价 × (1 + N×(N-1)/10)）
   gem-prices:
-    attack_gem: "2000 600"
-    defense_gem: "2000 600"
-    magnet_gem: "2000 600"
-    double_jump_gem: "2000 600"
-    unbreaking_gem: "2000 600"
-    thunder_gem: "3000 900"
-    knockback_gem: "3000 900"
-    lifesteal_gem: "3000 900"
-    fire_aspect_gem: "3000 900"
-    rare_skull: "5000 1500"
-  # 符文价格（Lv.1 起点：金币 20000 / 点券 5000）
+    attack_gem: "5000 200"
+    defense_gem: "5000 200"
+    magnet_gem: "5000 200"
+    double_jump_gem: "5000 200"
+    unbreaking_gem: "5000 200"
+    thunder_gem: "5000 200"
+    knockback_gem: "5000 200"
+    lifesteal_gem: "5000 200"
+    fire_aspect_gem: "5000 200"
+    rare_skull: "5000 200"
+  # 符文价格（Lv.1 基础价 = 20万金币/1500点券；实际 = 基础 × 等级，商城最高出售 Lv.5 = 100万金币）
   rune-prices:
-    HEALTH: "20000 5000"
-    SPEED: "20000 5000"
-    STRENGTH: "25000 7000"
-    REGEN: "25000 7000"
-    RESIST: "30000 9000"
-    FIRE: "30000 9000"
+    HEALTH: "200000 1500"
+    SPEED: "200000 1500"
+    STRENGTH: "200000 1500"
+    REGEN: "200000 1500"
+    RESIST: "200000 1500"
+    FIRE: "200000 1500"
   # 消耗品价格（淬炼保护符 / 宝石拆卸器）
   utility-prices:
-    protection-charm: "1000 300"
-    gem-remover: "5000 1500"
+    protection-charm: "1000 100"
+    gem-remover: "5000 200"
 
 # ============================================
 #  宝石/掉落物配置

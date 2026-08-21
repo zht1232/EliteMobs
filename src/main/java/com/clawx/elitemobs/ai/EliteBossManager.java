@@ -503,6 +503,7 @@ public class EliteBossManager implements Listener {
             }
             case 5 -> { // 飞扑下坠：主动飞起 → 追踪锁定玩家 → 猛砸落地（给目标 title 预警）
                 if (!(boss instanceof Mob bm) || !(bm.getTarget() instanceof Player tp)) return;
+                if (!boss.getWorld().equals(tp.getWorld())) return; // 跨世界目标跳过
                 double dist = boss.getLocation().distance(tp.getLocation());
                 if (dist < 3 || dist > 20) return; // 太近/太远不飞扑
                 tp.sendTitle(ChatColor.RED + "\u26a0 \u98de\u6251\uff01",
@@ -511,6 +512,7 @@ public class EliteBossManager implements Listener {
             }
             case 6 -> { // 声波（仿寻声守卫）：远程穿墙声波攻击目标玩家
                 if (!(boss instanceof Mob bm) || !(bm.getTarget() instanceof Player tp)) return;
+                if (!boss.getWorld().equals(tp.getWorld())) return; // 跨世界目标跳过
                 double d = boss.getLocation().distance(tp.getLocation());
                 if (d < 2 || d > 24) return;
                 sonicBoom(boss, tp);

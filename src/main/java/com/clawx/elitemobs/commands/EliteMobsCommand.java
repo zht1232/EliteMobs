@@ -3,13 +3,17 @@ package com.clawx.elitemobs.commands;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.command.*;
 import org.bukkit.entity.*;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import com.clawx.elitemobs.EliteMobsPlugin;
 import com.clawx.elitemobs.EliteMobManager;
+import com.clawx.elitemobs.essence.EliteEssenceUpgradeListener;
 import com.clawx.elitemobs.utils.StringUtil;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -38,6 +42,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             case "particle" -> particleTest(sender, args);
             case "gem" -> gemCmd(sender, args);
             case "rune" -> runeCmd(sender, args);
+            case "fixgear", "fixnetherite" -> fixNetheriteGear(sender, args);
 
             default -> showHelp(sender);
         }
@@ -73,7 +78,43 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,"");
         msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u7b26\u6587\u6307\u4ee4 \u2501\u2501\u2501");
         msg(s,ChatColor.YELLOW+"/em rune list"+ChatColor.GRAY+" \u2014 \u5217\u51fa\u6240\u6709\u7b26\u6587\u7c7b\u578b");
-        msg(s,ChatColor.YELLOW+"/em rune give <\u7c7b\u578b> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u7b26\u6587\uff08HEALTH/SPEED/STRENGTH/REGEN/RESIST/FIRE\uff09");    }
+        msg(s,ChatColor.YELLOW+"/em rune give <\u7c7b\u578b> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u7b26\u6587\uff08HEALTH/SPEED/STRENGTH/REGEN/RESIST/FIRE\uff09");
+        msg(s,"");
+        msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u7ba1\u7406\u6307\u4ee4 \u2501\u2501\u2501");
+        msg(s,ChatColor.YELLOW+"/em fixgear [\u73a9\u5bb6\u540d]"+ChatColor.GRAY+" \u2014 \u4fee\u590d\u5386\u53f2\u5347\u7ea7\u4e0b\u754c\u5408\u91d1\u7684\u6dec\u70bc\u88c5\u5907\u5c5e\u6027\uff08\u9ed8\u8ba4\u5168\u4f53\u5728\u7ebf\u73a9\u5bb6\uff09");    }
+
+    // ---- 修复历史下界合金装备属性（全体在线玩家 / 指定玩家） ----
+    private void fixNetheriteGear(CommandSender s, String[] args) {
+        if (!has(s, "elitemobs.admin")) return;
+        EliteEssenceUpgradeListener ess = plugin.getEssenceListener();
+        if (ess == null) { msg(s, ChatColor.RED + "✘ 淬炼监听器未就绪！"); return; }
+        List<Player> targets = new ArrayList<>();
+        if (args.length >= 2) {
+            Player t = Bukkit.getPlayerExact(args[1]);
+            if (t == null) { msg(s, ChatColor.RED + "✘ 玩家不在线: " + args[1]); return; }
+            targets.add(t);
+        } else {
+            targets.addAll(Bukkit.getOnlinePlayers());
+        }
+        int fixed = 0;
+        for (Player p : targets) {
+            boolean any = false;
+            PlayerInventory inv = p.getInventory();
+            for (int i = 0; i < inv.getSize(); i++) {
+                ItemStack it = inv.getItem(i);
+                if (it == null || it.getType() == Material.AIR) continue;
+                if (ess.isNetheriteAttributeBroken(it)) { inv.setItem(i, ess.fixUpgradedItem(it)); fixed++; any = true; }
+            }
+            Inventory ec = p.getEnderChest();
+            for (int i = 0; i < ec.getSize(); i++) {
+                ItemStack it = ec.getItem(i);
+                if (it == null || it.getType() == Material.AIR) continue;
+                if (ess.isNetheriteAttributeBroken(it)) { ec.setItem(i, ess.fixUpgradedItem(it)); fixed++; any = true; }
+            }
+            if (any) p.sendMessage(ChatColor.GREEN + "✔ 管理员已自动修复你的部分下界合金装备属性！");
+        }
+        msg(s, ChatColor.GREEN + "✔ 已扫描 " + targets.size() + " 名玩家，修复 " + fixed + " 件下界合金装备（含末影箱）");
+    }
 
     // ---- \u72b6\u6001 ----
     private void showInfo(CommandSender s) {
@@ -591,7 +632,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender s,Command c,String l,String[] a){
-        if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","stealtest","boss","particle","gem","rune").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
+        if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","stealtest","boss","particle","gem","rune","fixgear").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
         if(a.length==2&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")||a[0].equalsIgnoreCase("boss")))
             return plugin.getEliteConfig().getEnabledMobTypes().stream().map(x->x.name().toLowerCase()).filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
         if(a.length==4&&a[0].equalsIgnoreCase("spawn"))

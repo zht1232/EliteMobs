@@ -1188,6 +1188,187 @@ public class EliteEssenceUpgradeListener implements Listener {
         }
     }
 
+    // ==================== 锻造升级（下界合金）属性修正 ====================
+
+    /** 淬炼装备经锻造台升级为下界合金后，原版锻造会保留旧材质的基础修饰符（武器攻击/护甲韧性/击退抗性不更新），
+     *  这里在结果生成时修正为当前材质的基准值，并重新叠加淬炼加成与 Lore。 */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPrepareSmithing(PrepareSmithingEvent event) {
+        ItemStack result = event.getResult();
+        if (result == null || !result.hasItemMeta()) return;
+        if (!result.getType().name().contains("NETHERITE")) return;   // 只处理下界合金升级
+        if (EliteGemFactory.totalGemLevel(result) <= 0) return;       // 非本插件淬炼装备
+        ItemStack fixed = fixSmithedAttributes(result);
+        event.setResult(fixed);
+        event.getInventory().setItem(3, fixed);
+    }
+
+    /** 修正锻造升级后的基础属性（攻击基准 / 护甲韧性 / 击退抗性），并重叠加成与 Lore。 */
+    private ItemStack fixSmithedAttributes(ItemStack item) {
+        if (isWeapon(item)) fixWeaponBaseDamage(item);
+        else if (isArmor(item)) fixArmorBaseAttributes(item);
+        // 重新叠加宝石加成（保留原生修饰符，仅重写 elite_*），确保升级不丢淬炼加成
+        applyAllGemEffects(item);
+        rebuildLore(item, plugin.getMessages());
+        return item;
+    }
+
+    /** 修复单个淬炼装备（供指令批量修复历史下界合金装备属性）。 */
+    public ItemStack fixUpgradedItem(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return item;
+        if (!item.getType().name().contains("NETHERITE")) return item;
+        if (EliteGemFactory.totalGemLevel(item) <= 0) return item;
+        return fixSmithedAttributes(item);
+    }
+
+    /** 检测淬炼下界合金装备的基础属性是否残留旧材质值（需要修复）。 */
+    public boolean isNetheriteAttributeBroken(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        if (!item.getType().name().contains("NETHERITE")) return false;
+        if (EliteGemFactory.totalGemLevel(item) <= 0) return false;
+        if (isWeapon(item)) {
+            double target = getVanillaBaseDamage(item.getType()) - 1.0;
+            if (target >= 0) {
+                ItemAttributeModifiers am = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+                if (am == null) return false;
+                boolean found = false;
+                for (ItemAttributeModifiers.Entry e : am.modifiers()) {
+                    if (e.attribute() == Attribute.ATTACK_DAMAGE
+                            && e.modifier().getOperation() == AttributeModifier.Operation.ADD_NUMBER) {
+                        found = true;
+                        if (Math.abs(e.modifier().getAmount() - target) > 0.001) return true;
+                    }
+                }
+                if (!found) return true; // 连攻击修饰符都没有（异常）
+            }
+            // 攻击宝石存在但 elite_damage 修饰符缺失（属性组件被重置/丢失）→ 需修复
+            return hasGemEffect(item, "attack") && !hasModifierKey(item, "elite_damage");
+        }
+        if (isArmor(item)) {
+            double toughness = getVanillaToughness(item.getType());
+            double kbRes = getVanillaKnockbackResistance(item.getType());
+            ItemAttributeModifiers am = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+            if (am != null) {
+                boolean tFound = false, kbFound = false;
+                for (ItemAttributeModifiers.Entry e : am.modifiers()) {
+                    if (e.attribute() == Attribute.ARMOR_TOUGHNESS
+                            && e.modifier().getOperation() == AttributeModifier.Operation.ADD_NUMBER) {
+                        tFound = true;
+                        if (Math.abs(e.modifier().getAmount() - toughness) > 0.001) return true;
+                    }
+                    if (e.attribute() == Attribute.KNOCKBACK_RESISTANCE
+                            && e.modifier().getOperation() == AttributeModifier.Operation.ADD_NUMBER) {
+                        kbFound = true;
+                        if (Math.abs(e.modifier().getAmount() - kbRes) > 0.001) return true;
+                    }
+                }
+                if (toughness > 0 && !tFound) return true;
+                if (kbRes > 0 && !kbFound) return true;
+            }
+            // 防御宝石存在但 elite_armor 修饰符缺失（属性组件被重置/丢失）→ 需修复
+            return hasGemEffect(item, "defense") && !hasModifierKey(item, "elite_armor");
+        }
+        return false;
+    }
+
+    /** 装备上是否存在指定效果类型的宝石（attack / defense 等）。 */
+    private boolean hasGemEffect(ItemStack item, String effect) {
+        String[] ids = EliteGemFactory.getInstalledGems(item);
+        for (int i = 0; i < EliteGemFactory.MAX_GEM_SLOTS; i++) {
+            if (ids[i] != null && effect.equals(gemEffectFor(ids[i]))) return true;
+        }
+        return false;
+    }
+
+    /** 装备属性修饰符中是否存在 key 前缀匹配的修饰符。 */
+    private boolean hasModifierKey(ItemStack item, String keyPrefix) {
+        ItemAttributeModifiers am = item.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (am == null) return false;
+        for (ItemAttributeModifiers.Entry e : am.modifiers()) {
+            if (e.modifier().getKey().getKey().startsWith(keyPrefix)) return true;
+        }
+        return false;
+    }
+
+    /** 修正武器攻击基准：ATTACK_DAMAGE ADD_NUMBER 修正为当前材质（下界合金）基准值。 */
+    private void fixWeaponBaseDamage(ItemStack weapon) {
+        double base = getVanillaBaseDamage(weapon.getType());
+        if (base <= 0) return;
+        double target = base - 1.0;   // ADD_NUMBER 修饰符 = 总伤害 - 1
+        ItemAttributeModifiers existing = weapon.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (existing == null) return;
+        ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.itemAttributes();
+        boolean fixed = false;
+        for (ItemAttributeModifiers.Entry e : existing.modifiers()) {
+            // 只修正原版基础攻击修饰符；跳过本插件修饰符（elite_*，由 applyAllGemEffects 重写，避免误覆盖淬炼加成）
+            if (e.attribute() == Attribute.ATTACK_DAMAGE
+                    && e.modifier().getOperation() == AttributeModifier.Operation.ADD_NUMBER
+                    && !e.modifier().getKey().getKey().startsWith("elite_")) {
+                AttributeModifier nm = new AttributeModifier(e.modifier().getKey(), target,
+                        AttributeModifier.Operation.ADD_NUMBER, e.getGroup());
+                builder.addModifier(Attribute.ATTACK_DAMAGE, nm, e.getGroup());
+                fixed = true;
+            } else {
+                builder.addModifier(e.attribute(), e.modifier(), e.getGroup());
+            }
+        }
+        if (!fixed) {
+            AttributeModifier nm = new AttributeModifier(new NamespacedKey(plugin, "vanilla_damage"), target,
+                    AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND);
+            builder.addModifier(Attribute.ATTACK_DAMAGE, nm, EquipmentSlotGroup.MAINHAND);
+        }
+        weapon.setData(DataComponentTypes.ATTRIBUTE_MODIFIERS, builder.build());
+    }
+
+    /** 修正护甲基础属性：护甲韧性（下界合金 3）与击退抗性（下界合金 0.1）——原版锻造会保留旧材质值。 */
+    private void fixArmorBaseAttributes(ItemStack armor) {
+        double toughness = getVanillaToughness(armor.getType());
+        double kbRes = getVanillaKnockbackResistance(armor.getType());
+        ItemAttributeModifiers existing = armor.getData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
+        if (existing == null) return;
+        ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.itemAttributes();
+        boolean tFound = false, kbFound = false;
+        for (ItemAttributeModifiers.Entry e : existing.modifiers()) {
+            if (e.attribute() == Attribute.ARMOR_TOUGHNESS
+                    && e.modifier().getOperation() == AttributeModifier.Operation.ADD_NUMBER) {
+                AttributeModifier nm = new AttributeModifier(e.modifier().getKey(), toughness,
+                        AttributeModifier.Operation.ADD_NUMBER, e.getGroup());
+                builder.addModifier(Attribute.ARMOR_TOUGHNESS, nm, e.getGroup());
+                tFound = true;
+            } else {
+                builder.addModifier(e.attribute(), e.modifier(), e.getGroup());
+                if (e.attribute() == Attribute.KNOCKBACK_RESISTANCE
+                        && e.modifier().getOperation() == AttributeModifier.Operation.ADD_NUMBER) kbFound = true;
+            }
+        }
+        if (!tFound && toughness > 0) {
+            EquipmentSlotGroup g = slotGroupFor(armor.getType());
+            AttributeModifier nm = new AttributeModifier(new NamespacedKey(plugin, "vanilla_toughness"),
+                    toughness, AttributeModifier.Operation.ADD_NUMBER, g);
+            builder.addModifier(Attribute.ARMOR_TOUGHNESS, nm, g);
+        }
+        if (!kbFound && kbRes > 0) {
+            EquipmentSlotGroup g = slotGroupFor(armor.getType());
+            AttributeModifier nm = new AttributeModifier(new NamespacedKey(plugin, "vanilla_kb"),
+                    kbRes, AttributeModifier.Operation.ADD_NUMBER, g);
+            builder.addModifier(Attribute.KNOCKBACK_RESISTANCE, nm, g);
+        }
+        armor.setData(DataComponentTypes.ATTRIBUTE_MODIFIERS, builder.build());
+    }
+
+    /** 原版护甲韧性（下界合金 3 / 钻石 2，其余 0）。 */
+    private static double getVanillaToughness(Material m) {
+        String n = m.name();
+        if (n.contains("NETHERITE")) return 3.0;
+        if (n.contains("DIAMOND")) return 2.0;
+        return 0.0;
+    }
+
+    /** 原版击退抗性（仅下界合金 0.1）。 */
+    private static double getVanillaKnockbackResistance(Material m) {
+        return m.name().contains("NETHERITE") ? 0.1 : 0.0;
+    }
+
     // ==================== 基准值表（原版） ====================
 
     private static double getVanillaBaseDamage(Material m) {

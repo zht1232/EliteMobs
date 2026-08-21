@@ -26,6 +26,7 @@ import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.ItemAttributeModifiers;
 
 import com.clawx.elitemobs.EconomyHook;
+import com.clawx.elitemobs.EliteConfig;
 import com.clawx.elitemobs.EliteMobManager;
 import com.clawx.elitemobs.EliteMobsPlugin;
 
@@ -46,6 +47,10 @@ public class EliteRuneListener implements Listener {
     private final EliteMobsPlugin plugin;
     private final Random rng = new Random();
     private final NamespacedKey HINT;
+    /** 火焰符文：抗火触发后的冷却（tick）。 */
+    private static final int FIRE_COOLDOWN_TICKS = 100;   // 5 秒
+    /** 火焰符文：玩家 -> 下次允许触发抗火的毫秒时间戳（效果时长 + 冷却）。 */
+    private final Map<UUID, Long> fireCdUntil = new HashMap<>();
 
     public EliteRuneListener(EliteMobsPlugin plugin) {
         this.plugin = plugin;
@@ -124,15 +129,25 @@ public class EliteRuneListener implements Listener {
         }
     }
 
-    /** 执行符文镶嵌（消耗金币+点券+经验）。 */
+    /** 执行符文镶嵌（消耗金币+点券+经验；金币/经验随符文等级线性增长）。 */
     private void doInstallRune(Player p, AnvilInventory inv, ItemStack equip, ItemStack rune) {
-        // 需要：金币 / 点券 / 经验（软依赖缺失时跳过对应项）
-        double moneyCost = plugin.getEliteConfig().getRuneMoneyCost();
-        int pointsCost = plugin.getEliteConfig().getRunePointsCost();
-        int xpCost = plugin.getEliteConfig().getRuneXpCost();
+        String runeType = EliteRuneFactory.getRuneType(rune);
+        if (runeType == null) return;
+        int runeLevel = EliteRuneFactory.getRuneLevel(rune);
+        if (runeLevel < 1) runeLevel = 1;
+
+        // 基础消耗（可配置）；开启等级缩放时金币/经验 = 基础 × 符文等级（点券保持固定）
+        EliteConfig cfg = plugin.getEliteConfig();
+        double moneyCost = cfg.getRuneMoneyCost();
+        int pointsCost = cfg.getRunePointsCost();
+        int xpCost = cfg.getRuneXpCost();
+        if (cfg.isRuneCostLevelScaling()) {
+            moneyCost *= runeLevel;
+            xpCost *= runeLevel;
+        }
 
         if (moneyCost > 0 && EconomyHook.isVaultReady() && EconomyHook.getMoney(p) < moneyCost) {
-            p.sendMessage(ChatColor.RED + "✘ 金币不足！需要 " + ChatColor.GOLD + moneyCost + ChatColor.RED + " 金币");
+            p.sendMessage(ChatColor.RED + "✘ 金币不足！需要 " + ChatColor.GOLD + fmt(moneyCost) + ChatColor.RED + " 金币");
             return;
         }
         if (pointsCost > 0 && EconomyHook.isPlayerPointsReady() && EconomyHook.getPoints(p) < pointsCost) {
@@ -144,9 +159,6 @@ public class EliteRuneListener implements Listener {
             return;
         }
 
-        String runeType = EliteRuneFactory.getRuneType(rune);
-        if (runeType == null) return;
-        int runeLevel = EliteRuneFactory.getRuneLevel(rune);
         int slot = EliteRuneFactory.installRune(equip, runeType, runeLevel);
         if (slot < 0) { p.sendMessage(ChatColor.RED + "✘ 符文槽已满！"); return; }
 
@@ -194,6 +206,11 @@ public class EliteRuneListener implements Listener {
                 "&e&l✦ &f合成成功！&b" + EliteRuneFactory.TYPES.get(t0).coloredName
                 + " &7Lv." + (l0 + 1)));
         p.getWorld().playSound(p.getLocation(), org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f);
+    }
+
+    /** 数值格式化：整数不显示小数位。 */
+    private static String fmt(double v) {
+        return v == Math.floor(v) ? String.valueOf((long) v) : String.format("%.1f", v);
     }
 
     /** 消耗铁砧某个输入槽的 1 个物品。 */
@@ -405,6 +422,20 @@ public class EliteRuneListener implements Listener {
                         applyPotionRune(p, r, levels[i]);
                     }
                 }
+                // 火焰符文：检测玩家着火 → 直接触发抗火（时长 = 等级 秒），效果结束后需冷却才能再次触发
+                if (p.getFireTicks() > 0) {
+                    int flv = highestFireRuneLevel(p);
+                    long now = System.currentTimeMillis();
+                    if (flv > 0 && now >= fireCdUntil.getOrDefault(p.getUniqueId(), 0L)) {
+                        // Lv.N = N 秒抗火（20 tick = 1 秒）
+                        p.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, flv * 20, 0, true, false));
+                        // 下次触发 = 本次触发 + 效果时长 + 冷却
+                        fireCdUntil.put(p.getUniqueId(), now + (flv * 20L + FIRE_COOLDOWN_TICKS) * 50L);
+                    }
+                } else {
+                    // 不在着火状态：清除冷却记录（新一次着火视为新事件，直接触发），并防止 Map 无限增长
+                    fireCdUntil.remove(p.getUniqueId());
+                }
             }
         }, 40L, 40L);
     }
@@ -416,9 +447,25 @@ public class EliteRuneListener implements Listener {
             case "STRENGTH" -> p.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 80, amp, true, false));
             case "REGEN" -> p.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 80, amp, true, false));
             case "RESIST" -> p.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 80, amp, true, false));
-            case "FIRE" -> p.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 80, 0, true, false));
+            // FIRE（火焰符文）已改为检测着火触发：抗火时长随等级提升、有冷却（见 startRunePotionTask）
             default -> {}
         }
+    }
+
+    /** 装备与主手上等级最高的火焰符文等级（无则 0）。 */
+    private int highestFireRuneLevel(Player p) {
+        int best = 0;
+        for (ItemStack item : new ItemStack[]{p.getInventory().getHelmet(),
+                p.getInventory().getChestplate(), p.getInventory().getLeggings(),
+                p.getInventory().getBoots(), p.getInventory().getItemInMainHand()}) {
+            if (item == null || !item.hasItemMeta()) continue;
+            String[] runes = EliteRuneFactory.getInstalledRunes(item);
+            int[] levels = getInstalledRuneLevels(item);
+            for (int i = 0; i < runes.length; i++) {
+                if ("FIRE".equals(runes[i])) best = Math.max(best, levels[i]);
+            }
+        }
+        return best;
     }
 
     // ==================== 工具 ====================
