@@ -321,6 +321,16 @@ public class EliteEssenceUpgradeListener implements Listener {
                 }
             }
             meta.getPersistentDataContainer().set(isWeapon ? UK : AUK, PersistentDataType.BYTE, (byte) 1);
+            // 首次淬炼：初始化武器熟练度数据（0 星 + 0 击杀；之后靠击杀升星）。
+            // 旧版武器若已有星级（旧版"淬炼成功+1星"获得）则保留星数，只补击杀计数。
+            if (isWeapon && plugin.getEliteConfig().isProfEnabled()) {
+                if (!meta.getPersistentDataContainer().has(EliteGemFactory.KEY_PROF, PersistentDataType.INTEGER)) {
+                    meta.getPersistentDataContainer().set(EliteGemFactory.KEY_PROF, PersistentDataType.INTEGER, 0);
+                }
+                if (!meta.getPersistentDataContainer().has(EliteGemFactory.KEY_PROF_KILLS, PersistentDataType.INTEGER)) {
+                    meta.getPersistentDataContainer().set(EliteGemFactory.KEY_PROF_KILLS, PersistentDataType.INTEGER, 0);
+                }
+            }
             equip.setItemMeta(meta);
         }
 
@@ -328,10 +338,6 @@ public class EliteEssenceUpgradeListener implements Listener {
             // 成功：装备上该宝石等级 +1（新宝石从 Lv.1 开始；宝石自身等级只影响成功率）
             int newGemLevel = Math.min(10, curGemLevel + 1);
             EliteGemFactory.setGemSlot(equip, slot, gemId, newGemLevel);
-            // 淬炼成功：武器熟练度 +1 星（封顶；熟练度提升暴击率与后续成功率；仅武器）
-            if (cfg.isProfEnabled() && isWeapon(equip)) {
-                EliteGemFactory.addProf(equip, cfg.getProfMaxStars());
-            }
         } else if (hasCharm) {
             // 失败但有保护符：防降级，但宝石仍消耗
             consumeCharmFromPlayer(player);
@@ -689,6 +695,7 @@ public class EliteEssenceUpgradeListener implements Listener {
         pdc.remove(EliteMobManager.ARMOR_LV_KEY);
         pdc.remove(EliteGemFactory.KEY_QUALITY);
         pdc.remove(EliteGemFactory.KEY_PROF);
+        pdc.remove(EliteGemFactory.KEY_PROF_KILLS);
         // 清空宝石槽与符文槽残留
         for (int i = 0; i < EliteGemFactory.MAX_GEM_SLOTS; i++) {
             pdc.remove(EliteGemFactory.KEY_GEM_SLOTS[i]);
@@ -869,7 +876,7 @@ public class EliteEssenceUpgradeListener implements Listener {
                             .replace("{reduction}", String.format("%.1f", def))));
         }
 
-        // 武器熟练度（仅武器；星级 + 暴击率）
+        // 武器熟练度（仅武器；星级 + 暴击率 + 击杀进度）
         if (isW && plugin.getEliteConfig().isProfEnabled()) {
             int stars = EliteGemFactory.getProf(equip);
             double crit = Math.min(stars * plugin.getEliteConfig().getProfCritPerStar(),
@@ -879,6 +886,25 @@ public class EliteEssenceUpgradeListener implements Listener {
                             "   &7熟练度&8：{stars} &7(&6暴击+{crit}%&7)")
                             .replace("{stars}", EliteGemFactory.profStars(stars))
                             .replace("{crit}", String.format("%.0f", crit * 100))));
+            // 击杀进度（击杀驱动升星，指数增长；满星显示已满级）
+            if (stars < plugin.getEliteConfig().getProfMaxStars()) {
+                int need = EliteGemFactory.profKillThreshold(stars + 1,
+                        plugin.getEliteConfig().getProfKillBase(), plugin.getEliteConfig().getProfKillGrowth());
+                int kills = EliteGemFactory.getProfKills(equip);
+                int shownKills = Math.min(kills, need);
+                String tip = plugin.getEliteConfig().getProfEliteKillMultiplier() > 1
+                        ? " &8(精英×" + plugin.getEliteConfig().getProfEliteKillMultiplier() + ")"
+                        : "";
+                lore.add(ChatColor.translateAlternateColorCodes('&',
+                        msg(msgs, "essence-upgrade.lore.progress",
+                                "   &7熟练进度&8：&f{kills}/{need} &7击杀{tip}")
+                                .replace("{kills}", String.valueOf(shownKills))
+                                .replace("{need}", String.valueOf(need))
+                                .replace("{tip}", tip)));
+            } else {
+                lore.add(ChatColor.translateAlternateColorCodes('&',
+                        msg(msgs, "essence-upgrade.lore.progress-max", "   &7熟练进度&8：&a已满级")));
+            }
         }
         lore.add(sep);
 

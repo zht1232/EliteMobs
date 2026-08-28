@@ -425,7 +425,7 @@ public class EliteCombatListener implements Listener {
     // ==================== 武器熟练度暴击（weapon-proficiency） ====================
 
     /**
-     * 武器熟练度暴击：武器每淬炼成功 1 次 +1 星（封顶），每星提供暴击率；
+     * 武器熟练度暴击：武器每击杀累计熟练度（击杀驱动升星），每星提供暴击率；
      * 暴击伤害 = 基础伤害 × 倍率（满星额外加成）；被 Boss 封印时失效；
      * 不对玩家生效（PVP 不暴击）；不作用于宝石触发的额外伤害（防重入）。
      */
@@ -451,6 +451,72 @@ public class EliteCombatListener implements Listener {
         event.getEntity().getWorld().playSound(event.getEntity().getLocation(), Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.0f, 1.2f);
         EliteMobManager.spawnParticleSafe(event.getEntity().getWorld(),
                 Particle.CRIT, event.getEntity().getLocation().add(0, 1, 0), 12);
+    }
+
+    // ==================== 武器熟练度：击杀统计（击杀驱动升星） ====================
+
+    /**
+     * 玩家用已淬炼武器击杀敌对生物 → 熟练度击杀数 +1（精英 ×elite-kill-multiplier）；
+     * 达到指数阈值（第 N 星 = kill-base × kill-growth^(N-1)）自动升星。
+     * 刷怪笼刷出的怪不计（保护刷怪笼刷怪塔，与 exclude-spawner-mobs 一致）；
+     * 只统计怪物类（排除动物/水生/环境/村民/傀儡/悦灵/盔甲架/宠物）。
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onKillForProficiency(EntityDeathEvent event) {
+        EliteConfig cfg = plugin.getEliteConfig();
+        if (!cfg.isProfEnabled()) return;
+        LivingEntity e = event.getEntity();
+        if (e instanceof Player) return;
+        Player p = e.getKiller();
+        if (p == null || !p.isOnline()) return;
+        ItemStack hand = p.getInventory().getItemInMainHand();
+        if (!com.clawx.elitemobs.essence.EliteGemFactory.hasProfData(hand)) return; // 未淬炼武器不计
+        if (cfg.isProfExcludeSpawnerKills()) {
+            try {
+                if (e.getEntitySpawnReason() == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.SPAWNER) return;
+            } catch (Throwable ignored) {}
+        }
+        if (e instanceof Animals || e instanceof WaterMob || e instanceof Ambient
+                || e instanceof Villager || e instanceof AbstractVillager
+                || e instanceof Golem || e instanceof Allay
+                || e instanceof ArmorStand || e instanceof Tameable) return;
+        if (cfg.isProfCountEliteOnly() && !EliteMobManager.isElite(e)) return;
+        int amount = EliteMobManager.isElite(e) ? cfg.getProfEliteKillMultiplier() : 1;
+        addProfKillProgress(p, hand, amount);
+    }
+
+    /** 增加武器击杀进度并按指数阈值升星（含提示/音效/粒子）。 */
+    private void addProfKillProgress(Player p, ItemStack hand, int amount) {
+        EliteConfig cfg = plugin.getEliteConfig();
+        int stars = com.clawx.elitemobs.essence.EliteGemFactory.getProf(hand);
+        int max = cfg.getProfMaxStars();
+        if (stars >= max) return;
+        int kills = com.clawx.elitemobs.essence.EliteGemFactory.getProfKills(hand) + amount;
+        boolean leveled = false;
+        while (stars < max) {
+            int need = com.clawx.elitemobs.essence.EliteGemFactory.profKillThreshold(
+                    stars + 1, cfg.getProfKillBase(), cfg.getProfKillGrowth());
+            if (kills < need) break;
+            kills -= need;
+            stars++;
+            leveled = true;
+        }
+        if (kills != com.clawx.elitemobs.essence.EliteGemFactory.getProfKills(hand)) {
+            com.clawx.elitemobs.essence.EliteGemFactory.setProfKills(hand, kills);
+        }
+        if (stars != com.clawx.elitemobs.essence.EliteGemFactory.getProf(hand)) {
+            com.clawx.elitemobs.essence.EliteGemFactory.setProf(hand, stars);
+        }
+        if (leveled) {
+            double crit = Math.min(stars * cfg.getProfCritPerStar(), cfg.getProfMaxCritChance());
+            p.sendMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "[EliteMobs] " + ChatColor.YELLOW
+                    + "你的武器熟练度提升至 "
+                    + ChatColor.translateAlternateColorCodes('&', com.clawx.elitemobs.essence.EliteGemFactory.profStars(stars))
+                    + ChatColor.YELLOW + "！暴击率 +" + String.format("%.0f%%", crit * 100));
+            p.getWorld().playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f);
+            EliteMobManager.spawnParticleSafe(p.getWorld(), Particle.TOTEM_OF_UNDYING,
+                    p.getLocation().add(0, 1, 0), 16);
+        }
     }
 
     /** 根据宝石 id 返回效果类型（委托到 EliteConfig 缓存）。 */

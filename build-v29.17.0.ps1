@@ -1,4 +1,4 @@
-# Build script for EliteMobs v29.17.0 (Paper 26.2, JDK 25)
+# Build script for EliteMobs (Paper 26.2, JDK 25) - version auto-read from plugin.yml
 # Usage: pwsh -File build-v29.17.0.ps1
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -6,6 +6,11 @@ $JAVAC = "C:\Minecraftserver\DaemonData\Tools\Java\25\bin\javac.exe"
 $JAR = "C:\Minecraftserver\DaemonData\Tools\Java\25\bin\jar.exe"
 $Server = "C:\Minecraftserver\DaemonData\Servers\1"
 $Libs = "$Server\libraries"
+
+# auto version from plugin.yml (e.g. version: '29.17.1')
+$VerLine = Get-Content "$Root\src\main\resources\plugin.yml" | Where-Object { $_ -match '^version:' } | Select-Object -First 1
+$Ver = ($VerLine -replace ".*'([^']*)'.*", '$1').Trim()
+if (-not $Ver) { Write-Host "cannot read version from plugin.yml"; exit 1 }
 
 $Cp = @(
     "$Server\versions\26.2\paper-26.2.jar",
@@ -41,7 +46,7 @@ Copy-Item "$Root\src\main\resources\mobs.yml" $Tmp
 New-Item -ItemType Directory -Path "$Tmp\gems" -Force | Out-Null
 Copy-Item "$Root\src\main\resources\gems\*" "$Tmp\gems\" -Force
 
-$JarOut = "$Root\EliteMobs-29.17.0.jar"
+$JarOut = "$Root\EliteMobs-$Ver.jar"
 if (Test-Path $JarOut) { Remove-Item $JarOut -Force }
 Push-Location $Tmp
 & $JAR "cf" $JarOut "."

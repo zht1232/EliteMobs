@@ -201,6 +201,7 @@ public final class EliteGemFactory {
 
     public static final NamespacedKey KEY_QUALITY = new NamespacedKey("elitemobs", "quality");
     public static final NamespacedKey KEY_PROF = new NamespacedKey("elitemobs", "prof");
+    public static final NamespacedKey KEY_PROF_KILLS = new NamespacedKey("elitemobs", "prof_kills");
 
     public static final int Q_COMMON = 0;    // 普通
     public static final int Q_UNCOMMON = 1;  // 优秀
@@ -248,7 +249,13 @@ public final class EliteGemFactory {
         };
     }
 
-    // ==================== 武器熟练度（淬炼成功 +1 星，提升暴击率） ====================
+    // ==================== 武器熟练度（击杀驱动升星，指数增长，提升暴击率） ====================
+
+    /** 武器是否已初始化熟练度（已淬炼武器才有；无则击杀不计入）。 */
+    public static boolean hasProfData(ItemStack equip) {
+        return equip != null && equip.hasItemMeta()
+                && equip.getItemMeta().getPersistentDataContainer().has(KEY_PROF, PersistentDataType.INTEGER);
+    }
 
     /** 读取武器熟练度星级（0-5）。 */
     public static int getProf(ItemStack equip) {
@@ -257,14 +264,32 @@ public final class EliteGemFactory {
         return p == null ? 0 : Math.max(0, Math.min(5, p));
     }
 
-    /** 熟练度 +1 星（封顶 maxStars）。 */
-    public static void addProf(ItemStack equip, int maxStars) {
+    /** 写入熟练度星级（0-5）。 */
+    public static void setProf(ItemStack equip, int stars) {
         if (equip == null) return;
-        int cur = getProf(equip);
-        int max = Math.max(1, Math.min(5, maxStars));
-        if (cur >= max) return;
-        final int nv = cur + 1;
-        equip.editMeta(meta -> meta.getPersistentDataContainer().set(KEY_PROF, PersistentDataType.INTEGER, nv));
+        final int v = Math.max(0, Math.min(5, stars));
+        equip.editMeta(meta -> meta.getPersistentDataContainer().set(KEY_PROF, PersistentDataType.INTEGER, v));
+    }
+
+    /** 读取当前星级内的击杀进度（升星后清零重新累计）。 */
+    public static int getProfKills(ItemStack equip) {
+        if (equip == null || !equip.hasItemMeta()) return 0;
+        Integer k = equip.getItemMeta().getPersistentDataContainer().get(KEY_PROF_KILLS, PersistentDataType.INTEGER);
+        return k == null ? 0 : Math.max(0, k);
+    }
+
+    /** 写入击杀进度。 */
+    public static void setProfKills(ItemStack equip, int kills) {
+        if (equip == null) return;
+        final int v = Math.max(0, kills);
+        equip.editMeta(meta -> meta.getPersistentDataContainer().set(KEY_PROF_KILLS, PersistentDataType.INTEGER, v));
+    }
+
+    /** 第 star 颗星（star=1..max，即从 star-1 星升到 star 星）所需击杀数：base × growth^(star-1)（指数增长）。 */
+    public static int profKillThreshold(int star, int base, double growth) {
+        if (star <= 1) return Math.max(1, base);
+        double t = base * Math.pow(Math.max(1.0, growth), star - 1);
+        return (int) Math.max(1, Math.min(Integer.MAX_VALUE / 2L, Math.round(t)));
     }
 
     /** 星级显示：★（金色）/ ☆（灰色），如 3 星 → "&e★★★&7☆☆"。 */

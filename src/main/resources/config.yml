@@ -366,10 +366,18 @@ quality:
   #   普通 0% / 优秀 +2% / 传说 +5% / 史诗 +8% / 神话 +12%
   success-bonus: [0.0, 0.02, 0.05, 0.08, 0.12]
 
-# --- 武器熟练度（每次淬炼成功 +1 星，提升暴击率与淬炼成功率） ---
+# --- 武器熟练度（击杀驱动升星：击杀敌对生物累计熟练度，达阈值自动升星） ---
+# 升星所需击杀随星级指数增长：第 N 星 = kill-base × kill-growth^(N-1)
+#   默认 2000 / 4000 / 8000 / 16000 / 32000，满 5 星累计 62000 击杀
+#   普通怪 +1 击杀，精英怪按 elite-kill-multiplier 倍计数（鼓励野外打精英）
 weapon-proficiency:
   enabled: true
   max-stars: 5                 # 熟练度星级上限（1-5）
+  kill-base: 2000              # 第 1 颗星所需击杀数
+  kill-growth: 2.0             # 每星击杀需求倍率（指数增长）
+  elite-kill-multiplier: 5     # 击杀精英怪按 N 倍计数
+  count-elite-only: false      # true=只统计精英怪击杀（防暗房刷怪塔刷熟练度），false=普通怪也统计
+  exclude-spawner-kills: true  # 刷怪笼刷出的怪不计击杀（保护刷怪笼刷怪塔）
   crit-chance-per-star: 0.02   # 每星暴击率（满 5 星 = 10%）
   max-crit-chance: 0.10        # 暴击率上限
   crit-multiplier: 1.5         # 暴击伤害倍率（×1.5）

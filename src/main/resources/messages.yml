@@ -93,6 +93,8 @@ essence-upgrade:
     level: "   &7\u6dec\u70bc\u7b49\u7ea7&8\uff1a&bLv.{lvl}"
     attack: "   &7\u653b\u51fb\u529b&8\uff1a&c+{total} &4\u2764"
     proficiency: "   &7\u719f\u7ec3\u5ea6&8\uff1a{stars} &7(&6\u66b4\u51fb+{crit}%&7)"
+    progress: "   &7\u719f\u7ec3\u8fdb\u5ea6&8\uff1a&f{kills}/{need} &7\u51fb\u6740{tip}"
+    progress-max: "   &7\u719f\u7ec3\u8fdb\u5ea6&8\uff1a&a\u5df2\u6ee1\u7ea7"
     bonus: "   &7\u6dec\u70bc\u52a0\u6210&8\uff1a&a+{bonus}"
     gem-title: "&e\u2726 \u5b9d\u77f3\u69fd&7 ({used}/{max})"
     gem-empty: "   &8\u25c7 \u7a7a\u69fd"

@@ -189,13 +189,18 @@ public class EliteConfig {
     // 武器/护甲品质（quality）：首次淬炼时按权重掷定，影响后续淬炼成功率
     private int[] qualityWeights = {50, 30, 12, 6, 2};          // 普通/优秀/传说/史诗/神话
     private double[] qualitySuccessBonus = {0.0, 0.02, 0.05, 0.08, 0.12};
-    // 武器熟练度（weapon-proficiency）：每次淬炼成功 +1 星，提升暴击率
+    // 武器熟练度（weapon-proficiency）：击杀驱动升星（指数增长），提升暴击率
     private boolean profEnabled = true;
     private int profMaxStars = 5;
-    private double profCritPerStar = 0.02;        // 每星暴击率
-    private double profMaxCritChance = 0.10;      // 暴击率上限
-    private double profCritMultiplier = 1.5;      // 暴击伤害倍率
-    private double profFullStarCritBonus = 0.10;  // 满星额外暴击伤害加成（乘数）
+    private int profKillBase = 2000;               // 第 1 颗星所需击杀数
+    private double profKillGrowth = 2.0;           // 每星击杀需求倍率（第 N 星 = base × growth^(N-1)）
+    private int profEliteKillMultiplier = 5;       // 击杀精英怪按 N 倍计数
+    private boolean profCountEliteOnly = false;    // 只统计精英怪击杀（0 兼容普通怪）
+    private boolean profExcludeSpawnerKills = true;// 刷怪笼刷出的怪不计击杀（保护刷怪笼刷怪塔）
+    private double profCritPerStar = 0.02;         // 每星暴击率
+    private double profMaxCritChance = 0.10;       // 暴击率上限
+    private double profCritMultiplier = 1.5;       // 暴击伤害倍率
+    private double profFullStarCritBonus = 0.10;   // 满星额外暴击伤害加成（乘数）
     private double profSuccessBonusPerStar = 0.01; // 每星淬炼成功率加成
 
     public EliteConfig(JavaPlugin plugin) { this.plugin = plugin; this.config = plugin.getConfig(); load(); }
@@ -582,6 +587,11 @@ public class EliteConfig {
         // 武器熟练度（weapon-proficiency）
         profEnabled = config.getBoolean("weapon-proficiency.enabled", true);
         profMaxStars = Math.max(1, Math.min(5, config.getInt("weapon-proficiency.max-stars", 5)));
+        profKillBase = Math.max(1, config.getInt("weapon-proficiency.kill-base", 2000));
+        profKillGrowth = Math.max(1.0, config.getDouble("weapon-proficiency.kill-growth", 2.0));
+        profEliteKillMultiplier = Math.max(1, config.getInt("weapon-proficiency.elite-kill-multiplier", 5));
+        profCountEliteOnly = config.getBoolean("weapon-proficiency.count-elite-only", false);
+        profExcludeSpawnerKills = config.getBoolean("weapon-proficiency.exclude-spawner-kills", true);
         profCritPerStar = Math.max(0.0, config.getDouble("weapon-proficiency.crit-chance-per-star", 0.02));
         profMaxCritChance = Math.max(0.0, Math.min(1.0, config.getDouble("weapon-proficiency.max-crit-chance", 0.10)));
         profCritMultiplier = Math.max(1.0, config.getDouble("weapon-proficiency.crit-multiplier", 1.5));
@@ -806,6 +816,11 @@ public class EliteConfig {
 
     public boolean isProfEnabled() { return profEnabled; }
     public int getProfMaxStars() { return profMaxStars; }
+    public int getProfKillBase() { return profKillBase; }
+    public double getProfKillGrowth() { return profKillGrowth; }
+    public int getProfEliteKillMultiplier() { return profEliteKillMultiplier; }
+    public boolean isProfCountEliteOnly() { return profCountEliteOnly; }
+    public boolean isProfExcludeSpawnerKills() { return profExcludeSpawnerKills; }
     public double getProfCritPerStar() { return profCritPerStar; }
     public double getProfMaxCritChance() { return profMaxCritChance; }
     public double getProfCritMultiplier() { return profCritMultiplier; }
