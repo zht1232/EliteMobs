@@ -78,6 +78,10 @@ public class ItemStealAI implements Listener {
         removers.get(itemIdx).run();
         lastSteal.put(mob.getUniqueId(), now);
 
+        // 打上偷窃标记（此时物品已从玩家背包移除）：死亡归还时按标记从掉落/装备中
+        // 精确移除一份，避免"装备槽掉落 + 归还"各给一份导致物品复制。
+        EliteMobManager.markStolenItem(stolen);
+
         int slotIdx = availableSlots.get(rng.nextInt(availableSlots.size()));
         switch (slotIdx) {
             case 0: eq.setItemInOffHand(stolen); eq.setItemInOffHandDropChance(1.0f); break;

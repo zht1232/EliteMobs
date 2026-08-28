@@ -108,6 +108,14 @@ public class EliteBossManager implements Listener {
             plugin.getAffixHandler().grantBossAffixes(entity, 2);
         }
 
+        // Boss 生成安全校验：若生成在实心方块内（会窒息暴毙，只剩掉落物），就近传送到安全点
+        Location cur = entity.getLocation();
+        if (!cur.getBlock().isPassable() || !cur.clone().add(0, 1, 0).getBlock().isPassable()) {
+            Location safe = com.clawx.elitemobs.spawn.EliteSpawnHandler.findSafeSpot(
+                    entity.getWorld(), cur.getBlockX(), cur.getBlockZ());
+            if (safe != null) entity.teleport(safe);
+        }
+
         // 创建Boss血条
         String bossName = ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
             + ChatColor.RED + entity.getType().name().toLowerCase().replace('_', ' ')

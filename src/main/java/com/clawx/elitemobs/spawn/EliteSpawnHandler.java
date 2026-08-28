@@ -5,6 +5,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -32,6 +33,8 @@ public class EliteSpawnHandler implements Listener {
         EliteConfig config = plugin.getEliteConfig();
         if (!config.isWorldEnabled(entity.getWorld().getName())) return;
         if (!config.getEnabledMobTypes().contains(entity.getType())) return;
+        // 刷怪笼刷出的怪不精英化（保护刷怪笼式刷怪塔，general.exclude-spawner-mobs）
+        if (config.isExcludeSpawnerMobs() && reason == CreatureSpawnEvent.SpawnReason.SPAWNER) return;
         if (entity.getLocation().getBlockY() < config.getMinSpawnY()) return;
         Chunk chunk = entity.getLocation().getChunk();
         if (plugin.getMobManager().countElitesInChunk(chunk) >= config.getMaxElitesPerChunk()) return;
@@ -114,11 +117,29 @@ public class EliteSpawnHandler implements Listener {
         if (spot != null) entity.teleport(spot);
     }
 
-    /** 在 (x,z) 附近找一个实体能站立的 2 格高空间，找不到返回 null */
-    private Location findSafeSpot(World world, int x, int z) {
+    /** 在 (x,z) 附近找一个实体能站立的 2 格高空间，找不到返回 null。
+     *  地狱有天花板：getHighestBlockYAt 会返回天花板块，需从下往上找地表（避开天花板/岩浆）；
+     *  主世界/末地保持从高处向下找。 */
+    public static Location findSafeSpot(World world, int x, int z) {
+        if (world.getEnvironment() == World.Environment.NETHER) {
+            int minY = Math.max(world.getMinHeight(), 0);
+            int maxY = world.getMaxHeight() - 2;
+            for (int y = minY + 1; y < maxY; y++) {  // 从 minY+1 开始，保证 y-1 不越界
+                Block ground = world.getBlockAt(x, y - 1, z);
+                if (!ground.isPassable() && !ground.isLiquid()
+                        && world.getBlockAt(x, y, z).isPassable()
+                        && world.getBlockAt(x, y + 1, z).isPassable()) {
+                    return new Location(world, x + 0.5, y, z + 0.5);
+                }
+            }
+            return null;
+        }
         int top = world.getHighestBlockYAt(x, z);
         for (int y = top + 1; y >= Math.max(world.getMinHeight(), top - 6); y--) {
-            if (world.getBlockAt(x, y, z).isPassable() && world.getBlockAt(x, y + 1, z).isPassable()) {
+            Block ground = world.getBlockAt(x, y - 1, z);
+            if (!ground.isLiquid()
+                    && world.getBlockAt(x, y, z).isPassable()
+                    && world.getBlockAt(x, y + 1, z).isPassable()) {
                 return new Location(world, x + 0.5, y, z + 0.5);
             }
         }

@@ -24,6 +24,7 @@ public class EliteConfig {
     private double spawnDistPerLevel = 0.8;
     private double spawnDistMax = 48;
     private double spawnMinPlayerDist = 48;   // 生成前距离检查：离玩家太近不精英化（0=禁用）
+    private boolean excludeSpawnerMobs = true; // 刷怪笼刷出的怪不精英化（保护刷怪笼刷怪塔）
     // 护甲套装加成（armor-set-bonus）
     private boolean setBonusEnabled = true;
     private double setBonusReductionPerLevel = 2.0;   // 每点套装等级减伤 %
@@ -185,6 +186,17 @@ public class EliteConfig {
     private final Map<String, double[]> utilityPrices = new LinkedHashMap<>();
     // 宝石合成（铁砧 2 个同级宝石合成高一级）
     private boolean gemCombineEnabled = true;
+    // 武器/护甲品质（quality）：首次淬炼时按权重掷定，影响后续淬炼成功率
+    private int[] qualityWeights = {50, 30, 12, 6, 2};          // 普通/优秀/传说/史诗/神话
+    private double[] qualitySuccessBonus = {0.0, 0.02, 0.05, 0.08, 0.12};
+    // 武器熟练度（weapon-proficiency）：每次淬炼成功 +1 星，提升暴击率
+    private boolean profEnabled = true;
+    private int profMaxStars = 5;
+    private double profCritPerStar = 0.02;        // 每星暴击率
+    private double profMaxCritChance = 0.10;      // 暴击率上限
+    private double profCritMultiplier = 1.5;      // 暴击伤害倍率
+    private double profFullStarCritBonus = 0.10;  // 满星额外暴击伤害加成（乘数）
+    private double profSuccessBonusPerStar = 0.01; // 每星淬炼成功率加成
 
     public EliteConfig(JavaPlugin plugin) { this.plugin = plugin; this.config = plugin.getConfig(); load(); }
 
@@ -201,6 +213,7 @@ public class EliteConfig {
         spawnDistPerLevel = config.getDouble("general.spawn-distance.dist-per-level", 0.8);
         spawnDistMax = config.getDouble("general.spawn-distance.max-dist", 48);
         spawnMinPlayerDist = config.getDouble("general.spawn-min-player-distance", 48);
+        excludeSpawnerMobs = config.getBoolean("general.exclude-spawner-mobs", true);
         // 护甲套装加成
         setBonusEnabled = config.getBoolean("armor-set-bonus.enabled", true);
         setBonusReductionPerLevel = config.getDouble("armor-set-bonus.reduction-per-level", 2.0);
@@ -551,6 +564,29 @@ public class EliteConfig {
         runeDropMaxLevel = Math.max(1, config.getInt("rune.drops.max-level", 10));
         runeCombineEnabled = config.getBoolean("rune.combine.enabled", true);
         gemCombineEnabled = config.getBoolean("essence-upgrade.gem-combine-enabled", true);
+        // 武器/护甲品质（quality）
+        List<Integer> qw = config.getIntegerList("quality.weights");
+        if (!qw.isEmpty() && qw.size() >= 5) {
+            qualityWeights = new int[5];
+            for (int i = 0; i < 5; i++) qualityWeights[i] = Math.max(0, qw.get(i));
+        } else {
+            qualityWeights = new int[]{50, 30, 12, 6, 2};
+        }
+        List<Double> qb = config.getDoubleList("quality.success-bonus");
+        if (qb.size() >= 5) {
+            qualitySuccessBonus = new double[5];
+            for (int i = 0; i < 5; i++) qualitySuccessBonus[i] = Math.max(0.0, qb.get(i));
+        } else {
+            qualitySuccessBonus = new double[]{0.0, 0.02, 0.05, 0.08, 0.12};
+        }
+        // 武器熟练度（weapon-proficiency）
+        profEnabled = config.getBoolean("weapon-proficiency.enabled", true);
+        profMaxStars = Math.max(1, Math.min(5, config.getInt("weapon-proficiency.max-stars", 5)));
+        profCritPerStar = Math.max(0.0, config.getDouble("weapon-proficiency.crit-chance-per-star", 0.02));
+        profMaxCritChance = Math.max(0.0, Math.min(1.0, config.getDouble("weapon-proficiency.max-crit-chance", 0.10)));
+        profCritMultiplier = Math.max(1.0, config.getDouble("weapon-proficiency.crit-multiplier", 1.5));
+        profFullStarCritBonus = Math.max(0.0, config.getDouble("weapon-proficiency.full-star-crit-bonus", 0.10));
+        profSuccessBonusPerStar = Math.max(0.0, config.getDouble("weapon-proficiency.success-bonus-per-star", 0.01));
         // 强化菜单/商城（顶层 shop 段）
         shopEnabled = config.getBoolean("shop.enabled", true);
         gemDailyLimit = Math.max(0, config.getInt("shop.gem-daily-limit", 10));
@@ -623,6 +659,7 @@ public class EliteConfig {
     public double getSpawnDistPerLevel() { return spawnDistPerLevel; }
     public double getSpawnDistMax() { return spawnDistMax; }
     public double getSpawnMinPlayerDist() { return spawnMinPlayerDist; }
+    public boolean isExcludeSpawnerMobs() { return excludeSpawnerMobs; }
     // ========== 护甲套装加成 ==========
     public boolean isSetBonusEnabled() { return setBonusEnabled; }
     public double getSetBonusReductionPerLevel() { return setBonusReductionPerLevel; }
@@ -757,6 +794,23 @@ public class EliteConfig {
     /** 消耗品价格（protection-charm / gem-remover）。 */
     public double[] getUtilityPrice(String key) { return utilityPrices.get(key.toUpperCase()); }
     public boolean isGemCombineEnabled() { return gemCombineEnabled; }
+
+    // ========== 武器/护甲品质 & 熟练度 ==========
+    public int[] getQualityWeights() { return qualityWeights; }
+
+    /** 品质对淬炼成功率的加成（0-4：普通/优秀/传说/史诗/神话）。 */
+    public double getQualitySuccessBonus(int quality) {
+        if (quality < 0 || quality >= qualitySuccessBonus.length) return 0.0;
+        return qualitySuccessBonus[quality];
+    }
+
+    public boolean isProfEnabled() { return profEnabled; }
+    public int getProfMaxStars() { return profMaxStars; }
+    public double getProfCritPerStar() { return profCritPerStar; }
+    public double getProfMaxCritChance() { return profMaxCritChance; }
+    public double getProfCritMultiplier() { return profCritMultiplier; }
+    public double getProfFullStarCritBonus() { return profFullStarCritBonus; }
+    public double getProfSuccessBonusPerStar() { return profSuccessBonusPerStar; }
 
     /** 更新商城价格（金币/点券）并即时保存。path: shop.gem-prices / shop.rune-prices / shop.utility-prices。 */
     public void setShopPrice(String path, String id, double money, double points) {

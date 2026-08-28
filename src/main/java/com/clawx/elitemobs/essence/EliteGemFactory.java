@@ -196,5 +196,85 @@ public final class EliteGemFactory {
 
     /** 二段跳宝石：再次起跳冷却（毫秒），等级越高蓄力越快（冷却越短，Lv1≈2.7s → Lv10=0.4s）。 */
     public static int jumpCooldown(int level) { return Math.max(400, 3000 - level * 260); }
+
+    // ==================== 武器/护甲品质（首次淬炼时掷定，影响后续成功率） ====================
+
+    public static final NamespacedKey KEY_QUALITY = new NamespacedKey("elitemobs", "quality");
+    public static final NamespacedKey KEY_PROF = new NamespacedKey("elitemobs", "prof");
+
+    public static final int Q_COMMON = 0;    // 普通
+    public static final int Q_UNCOMMON = 1;  // 优秀
+    public static final int Q_RARE = 2;      // 传说
+    public static final int Q_EPIC = 3;      // 史诗
+    public static final int Q_MYTHIC = 4;    // 神话
+    public static final int MAX_QUALITY = 4;
+
+    /** 读取装备品质（无标记返回普通 0）。 */
+    public static int getQuality(ItemStack equip) {
+        if (equip == null || !equip.hasItemMeta()) return Q_COMMON;
+        Integer q = equip.getItemMeta().getPersistentDataContainer().get(KEY_QUALITY, PersistentDataType.INTEGER);
+        return q == null ? Q_COMMON : Math.max(Q_COMMON, Math.min(MAX_QUALITY, q));
+    }
+
+    /** 写入装备品质（自动夹取到 0-4）。 */
+    public static void setQuality(ItemStack equip, int q) {
+        if (equip == null) return;
+        equip.editMeta(meta -> meta.getPersistentDataContainer().set(KEY_QUALITY, PersistentDataType.INTEGER,
+                Math.max(Q_COMMON, Math.min(MAX_QUALITY, q))));
+    }
+
+    /** 按权重掷定品质（返回 0-4）。 */
+    public static int rollQuality(java.util.Random rng, int[] weights) {
+        if (weights == null || weights.length == 0) return Q_COMMON;
+        int total = 0;
+        for (int w : weights) total += Math.max(0, w);
+        if (total <= 0) return Q_COMMON;
+        int roll = rng.nextInt(total);
+        for (int i = 0; i < weights.length && i <= MAX_QUALITY; i++) {
+            roll -= Math.max(0, weights[i]);
+            if (roll < 0) return i;
+        }
+        return Q_COMMON;
+    }
+
+    /** 品质显示名（含颜色，与宝石品质命名一致：普通/优秀/传说/史诗/神话）。 */
+    public static String qualityName(int q) {
+        return switch (q) {
+            case Q_UNCOMMON -> "&e&l优秀";
+            case Q_RARE -> "&a&l传说";
+            case Q_EPIC -> "&b&l史诗";
+            case Q_MYTHIC -> "&2&l神话";
+            default -> "&f普通";
+        };
+    }
+
+    // ==================== 武器熟练度（淬炼成功 +1 星，提升暴击率） ====================
+
+    /** 读取武器熟练度星级（0-5）。 */
+    public static int getProf(ItemStack equip) {
+        if (equip == null || !equip.hasItemMeta()) return 0;
+        Integer p = equip.getItemMeta().getPersistentDataContainer().get(KEY_PROF, PersistentDataType.INTEGER);
+        return p == null ? 0 : Math.max(0, Math.min(5, p));
+    }
+
+    /** 熟练度 +1 星（封顶 maxStars）。 */
+    public static void addProf(ItemStack equip, int maxStars) {
+        if (equip == null) return;
+        int cur = getProf(equip);
+        int max = Math.max(1, Math.min(5, maxStars));
+        if (cur >= max) return;
+        final int nv = cur + 1;
+        equip.editMeta(meta -> meta.getPersistentDataContainer().set(KEY_PROF, PersistentDataType.INTEGER, nv));
+    }
+
+    /** 星级显示：★（金色）/ ☆（灰色），如 3 星 → "&e★★★&7☆☆"。 */
+    public static String profStars(int stars) {
+        stars = Math.max(0, Math.min(5, stars));
+        StringBuilder sb = new StringBuilder("&e");
+        for (int i = 0; i < stars; i++) sb.append('★');
+        sb.append("&7");
+        for (int i = stars; i < 5; i++) sb.append('☆');
+        return sb.toString();
+    }
 }
 

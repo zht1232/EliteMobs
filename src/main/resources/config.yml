@@ -30,6 +30,10 @@ general:
   # 建议值：32-64（保护基地周围的机器）
   spawn-min-player-distance: 48
 
+  # 刷怪笼刷出的怪不精英化（保护刷怪笼式刷怪塔；暗房/水流刷怪塔靠上面的
+  # spawn-min-player-distance 保护——挂机点与刷怪面距离通常小于该值）
+  exclude-spawner-mobs: true
+
   # 高等级精英生成时全服广播提示
   spawn-announce:
     enabled: false          # 普通精英生成广播（false=关闭）
@@ -353,6 +357,24 @@ essence-upgrade:
   armor-max-bonus: 15.0            # 护甲减伤上限
   # 铁砧宝石合成：2 个同类型同级宝石（gems/*.yml）合成高一级（Lv.10 满级不可合成）
   gem-combine-enabled: true
+
+# --- 武器/护甲品质（首次淬炼时掷定，固化后影响后续淬炼成功率） ---
+quality:
+  # 首次淬炼时的品质权重 [普通, 优秀, 传说, 史诗, 神话]（合计 100）
+  weights: [50, 30, 12, 6, 2]
+  # 品质对淬炼成功率的加成（与 essence-upgrade.base-rate/per-level 相加，封顶 max-rate）
+  #   普通 0% / 优秀 +2% / 传说 +5% / 史诗 +8% / 神话 +12%
+  success-bonus: [0.0, 0.02, 0.05, 0.08, 0.12]
+
+# --- 武器熟练度（每次淬炼成功 +1 星，提升暴击率与淬炼成功率） ---
+weapon-proficiency:
+  enabled: true
+  max-stars: 5                 # 熟练度星级上限（1-5）
+  crit-chance-per-star: 0.02   # 每星暴击率（满 5 星 = 10%）
+  max-crit-chance: 0.10        # 暴击率上限
+  crit-multiplier: 1.5         # 暴击伤害倍率（×1.5）
+  full-star-crit-bonus: 0.10   # 满星额外暴击伤害加成（满星暴击 = ×1.6）
+  success-bonus-per-star: 0.01 # 每星淬炼成功率加成（与品质叠加，封顶 95%）
 
 # --- 符文系统（独立于淬炼，铁砧镶嵌） ---
 # 符文效果比淬炼更高级（生命/移速/药水效果），槽位数量由装备淬炼等级决定：

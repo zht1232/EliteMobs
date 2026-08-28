@@ -43,6 +43,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             case "gem" -> gemCmd(sender, args);
             case "rune" -> runeCmd(sender, args);
             case "fixgear", "fixnetherite" -> fixNetheriteGear(sender, args);
+            case "quality" -> qualityCmd(sender, args);
 
             default -> showHelp(sender);
         }
@@ -81,7 +82,8 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,ChatColor.YELLOW+"/em rune give <\u7c7b\u578b> [\u7b49\u7ea7] [\u6570\u91cf]"+ChatColor.GRAY+" \u2014 \u53d1\u653e\u7b26\u6587\uff08HEALTH/SPEED/STRENGTH/REGEN/RESIST/FIRE\uff09");
         msg(s,"");
         msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u7ba1\u7406\u6307\u4ee4 \u2501\u2501\u2501");
-        msg(s,ChatColor.YELLOW+"/em fixgear [\u73a9\u5bb6\u540d]"+ChatColor.GRAY+" \u2014 \u4fee\u590d\u5386\u53f2\u5347\u7ea7\u4e0b\u754c\u5408\u91d1\u7684\u6dec\u70bc\u88c5\u5907\u5c5e\u6027\uff08\u9ed8\u8ba4\u5168\u4f53\u5728\u7ebf\u73a9\u5bb6\uff09");    }
+        msg(s,ChatColor.YELLOW+"/em fixgear [\u73a9\u5bb6\u540d]"+ChatColor.GRAY+" \u2014 \u4fee\u590d\u5386\u53f2\u5347\u7ea7\u4e0b\u754c\u5408\u91d1\u7684\u6dec\u70bc\u88c5\u5907\u5c5e\u6027\uff08\u9ed8\u8ba4\u5168\u4f53\u5728\u7ebf\u73a9\u5bb6\uff09");
+        msg(s,ChatColor.YELLOW+"/em quality [set <0-4> | prof <0-5> | info]"+ChatColor.GRAY+" \u2014 \u8bbe\u7f6e/\u67e5\u770b\u624b\u6301\u88c5\u5907\u54c1\u8d28\u4e0e\u719f\u7ec3\u5ea6\uff080\u666e\u901a/1\u4f18\u79c0/2\u4f20\u8bf4/3\u53f2\u8bd7/4\u795e\u8bdd\uff09");    }
 
     // ---- 修复历史下界合金装备属性（全体在线玩家 / 指定玩家） ----
     private void fixNetheriteGear(CommandSender s, String[] args) {
@@ -114,6 +116,47 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             if (any) p.sendMessage(ChatColor.GREEN + "✔ 管理员已自动修复你的部分下界合金装备属性！");
         }
         msg(s, ChatColor.GREEN + "✔ 已扫描 " + targets.size() + " 名玩家，修复 " + fixed + " 件下界合金装备（含末影箱）");
+    }
+
+    // ---- 品质/熟练度管理（/em quality set <0-4> | prof <0-5> | info） ----
+    private void qualityCmd(CommandSender s, String[] args) {
+        if (!has(s, "elitemobs.admin")) return;
+        if (!(s instanceof Player p)) { msg(s, ChatColor.RED + "✘ 请在游戏内手持装备执行！"); return; }
+        ItemStack hand = p.getInventory().getItemInMainHand();
+        if (hand == null || hand.getType() == Material.AIR) { msg(s, ChatColor.RED + "✘ 请手持武器/护甲！"); return; }
+        if (args.length < 2 || "info".equalsIgnoreCase(args[1])) {
+            int q = com.clawx.elitemobs.essence.EliteGemFactory.getQuality(hand);
+            int stars = com.clawx.elitemobs.essence.EliteGemFactory.getProf(hand);
+            msg(s, ChatColor.GOLD + "手持装备品质: " + ChatColor.translateAlternateColorCodes('&',
+                    com.clawx.elitemobs.essence.EliteGemFactory.qualityName(q)));
+            msg(s, ChatColor.GOLD + "熟练度: " + ChatColor.translateAlternateColorCodes('&',
+                    com.clawx.elitemobs.essence.EliteGemFactory.profStars(stars)));
+            return;
+        }
+        if ("set".equalsIgnoreCase(args[1])) {
+            if (args.length < 3) { msg(s, ChatColor.RED + "✘ 用法: /em quality set <0-4>（0普通/1优秀/2传说/3史诗/4神话）"); return; }
+            int q;
+            try { q = Integer.parseInt(args[2]); } catch (Exception e) { msg(s, ChatColor.RED + "✘ 品质必须是 0-4"); return; }
+            com.clawx.elitemobs.essence.EliteGemFactory.setQuality(hand, q);
+            p.getInventory().setItemInMainHand(hand);
+            msg(s, ChatColor.GREEN + "✔ 已将手持装备品质设为: " + ChatColor.translateAlternateColorCodes('&',
+                    com.clawx.elitemobs.essence.EliteGemFactory.qualityName(q)));
+            return;
+        }
+        if ("prof".equalsIgnoreCase(args[1])) {
+            if (args.length < 3) { msg(s, ChatColor.RED + "✘ 用法: /em quality prof <0-5>"); return; }
+            int stars;
+            try { stars = Integer.parseInt(args[2]); } catch (Exception e) { msg(s, ChatColor.RED + "✘ 星级必须是 0-5"); return; }
+            if (stars < 0 || stars > 5) { msg(s, ChatColor.RED + "✘ 星级必须是 0-5"); return; }
+            final int fs = stars;
+            hand.editMeta(meta -> meta.getPersistentDataContainer().set(
+                    com.clawx.elitemobs.essence.EliteGemFactory.KEY_PROF,
+                    org.bukkit.persistence.PersistentDataType.INTEGER, fs));
+            p.getInventory().setItemInMainHand(hand);
+            msg(s, ChatColor.GREEN + "✔ 已将手持装备熟练度设为 " + stars + " 星");
+            return;
+        }
+        msg(s, ChatColor.RED + "✘ 用法: /em quality [set <0-4> | prof <0-5> | info]");
     }
 
     // ---- \u72b6\u6001 ----
@@ -632,7 +675,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender s,Command c,String l,String[] a){
-        if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","stealtest","boss","particle","gem","rune","fixgear").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
+        if(a.length==1)return Arrays.asList("reload","info","spawn","list","toggle","test","wave","clear","stat","stealtest","boss","particle","gem","rune","fixgear","quality").stream().filter(x->x.startsWith(a[0].toLowerCase())).collect(Collectors.toList());
         if(a.length==2&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")||a[0].equalsIgnoreCase("boss")))
             return plugin.getEliteConfig().getEnabledMobTypes().stream().map(x->x.name().toLowerCase()).filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
         if(a.length==4&&a[0].equalsIgnoreCase("spawn"))
@@ -661,6 +704,12 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             return Arrays.asList("1","3","5","7","10").stream().filter(x->x.startsWith(a[3].toLowerCase())).collect(Collectors.toList());
         if(a.length==5&&a[0].equalsIgnoreCase("rune")&&a[1].equalsIgnoreCase("give"))
             return Arrays.asList("1","5","10","32","64").stream().filter(x->x.startsWith(a[4].toLowerCase())).collect(Collectors.toList());
+        if(a.length==2&&a[0].equalsIgnoreCase("quality"))
+            return Arrays.asList("set","prof","info").stream().filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
+        if(a.length==3&&a[0].equalsIgnoreCase("quality")&&a[1].equalsIgnoreCase("set"))
+            return Arrays.asList("0","1","2","3","4").stream().filter(x->x.startsWith(a[2].toLowerCase())).collect(Collectors.toList());
+        if(a.length==3&&a[0].equalsIgnoreCase("quality")&&a[1].equalsIgnoreCase("prof"))
+            return Arrays.asList("0","1","2","3","4","5").stream().filter(x->x.startsWith(a[2].toLowerCase())).collect(Collectors.toList());
         if(a.length==3&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")))
             return Arrays.asList("1","3","5","7","10","15","20");
         if(a.length==4&&(a[0].equalsIgnoreCase("test")))

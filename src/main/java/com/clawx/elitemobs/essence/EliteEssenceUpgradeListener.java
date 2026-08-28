@@ -275,15 +275,25 @@ public class EliteEssenceUpgradeListener implements Listener {
             return;
         }
 
-        // 成功率: 基于宝石自身等级；测试宝石可用 gem_success_rate 覆盖（0=必失败 / 1=必成功）
+        // 品质：首次淬炼时掷定并固化（影响本次及后续成功率）；旧版已淬炼装备自动迁移为普通
+        int quality = ensureQuality(equip);
+
+        // 熟练度：当前星级（每次淬炼成功 +1 星，封顶；提升暴击率）
+        int profStars = EliteGemFactory.getProf(equip);
+
+        // 成功率: 基础 + 宝石等级加成 + 品质加成 + 熟练度加成（封顶 maxRate）
+        // 测试宝石可用 gem_success_rate 覆盖（0=必失败 / 1=必成功）
         double rate = EliteGemFactory.getGemSuccessRate(gem);
         if (rate < 0) {
-            rate = Math.min(cfg.getEssenceUpgradeBaseRate() + (gemLevel - 1) * cfg.getEssenceUpgradePerLevel(),
+            double qualityBonus = cfg.getQualitySuccessBonus(quality);
+            double profBonus = cfg.isProfEnabled() ? profStars * cfg.getProfSuccessBonusPerStar() : 0.0;
+            rate = Math.min(cfg.getEssenceUpgradeBaseRate() + (gemLevel - 1) * cfg.getEssenceUpgradePerLevel()
+                            + qualityBonus + profBonus,
                     cfg.getEssenceUpgradeMaxRate());
         }
         boolean ok = rng.nextDouble() < rate;
 
-        // 首次放入宝石时保存原版 Lore 与显示名（供还原）
+        // 首次放入宝石时保存原版 Lore 与显示名（供还原）——注意必须 setItemMeta 持久化
         ItemMeta meta = equip.getItemMeta();
         if (meta != null) {
             boolean isWeapon = isWeapon(equip);
@@ -297,17 +307,31 @@ public class EliteEssenceUpgradeListener implements Listener {
                             PersistentDataType.LIST.strings(), new ArrayList<>(orig));
                 }
                 if (meta.hasDisplayName()) {
+                    // 旧版显示名带 "精英 " 前缀与 [Lv.X] 后缀：一次性剥离（保留原名与颜色），
+                    // 此后不再改动武器名字（只改 Lore）
+                    String dn = meta.getDisplayName();
+                    String plain = ChatColor.stripColor(dn);
+                    if (plain != null && plain.matches("精英 .*\\[Lv\\.\\d+\\]\\s*")) {
+                        dn = dn.replaceFirst("^.*?精英\\s+", "")
+                                .replaceAll("\\s*\\[[^\\]]*Lv\\.\\d+\\s*\\]\\s*$", "");
+                        meta.setDisplayName(dn);
+                    }
                     meta.getPersistentDataContainer().set(isWeapon ? ORIG_NAME : ORIG_NAME_A,
-                            PersistentDataType.STRING, meta.getDisplayName());
+                            PersistentDataType.STRING, dn);
                 }
             }
             meta.getPersistentDataContainer().set(isWeapon ? UK : AUK, PersistentDataType.BYTE, (byte) 1);
+            equip.setItemMeta(meta);
         }
 
         if (ok) {
             // 成功：装备上该宝石等级 +1（新宝石从 Lv.1 开始；宝石自身等级只影响成功率）
             int newGemLevel = Math.min(10, curGemLevel + 1);
             EliteGemFactory.setGemSlot(equip, slot, gemId, newGemLevel);
+            // 淬炼成功：武器熟练度 +1 星（封顶；熟练度提升暴击率与后续成功率；仅武器）
+            if (cfg.isProfEnabled() && isWeapon(equip)) {
+                EliteGemFactory.addProf(equip, cfg.getProfMaxStars());
+            }
         } else if (hasCharm) {
             // 失败但有保护符：防降级，但宝石仍消耗
             consumeCharmFromPlayer(player);
@@ -315,6 +339,10 @@ public class EliteEssenceUpgradeListener implements Listener {
                     isWeapon(equip)
                             ? msg(msgs, "essence-upgrade.protected", "&e&l✦ 保护符生效！武器未降级")
                             : msg(msgs, "armor-upgrade.protected", "&e&l✦ 保护符生效！护甲未降级")));
+            // 首次淬炼已掷定品质：受保护失败也刷新 Lore 显示品质/熟练度
+            rebuildLore(equip, msgs);
+            ItemStack protectedEquip = equip;
+            plugin.getServer().getScheduler().runTask(plugin, () -> inv.setItem(0, protectedEquip));
             playSuccess(player);
             consume(inv);
             return;
@@ -372,20 +400,8 @@ public class EliteEssenceUpgradeListener implements Listener {
             return;
         }
 
-        // 刷新 Lore（核心属性 + 宝石槽 + 符文槽）
+        // 刷新 Lore（基础属性 + 品质 + 熟练度 + 宝石槽 + 符文槽）
         rebuildLore(equip, msgs);
-
-        // 设置精英物品显示名
-        String baseName = getItemDisplayName(equip);
-        String titleName = ChatColor.translateAlternateColorCodes('&',
-                (isWeapon(equip)
-                        ? msg(msgs, "essence-upgrade.display-name", "&6&l精英 &e&l{name} &7[&bLv.{lvl}&7]")
-                        : msg(msgs, "armor-upgrade.display-name", "&9&l精英 &e&l{name} &7[&bLv.{lvl}&7]"))
-                        .replace("{name}", baseName)
-                        .replace("{lvl}", String.valueOf(totalAfter)));
-        ItemMeta m2 = equip.getItemMeta();
-        if (m2 != null) m2.setDisplayName(titleName);
-        equip.setItemMeta(m2);
 
         // 淬炼成功后附魔光效（仅当装备无其他附魔时添加；用 HIDE_UNBREAKABLE 只隐藏耐久附魔，不隐藏玩家后续附魔）
         if (ok && equip.getItemMeta() != null
@@ -671,6 +687,8 @@ public class EliteEssenceUpgradeListener implements Listener {
         pdc.remove(isW ? ORIG_NAME : ORIG_NAME_A);
         pdc.remove(new NamespacedKey(plugin, "gem_knockback"));
         pdc.remove(EliteMobManager.ARMOR_LV_KEY);
+        pdc.remove(EliteGemFactory.KEY_QUALITY);
+        pdc.remove(EliteGemFactory.KEY_PROF);
         // 清空宝石槽与符文槽残留
         for (int i = 0; i < EliteGemFactory.MAX_GEM_SLOTS; i++) {
             pdc.remove(EliteGemFactory.KEY_GEM_SLOTS[i]);
@@ -775,21 +793,70 @@ public class EliteEssenceUpgradeListener implements Listener {
         return plugin.getEliteConfig().gemEffectFor(gemId);
     }
 
-    /** 重建装备 Lore：核心属性 + 宝石槽 + 符文槽（保留原美感）。 */
+    /**
+     * 读取/初始化装备品质：
+     * - 首次淬炼（无升级标记）：按权重掷定品质并固化，品质加成作用于本次及后续成功率
+     * - 旧版已淬炼装备（有升级标记但无品质标记）：自动迁移为普通（0）并固化
+     */
+    private int ensureQuality(ItemStack equip) {
+        int q = EliteGemFactory.getQuality(equip);
+        ItemMeta meta = equip.getItemMeta();
+        if (meta == null) return q;
+        var pdc = meta.getPersistentDataContainer();
+        if (pdc.has(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER)) return q;
+        boolean refined = pdc.has(isWeapon(equip) ? UK : AUK, PersistentDataType.BYTE);
+        if (refined) {
+            // 旧版已淬炼装备：迁移为普通品质
+            pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, 0);
+            equip.setItemMeta(meta);
+            return 0;
+        }
+        // 首次淬炼：按权重掷品质
+        q = EliteGemFactory.rollQuality(rng, plugin.getEliteConfig().getQualityWeights());
+        pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, q);
+        equip.setItemMeta(meta);
+        return q;
+    }
+
+    /** 重建装备 Lore：基础属性（品质/淬炼等级/主属性/熟练度）+ 宝石槽 + 符文槽。 */
     private void rebuildLore(ItemStack equip, FileConfiguration msgs) {
         if (equip == null) return;
         ItemMeta meta = equip.getItemMeta();
         if (meta == null) return;
+        var pdc = meta.getPersistentDataContainer();
+        boolean isW = isWeapon(equip);
 
         String sep = ChatColor.translateAlternateColorCodes('&',
                 msg(msgs, "essence-upgrade.lore.separator", "&8&m------------------------------------"));
         List<String> lore = new ArrayList<>();
         lore.add(sep);
 
-        // 核心属性
+        // ===== 基础属性：品质 / 淬炼等级 / 主属性 / 熟练度 =====
         lore.add(ChatColor.translateAlternateColorCodes('&',
-                msg(msgs, "essence-upgrade.lore.stat-title", "&b❖ 核心属性")));
-        if (isWeapon(equip)) {
+                msg(msgs, "essence-upgrade.lore.stat-title", "&b❖ 基础属性")));
+
+        // 品质（首次淬炼掷定；旧版已淬炼装备自动迁移为普通）
+        int quality = EliteGemFactory.getQuality(equip);
+        boolean hasQuality = pdc.has(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER);
+        boolean refined = pdc.has(isW ? UK : AUK, PersistentDataType.BYTE);
+        if (!hasQuality && refined) {
+            quality = 0;
+            pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, 0);
+        }
+        String qKey = isW ? "essence-upgrade.lore.quality-weapon" : "armor-upgrade.lore.quality-armor";
+        String qLabel = isW ? "   &7武器品质&8：" : "   &7护甲品质&8：";
+        lore.add(ChatColor.translateAlternateColorCodes('&',
+                msg(msgs, qKey, qLabel + "{quality}")
+                        .replace("{quality}", EliteGemFactory.qualityName(quality))));
+
+        // 淬炼等级（从显示名移入基础属性）
+        int totalLevel = EliteGemFactory.totalGemLevel(equip);
+        lore.add(ChatColor.translateAlternateColorCodes('&',
+                msg(msgs, "essence-upgrade.lore.level", "   &7淬炼等级&8：&bLv.{lvl}")
+                        .replace("{lvl}", String.valueOf(totalLevel))));
+
+        // 主属性：攻击力 / 减伤
+        if (isW) {
             // 直接读取当前实际攻击伤害（含淬炼加成），与游戏工具提示/实际伤害严格一致（修复矛等非标准武器显示不符）
             double totalDmg = getActualWeaponDamage(equip);
             lore.add(ChatColor.translateAlternateColorCodes('&',
@@ -801,6 +868,18 @@ public class EliteEssenceUpgradeListener implements Listener {
                     msg(msgs, "armor-upgrade.lore.defense", "   &7减伤&8：&b{reduction}%")
                             .replace("{reduction}", String.format("%.1f", def))));
         }
+
+        // 武器熟练度（仅武器；星级 + 暴击率）
+        if (isW && plugin.getEliteConfig().isProfEnabled()) {
+            int stars = EliteGemFactory.getProf(equip);
+            double crit = Math.min(stars * plugin.getEliteConfig().getProfCritPerStar(),
+                    plugin.getEliteConfig().getProfMaxCritChance());
+            lore.add(ChatColor.translateAlternateColorCodes('&',
+                    msg(msgs, "essence-upgrade.lore.proficiency",
+                            "   &7熟练度&8：{stars} &7(&6暴击+{crit}%&7)")
+                            .replace("{stars}", EliteGemFactory.profStars(stars))
+                            .replace("{crit}", String.format("%.0f", crit * 100))));
+        }
         lore.add(sep);
 
         // 宝石槽显示
@@ -808,7 +887,6 @@ public class EliteEssenceUpgradeListener implements Listener {
         lore.add(sep);
 
         // 符文槽显示（数量由宝石等级之和决定）
-        int totalLevel = EliteGemFactory.totalGemLevel(equip);
         int runeSlots = EliteGemFactory.runeSlotsForTotalLevel(totalLevel);
         if (runeSlots > 0) {
             appendRuneSlotsLore(meta, lore, runeSlots);

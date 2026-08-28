@@ -422,6 +422,37 @@ public class EliteCombatListener implements Listener {
         }
     }
 
+    // ==================== 武器熟练度暴击（weapon-proficiency） ====================
+
+    /**
+     * 武器熟练度暴击：武器每淬炼成功 1 次 +1 星（封顶），每星提供暴击率；
+     * 暴击伤害 = 基础伤害 × 倍率（满星额外加成）；被 Boss 封印时失效；
+     * 不对玩家生效（PVP 不暴击）；不作用于宝石触发的额外伤害（防重入）。
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPlayerProficiencyCrit(EntityDamageByEntityEvent event) {
+        if (processingGemAttack) return; // 宝石触发的重入伤害不暴击
+        Player p = null;
+        if (event.getDamager() instanceof Player pp) p = pp;
+        else if (event.getDamager() instanceof Projectile proj && proj.getShooter() instanceof Player pp) p = pp;
+        if (p == null) return;
+        if (event.getEntity() instanceof Player) return; // PVP 不触发
+        EliteConfig cfg = plugin.getEliteConfig();
+        if (!cfg.isProfEnabled()) return;
+        if (plugin.getBossManager().isSealedPlayer(p)) return;
+        ItemStack hand = p.getInventory().getItemInMainHand();
+        int stars = com.clawx.elitemobs.essence.EliteGemFactory.getProf(hand);
+        if (stars <= 0) return;
+        double chance = Math.min(stars * cfg.getProfCritPerStar(), cfg.getProfMaxCritChance());
+        if (rng.nextDouble() >= chance) return;
+        double mult = cfg.getProfCritMultiplier();
+        if (stars >= cfg.getProfMaxStars()) mult += cfg.getProfFullStarCritBonus();
+        event.setDamage(event.getDamage() * mult);
+        event.getEntity().getWorld().playSound(event.getEntity().getLocation(), Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.0f, 1.2f);
+        EliteMobManager.spawnParticleSafe(event.getEntity().getWorld(),
+                Particle.CRIT, event.getEntity().getLocation().add(0, 1, 0), 12);
+    }
+
     /** 根据宝石 id 返回效果类型（委托到 EliteConfig 缓存）。 */
     private String gemEffectFor(String gemId) {
         return plugin.getEliteConfig().gemEffectFor(gemId);
@@ -440,11 +471,64 @@ public class EliteCombatListener implements Listener {
         }
     }
 
-    /** 判断装备槽物品是否为被偷物品（同一对象引用，ItemStealAI 存入/装备用的是同一实例） */
-    private boolean containsStolenRef(List<ItemStack> stolen, ItemStack slot) {
-        if (slot == null) return false;
-        for (ItemStack it : stolen) if (it == slot) return true;
-        return false;
+    /** 从死亡掉落中移除被偷物品的副本（按偷窃标记精确匹配；每件被偷物品移除一份）。 */
+    private void removeStolenDrops(List<ItemStack> drops, List<ItemStack> stolen) {
+        if (drops == null || stolen == null) return;
+        for (ItemStack st : stolen) {
+            if (st == null) continue;
+            String id = EliteMobManager.getStolenId(st);
+            if (id == null) continue;
+            drops.removeIf(d -> d != null && id.equals(EliteMobManager.getStolenId(d)));
+        }
+    }
+
+    /** 清空怪身上带偷窃标记的装备槽（防止与其他死亡处理路径重复归还）。 */
+    private void clearStolenEquipment(LivingEntity e, List<ItemStack> stolen) {
+        if (stolen == null || stolen.isEmpty()) return;
+        Set<String> ids = new HashSet<>();
+        for (ItemStack st : stolen) {
+            String id = EliteMobManager.getStolenId(st);
+            if (id != null) ids.add(id);
+        }
+        if (ids.isEmpty()) return;
+        org.bukkit.inventory.EntityEquipment geq = e.getEquipment();
+        if (geq == null) return;
+        if (isMarked(geq.getItemInOffHand(), ids)) geq.setItemInOffHand(null);
+        if (isMarked(geq.getBoots(), ids)) geq.setBoots(null);
+        if (isMarked(geq.getLeggings(), ids)) geq.setLeggings(null);
+        if (isMarked(geq.getChestplate(), ids)) geq.setChestplate(null);
+        if (isMarked(geq.getHelmet(), ids)) geq.setHelmet(null);
+    }
+
+    private boolean isMarked(ItemStack slot, Set<String> ids) {
+        String id = EliteMobManager.getStolenId(slot);
+        return id != null && ids.contains(id);
+    }
+
+    /** 清除掉落物列表上所有带偷窃标记物品的标记（保留物品本身，保证可正常堆叠）。 */
+    private void stripStolenMarks(List<ItemStack> drops) {
+        if (drops == null) return;
+        for (ItemStack d : drops) {
+            if (d != null && EliteMobManager.getStolenId(d) != null) {
+                EliteMobManager.stripStolenMark(d);
+            }
+        }
+    }
+
+    /** 清除怪装备槽上带偷窃标记物品的标记（保留物品本身；镜像需写回装备槽）。 */
+    private void stripEquipmentMarks(LivingEntity e) {
+        org.bukkit.inventory.EntityEquipment geq = e.getEquipment();
+        if (geq == null) return;
+        ItemStack off = geq.getItemInOffHand();
+        if (EliteMobManager.getStolenId(off) != null) { EliteMobManager.stripStolenMark(off); geq.setItemInOffHand(off); }
+        ItemStack boots = geq.getBoots();
+        if (EliteMobManager.getStolenId(boots) != null) { EliteMobManager.stripStolenMark(boots); geq.setBoots(boots); }
+        ItemStack legs = geq.getLeggings();
+        if (EliteMobManager.getStolenId(legs) != null) { EliteMobManager.stripStolenMark(legs); geq.setLeggings(legs); }
+        ItemStack chest = geq.getChestplate();
+        if (EliteMobManager.getStolenId(chest) != null) { EliteMobManager.stripStolenMark(chest); geq.setChestplate(chest); }
+        ItemStack helm = geq.getHelmet();
+        if (EliteMobManager.getStolenId(helm) != null) { EliteMobManager.stripStolenMark(helm); geq.setHelmet(helm); }
     }
 
     /** 掉落物耐火/岩浆：防止精英掉落物被火烧毁、掉岩浆消失（只保护带 elitemobs 标记的掉落物）。 */
@@ -467,7 +551,7 @@ public class EliteCombatListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEliteDeath(EntityDeathEvent event) {
         LivingEntity e = event.getEntity();
         boolean elite = EliteMobManager.isElite(e);
@@ -493,30 +577,33 @@ public class EliteCombatListener implements Listener {
         if (plugin.getEliteConfig().isReturnStolenItemsOnDeath()) {
             List<ItemStack> stolen = plugin.getMobManager().takeStolenItems(e.getUniqueId());
             if (stolen != null && !stolen.isEmpty()) {
-                // 先移除已捕获的死亡掉落中的被偷物品（装备 dropChance=1.0 已把物品加入 drops），避免一份变两份
-                event.getDrops().removeIf(drop -> drop != null && containsStolenRef(stolen, drop));
-                // 从怪身上移除被偷物品（同一对象引用），避免与装备掉落重复
-                org.bukkit.inventory.EntityEquipment geq = e.getEquipment();
-                if (geq != null) {
-                    if (containsStolenRef(stolen, geq.getItemInOffHand())) geq.setItemInOffHand(null);
-                    if (containsStolenRef(stolen, geq.getBoots())) geq.setBoots(null);
-                    if (containsStolenRef(stolen, geq.getLeggings())) geq.setLeggings(null);
-                    if (containsStolenRef(stolen, geq.getChestplate())) geq.setChestplate(null);
-                    if (containsStolenRef(stolen, geq.getHelmet())) geq.setHelmet(null);
-                }
+                // 按偷窃标记精确移除掉落物中被偷物品的副本（装备 dropChance=1.0 已把物品加入 drops），
+                // 镜像对象也能按 PDC 标记匹配 → 掉落一份 + 归还一份 = 恰好一份，不再复制
+                removeStolenDrops(event.getDrops(), stolen);
+                // 清空怪身上带偷窃标记的装备槽（防止与其他死亡处理路径重复）
+                clearStolenEquipment(e, stolen);
                 Player gk = e.getKiller();
                 if (gk != null) {
                     for (ItemStack it : stolen) {
                         if (it == null) continue;
+                        EliteMobManager.stripStolenMark(it);
                         gk.getInventory().addItem(it).values().forEach(d -> e.getWorld().dropItemNaturally(e.getLocation(), d));
                     }
                     gk.sendMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "[EliteMobs] " + ChatColor.GRAY
                             + "\u8fd4\u8fd8\u4e86\u88ab\u5077\u8d70\u7684 " + ChatColor.YELLOW + stolen.size()
                             + ChatColor.GRAY + " \u4ef6\u7269\u54c1\uff01");
                 } else {
-                    for (ItemStack it : stolen) if (it != null) e.getWorld().dropItemNaturally(e.getLocation(), it);
+                    for (ItemStack it : stolen) {
+                        if (it == null) continue;
+                        EliteMobManager.stripStolenMark(it);
+                        e.getWorld().dropItemNaturally(e.getLocation(), it);
+                    }
                 }
             }
+        } else {
+            // 不归还：物品随装备自然掉落（恰好一份），仅清除掉落/装备上的偷窃标记（保证可正常堆叠）
+            stripStolenMarks(event.getDrops());
+            stripEquipmentMarks(e);
         }
 
         plugin.getMobManager().handleEliteDeath(e.getUniqueId());

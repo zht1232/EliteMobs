@@ -504,6 +504,32 @@ public class EliteMobManager {
         return true;
     }
 
+    // ==================== 偷窃标记（死亡归还精确识别，防止复制） ====================
+    // Paper 的实体装备/死亡掉落会生成新的 CraftItemStack 镜像，引用相等永远不成立。
+    // 因此在偷窃时给物品写入唯一标记（PDC），死亡归还时按标记从掉落/装备中精确移除一份。
+
+    public static final NamespacedKey STOLEN_KEY = new NamespacedKey("elitemobs", "stolen_id");
+
+    /** 给物品写入偷窃标记（幂等：已有标记则保留）。返回该标记值。 */
+    public static String markStolenItem(ItemStack item) {
+        if (item == null) return null;
+        String id = UUID.randomUUID().toString();
+        item.editMeta(meta -> meta.getPersistentDataContainer().set(STOLEN_KEY, PersistentDataType.STRING, id));
+        return id;
+    }
+
+    /** 读取物品上的偷窃标记（无标记返回 null）。 */
+    public static String getStolenId(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return null;
+        return item.getItemMeta().getPersistentDataContainer().get(STOLEN_KEY, PersistentDataType.STRING);
+    }
+
+    /** 移除物品上的偷窃标记（归还玩家前调用，保证物品与偷窃前完全一致）。 */
+    public static void stripStolenMark(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return;
+        item.editMeta(meta -> meta.getPersistentDataContainer().remove(STOLEN_KEY));
+    }
+
     /** 取出并移除某怪被偷的物品（供死亡归还原主/击杀者） */
     public List<ItemStack> takeStolenItems(UUID mobUuid) {
         return stolenItems.remove(mobUuid);
