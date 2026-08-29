@@ -36,12 +36,17 @@ public class EliteCombatListener implements Listener {
     private final Map<UUID, Integer> comboKills = new HashMap<>();
     /** 二段跳宝石：上次二段跳时间戳（毫秒） */
     private final Map<UUID, Long> lastDoubleJump = new HashMap<>();
+    /** 社区兼容：服务器是否装了 SweetFlight。
+     *  true = 解耦模式（SweetFlight 管理飞行武装，二段跳跟随，本插件绝不碰 allowFlight）；
+     *  false = 自带武装模式（手持二段跳宝石武器时保持 allowFlight=true，切掉武器后自然恢复，社区玩家无需 SweetFlight 也能用二段跳）。 */
+    private final boolean sweetFlightMode;
     /** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem。
      *  仅限主线程使用（Bukkit 事件处理均在主线程），无需 ThreadLocal。 */
     private boolean processingGemAttack = false;
 
     public EliteCombatListener(EliteMobsPlugin plugin) {
         this.plugin = plugin;
+        this.sweetFlightMode = plugin.getServer().getPluginManager().getPlugin("SweetFlight") != null;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -213,18 +218,18 @@ public class EliteCombatListener implements Listener {
     /**
      * 二段跳宝石：<b>双击空格触发</b>（拦截 PlayerToggleFlightEvent）。
      *
-     * <p>手持二段跳宝石武器时，双击空格（起跳后空中按空格）不再交给 SweetFlight 起飞，
+     * <p>手持二段跳宝石武器时，双击空格（起跳后空中按空格）不再交给飞行插件起飞，
      * 而是改为二段跳：连按两下空格 = 起跳 + 二段跳，空中/地面均可触发；
-     * 不手持宝石武器时完全放行，双击空格 = SweetFlight 正常飞行（额度/战斗/禁飞世界由它把关）。</p>
+     * 不手持宝石武器时完全放行。</p>
      * <ul>
-     *   <li>本插件<b>绝不修改</b> allowFlight/flying —— 飞行状态完全由 SweetFlight 管理（两插件解耦），
-     *       /sweetfly on/off/toggle 手持任何武器都照常生效；</li>
-     *   <li>二段跳依赖 SweetFlight 的飞行武装（allowFlight=true，加入时默认武装）：飞行可用时双击空格 = 二段跳；
-     *       /sweetfly off 关闭飞行后二段跳随之失效（双击空格无反应），重新 /sweetfly on 或重新加入后恢复；</li>
+     *   <li><b>装了 SweetFlight（本服）</b>：本插件绝不修改 allowFlight/flying（解耦），
+     *       二段跳跟随 SweetFlight 的飞行武装（allowFlight=true，加入默认武装）；/sweetfly on/off/toggle 照常；</li>
+     *   <li><b>没装 SweetFlight（社区）</b>：本插件自带武装——手持二段跳宝石武器时保持 allowFlight=true，
+     *       双击空格=二段跳；切掉武器后不再维护（交给其他飞行插件/原版）；</li>
      *   <li>切换物品不改变飞行状态；</li>
      *   <li>战斗禁飞（未飞行时受伤）不收回 allowFlight → 战斗中二段跳照常可用；</li>
      *   <li>冷却内 / 本次空中已用过 → 取消但不跳（一次空中一次，落地/卸宝石清除）；</li>
-     *   <li>落地事件（isFlying=false）放行，SweetFlight 正常清 BossBar/落地逻辑。</li>
+     *   <li>落地事件（isFlying=false）放行，飞行插件正常清 BossBar/落地逻辑。</li>
      * </ul>
      * 等级越高冷却越短（蓄力越快）。</p>
      */
@@ -286,12 +291,18 @@ public class EliteCombatListener implements Listener {
     }
 
     /** 定时任务：落地/卸下宝石时清理"本次空中已用"标记（防 Map 泄漏）。
-     *  <b>不修改任何飞行状态</b>：飞行由 SweetFlight 完全管理（两插件解耦），
-     *  二段跳依赖 SweetFlight 的飞行武装（allowFlight=true 时双击空格才有事件信号）。 */
+     *  社区兼容双逻辑：
+     *  装了 SweetFlight → 完全不碰飞行武装（解耦，二段跳跟随 SweetFlight 的 allowFlight）；
+     *  没装 SweetFlight → 手持二段跳宝石武器时保持 allowFlight=true（自带武装，社区玩家也能用二段跳），
+     *  切掉武器后不再维护（武装是否残留交给其他飞行插件/原版，本插件不主动收回以免破坏 /fly 等）。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
-                if (getDoubleJumpLevel(p) <= 0 || p.isOnGround()) {
+                int lv = getDoubleJumpLevel(p);
+                if (!sweetFlightMode && lv > 0 && !p.getAllowFlight()) {
+                    p.setAllowFlight(true);  // 无 SweetFlight：自带武装（仅手持宝石武器时）
+                }
+                if (lv <= 0 || p.isOnGround()) {
                     djUsed.remove(p.getUniqueId());
                 }
             }

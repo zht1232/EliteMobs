@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.19.9.jar`
+1. 下载 `EliteMobs-29.20.0.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,12 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.20.0
+- 🌍 **社区兼容（无需 SweetFlight）**：自动检测服务器是否装 SweetFlight——
+  - **装了**：解耦模式（飞行状态由 SweetFlight 管理，/sweetfly on/off/toggle 完整）
+  - **没装**：自带武装模式（手持二段跳宝石武器时自动武装，双击空格=二段跳；切掉武器后不再维护，社区玩家零配置可用）
+- 🐛 **修复熟练进度 Lore 不更新**（v29.19.9）：刷新顺序反了（先放回背包再刷新，Paper 复制物品改副本）→ 改为先刷新再放回
 
 ### v29.19.9
 - 🐛 **修复熟练进度 Lore 不自动更新**：`onKillForProficiency` 里刷新顺序反了（先 `setItemInMainHand` 再 `refreshWeaponLore`）——Paper 的 `setItemInMainHand` 经 NMS 转换会复制物品，先放回再刷新改的是副本，背包里 Lore 停在旧值。改为**先刷新再放回**
