@@ -186,6 +186,8 @@ public class EliteConfig {
     private final Map<String, double[]> utilityPrices = new LinkedHashMap<>();
     // 宝石合成（铁砧 2 个同级宝石合成高一级）
     private boolean gemCombineEnabled = true;
+    // 二段跳宝石（double-jump）：触发所需连按空格次数（2=双击旧行为，3=三连击，默认 3）
+    private int doubleJumpPresses = 3;
     // 武器/护甲品质（quality）：首次淬炼时按权重掷定，影响后续淬炼成功率
     // 9 档：残次 < 粗劣 < 普通 < 优秀 < 传说 < 史诗 < 神话 < 至臻 < 不朽
     private int[] qualityWeights = {8, 12, 30, 20, 12, 10, 5, 2, 1};          // 合计 100
@@ -587,6 +589,8 @@ public class EliteConfig {
             qualitySuccessBonus = new double[]{-0.15, -0.08, 0.0, 0.03, 0.06, 0.09, 0.12, 0.15, 0.18};
         }
         qualityMinRate = Math.max(0.0, Math.min(1.0, config.getDouble("quality.min-rate", 0.05)));
+        // 二段跳宝石：连按空格次数
+        doubleJumpPresses = Math.max(1, Math.min(5, config.getInt("double-jump.presses", 3)));
         // 武器熟练度（weapon-proficiency）
         profEnabled = config.getBoolean("weapon-proficiency.enabled", true);
         profMaxStars = Math.max(1, Math.min(5, config.getInt("weapon-proficiency.max-stars", 5)));
@@ -819,6 +823,9 @@ public class EliteConfig {
 
     /** 淬炼成功率下限（劣质品质不能锁死）。 */
     public double getQualityMinRate() { return qualityMinRate; }
+
+    /** 二段跳触发所需连按空格次数（2=双击 / 3=三连击）。 */
+    public int getDoubleJumpPresses() { return doubleJumpPresses; }
 
     public boolean isProfEnabled() { return profEnabled; }
     public int getProfMaxStars() { return profMaxStars; }

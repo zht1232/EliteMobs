@@ -207,41 +207,67 @@ public class EliteCombatListener implements Listener {
         return best;
     }
 
-    /** 二段跳宝石：空中双击空格二段跳；等级越高冷却越短（蓄力越快）。 */
+    /** 二段跳连按计数：空中按空格的次数（相邻两次间隔 >1.2s 重新计数；落地清零）。 */
+    private final Map<UUID, Integer> djPressCount = new HashMap<>();
+    private final Map<UUID, Long> djLastPress = new HashMap<>();
+
+    /**
+     * 二段跳宝石：空中连按空格触发（默认 3 次 = 起跳 + 空中 2 连按；config double-jump.presses 可调 2-5）。
+     * 等级越高冷却越短（蓄力越快）。冷却期间连按不计入（吞掉重新计数）。
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDoubleJumpToggle(org.bukkit.event.player.PlayerToggleFlightEvent event) {
         Player p = event.getPlayer();
         if (p.getGameMode() == org.bukkit.GameMode.CREATIVE || p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
         int lv = getDoubleJumpLevel(p);
         if (lv <= 0) return;
-        if (!event.isFlying()) return; // 只处理双击空格（尝试开启飞行）
+        if (!event.isFlying()) return; // 空中按空格尝试起飞
         event.setCancelled(true);
         long now = System.currentTimeMillis();
+
+        // 连按计数：需要 空中按空格次数 = presses - 1（presses=3 → 空中 2 连按）
+        int need = Math.max(1, plugin.getEliteConfig().getDoubleJumpPresses() - 1);
+        long lastPress = djLastPress.getOrDefault(p.getUniqueId(), 0L);
+        int count = (now - lastPress <= 1200L) ? djPressCount.getOrDefault(p.getUniqueId(), 0) + 1 : 1;
+        djPressCount.put(p.getUniqueId(), count);
+        djLastPress.put(p.getUniqueId(), now);
+        if (count < need) return; // 还需要更多连按
+
+        // 达到次数：仅在空中且冷却已过才触发二段跳；冷却未过则吞掉本次重新计数
         long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
-        // 仅在空中且冷却已过才二段跳
-        if (!p.isOnGround() && now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
-            p.setFlying(false);
-            p.setAllowFlight(false); // 消耗一次，落地后按冷却恢复
-            // 二段跳 = 向前冲 + 向上跳（玩家朝向水平方向，等级越高冲得越远）
-            org.bukkit.util.Vector dir = p.getLocation().getDirection();
-            dir.setY(0).normalize();
-            double forward = Math.min(0.5 + lv * 0.03, 1.0);
-            org.bukkit.util.Vector vel = dir.multiply(forward);
-            vel.setY(com.clawx.elitemobs.essence.EliteGemFactory.jumpPower(lv));
-            p.setVelocity(vel);
-            p.getWorld().playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 0.9f);
-            p.getWorld().spawnParticle(Particle.CLOUD, p.getLocation(), 12, 0.3, 0.1, 0.3, 0);
-            lastDoubleJump.put(p.getUniqueId(), now);
-        }
-        // 冷却未过或在地面：吞掉本次双击（不二段跳），落地蓄力完成后才能再次二段跳
+        djPressCount.remove(p.getUniqueId());
+        if (p.isOnGround() || now - last < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;
+
+        p.setFlying(false);
+        p.setAllowFlight(false); // 消耗一次，落地后按冷却恢复
+        // 二段跳 = 向前冲 + 向上跳（玩家朝向水平方向，等级越高冲得越远）
+        org.bukkit.util.Vector dir = p.getLocation().getDirection();
+        dir.setY(0).normalize();
+        double forward = Math.min(0.5 + lv * 0.03, 1.0);
+        org.bukkit.util.Vector vel = dir.multiply(forward);
+        vel.setY(com.clawx.elitemobs.essence.EliteGemFactory.jumpPower(lv));
+        p.setVelocity(vel);
+        p.getWorld().playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 0.9f);
+        p.getWorld().spawnParticle(Particle.CLOUD, p.getLocation(), 12, 0.3, 0.1, 0.3, 0);
+        lastDoubleJump.put(p.getUniqueId(), now);
     }
 
-    /** 定时恢复二段跳：玩家落地且冷却已过 → 重新允许飞行（下一次二段跳）。 */
+    /** 定时恢复二段跳：玩家落地且冷却已过 → 重新允许飞行（下一次二段跳）；落地重置连按计数。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
                 int lv = getDoubleJumpLevel(p);
-                if (lv <= 0) continue;
+                if (lv <= 0) {
+                    // 不再持有二段跳宝石：清理连按计数，防止 Map 泄漏
+                    djPressCount.remove(p.getUniqueId());
+                    djLastPress.remove(p.getUniqueId());
+                    continue;
+                }
+                // 落地：重置连按计数
+                if (p.isOnGround()) {
+                    djPressCount.remove(p.getUniqueId());
+                    djLastPress.remove(p.getUniqueId());
+                }
                 if (!p.isOnGround() || p.getAllowFlight()) continue;
                 long now = System.currentTimeMillis();
                 long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);

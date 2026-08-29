@@ -8,12 +8,12 @@ id: double_jump_gem
 material: PLAYER_HEAD
 texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjNkMzU2Yjg2MTE4ZmY4YzQ4YzExOWVmM2QyYWM5MGMxYWQxMzkyODkzMDIyZjgwYjlkYzE2OGMzNmRiMmE1NiJ9fX0="
 name: "&a&l二段跳宝石"
-# 淬炼效果: 空中双击空格二段跳；等级越高蓄力越快（冷却越短，3s → 0.4s）
+# 淬炼效果: 空中连按空格触发二段跳（默认 3 次 = 起跳 + 空中 2 连按；config double-jump.presses 可调 2-5）；等级越高蓄力越快（冷却越短，3s → 0.4s）
 # 适用: 武器
 effect: doublejump
 max-level: 10
 lore:
-  - "&7空中双击空格二段跳"
+  - "&7空中连按三次空格二段跳"
   - "&7等级越高蓄力越快（冷却 3s → 0.4s）"
 glow: true
 # 各等级段掉落概率 (0.0-1.0)
