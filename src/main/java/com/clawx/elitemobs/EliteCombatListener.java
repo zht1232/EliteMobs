@@ -268,6 +268,33 @@ public class EliteCombatListener implements Listener {
         }, 20L, 20L);
     }
 
+    /** 兼容 SweetFlight 的 <code>/sweetflight toggle</code>：其判定基于 getAllowFlight()，而本插件
+     *  武装（allowFlight=true）会让 toggle 永远切到 off。这里在命令执行前把 allowFlight 预置为
+     *  "是否在飞"——未飞 → toggle 走 on 分支（开启飞行）；飞行中 → 走 off 分支（关闭飞行）。
+     *  只影响 toggle 子命令；非宝石武器玩家同样生效（落地后 toggle = 重新起飞，语义更直觉）。
+     *  flying=true 时只 setAllowFlight(true)（无副作用），不会让飞行中的玩家掉落。 */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onSweetflyToggleCommand(org.bukkit.event.player.PlayerCommandPreprocessEvent e) {
+        String raw = e.getMessage();
+        if (raw == null) return;
+        String lower = raw.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!lower.startsWith("/")) return;
+        String[] parts = lower.substring(1).split("\\s+");
+        if (parts.length < 2 || parts.length > 3) return;
+        if (!parts[1].equals("toggle")) return;
+        switch (parts[0]) {   // sweetflight / sweetfly / sflight / sfly / sf
+            case "sweetflight": case "sweetfly": case "sflight": case "sfly": case "sf": break;
+            default: return;
+        }
+        org.bukkit.entity.Player target = e.getPlayer();
+        if (parts.length == 3) {
+            org.bukkit.entity.Player t = Bukkit.getPlayerExact(parts[2]);
+            if (t == null) return;   // 目标不在线：交给 SweetFlight 报错
+            target = t;
+        }
+        target.setAllowFlight(target.isFlying());
+    }
+
     /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */
     public void startMagnetTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
