@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.19.6.jar`
+1. 下载 `EliteMobs-29.19.7.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,10 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.19.7
+- ⏪ **回退 v29.19.6 的 PDC 协作方案**（该方案让 `/sweetfly off` 保留飞行武装 → 状态显示错误、提示不稳定，实测不可靠）
+- ✅ **最终定型（简单可预期）**：EliteMobs 不碰任何飞行状态；二段跳依赖 SweetFlight 飞行武装——默认（加入即武装）手持宝石武器双击空格=二段跳；`/sweetfly off` 彻底关闭（状态准确、双击空格无反应），`on`/`toggle` 恢复正常；战斗禁飞二段跳照常
 
 ### v29.19.6
 - 🤝 **与 SweetFlight 源码版完美配合（需搭配 SweetFlight 1.1.5 源码定制版）**：通过玩家 PDC 标记（`elitemobs:dj_armed`）告知 SweetFlight"玩家是否手持二段跳宝石武器"——`/sweetfly off` 时 SweetFlight 会**保留飞行武装给二段跳**（只关飞行不关武装），同时非宝石武器双击空格仍被拒（提示"飞行已关闭"）
