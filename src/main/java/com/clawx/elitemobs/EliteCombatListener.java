@@ -232,6 +232,8 @@ public class EliteCombatListener implements Listener {
     public void onDoubleJumpToggleFlight(org.bukkit.event.player.PlayerToggleFlightEvent event) {
         Player p = event.getPlayer();
         if (p.getGameMode() == org.bukkit.GameMode.CREATIVE || p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
+        // PJ 飞行附魔装备最高优先级：穿 PJ 飞行套装时完全放行（PJ 二段跳/滑翔接管，二段跳宝石不生效）
+        if (hasPjFlightGear(p)) return;
         int lv = getDoubleJumpLevel(p);
         if (lv <= 0) { djUsed.remove(p.getUniqueId()); return; }  // 无宝石：完全放行（含落地事件）
         if (!event.isFlying()) return;                             // 落地（关飞行）事件：放行，让 SweetFlight 处理
@@ -251,6 +253,36 @@ public class EliteCombatListener implements Listener {
         p.getWorld().playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 0.9f);
         p.getWorld().spawnParticle(Particle.CLOUD, p.getLocation(), 12, 0.3, 0.1, 0.3, 0);
         lastDoubleJump.put(p.getUniqueId(), now);
+    }
+
+    /** 玩家是否穿 PJ 飞行附魔装备（翅膀/升空=胸甲、反重力=靴、磁力=四件套）。
+     *  PJ 附魔写在物品 Lore（中/英文名），这里只做字符串匹配，不依赖 PJ 类，两插件保持独立。 */
+    private static boolean hasPjFlightGear(Player p) {
+        ItemStack chest = p.getInventory().getChestplate();
+        ItemStack boots = p.getInventory().getBoots();
+        if (loreContains(chest, "翅膀", "WINGS", "升空", "LIFT")) return true;
+        if (loreContains(boots, "反重力", "ANTIGRAVITY")) return true;
+        ItemStack helm = p.getInventory().getHelmet();
+        ItemStack legs = p.getInventory().getLeggings();
+        return loreContains(helm, "磁力", "MAGNETIC")
+                && loreContains(chest, "磁力", "MAGNETIC")
+                && loreContains(legs, "磁力", "MAGNETIC")
+                && loreContains(boots, "磁力", "MAGNETIC");
+    }
+
+    /** 物品 Lore 任一行（去掉前 2 个颜色码字符后）是否包含任一关键词（忽略大小写）。 */
+    private static boolean loreContains(ItemStack i, String... names) {
+        if (i == null || !i.hasItemMeta()) return false;
+        java.util.List<String> lore = i.getItemMeta().getLore();
+        if (lore == null) return false;
+        for (String s : lore) {
+            if (s == null || s.length() < 2) continue;
+            String line = s.substring(2).toLowerCase(java.util.Locale.ROOT);
+            for (String n : names) {
+                if (line.contains(n.toLowerCase(java.util.Locale.ROOT))) return true;
+            }
+        }
+        return false;
     }
 
     /** 定时任务：落地/卸下宝石时清理"本次空中已用"标记（防 Map 泄漏）。
