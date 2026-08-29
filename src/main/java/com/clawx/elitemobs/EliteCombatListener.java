@@ -207,68 +207,46 @@ public class EliteCombatListener implements Listener {
         return best;
     }
 
-    /** 二段跳连按计数：空中按空格的次数（相邻两次间隔 >1.2s 重新计数；落地清零）。 */
-    private final Map<UUID, Integer> djPressCount = new HashMap<>();
-    private final Map<UUID, Long> djLastPress = new HashMap<>();
-    /** 本次空中已用过二段跳：落地前不再触发（替代旧 setAllowFlight(false) 的防连跳，且不干扰玩家飞行状态）。 */
+    /** 本次空中已用过二段跳：落地前不再触发（防连跳，让二段跳保持"一次空中一次"）。 */
     private final Set<UUID> djUsed = java.util.concurrent.ConcurrentHashMap.newKeySet();
-    /** 第 1 次空中连按后的延迟起飞任务：仲裁窗口（默认 600ms）内无第 2 次连按 → 补发起飞（双击=飞行）。 */
-    private final Map<UUID, org.bukkit.scheduler.BukkitTask> djFlyTasks = new HashMap<>();
-    /** 防重入：补发起飞前抛"假 PlayerToggleFlightEvent"让 SweetFlight 判断（战斗/额度/禁飞世界 → 取消+提示），
-     *  此时本监听器必须跳过，避免把假事件也当作连按计数。 */
-    private boolean processingFakeFly = false;
 
     /**
-     * 二段跳宝石：空中连按空格触发（默认 3 次 = 起跳 + 空中 2 连按；config double-jump.presses 可调 2-5）。
+     * 二段跳宝石（v29.17.9 起）：<b>空中右键触发</b>（RIGHT_CLICK_AIR）。
      *
-     * <p><b>双击=飞行 / 三连=二段跳（v29.17.8 与 SweetFlight 联动）</b>：
-     * 所有空中按空格（无论起跳后还是掉落中）都先取消并进入连按计数；
-     * 达到次数（默认空中 2 连按=三连）→ 二段跳；未达到且仲裁窗口（`double-jump.fly-window-ticks`，
-     * 默认 12tick=600ms）内无下一次连按 → 尝试补发起飞（双击=飞行）。
-     * 补发起飞前抛"假起飞事件"让 SweetFlight 裁决：战斗禁飞/额度用尽/禁飞世界 → SweetFlight 取消并提示
-     * （玩家不飞，但仍显示"战斗期间无法起飞"等原版消息）；SweetFlight 放行 → 才真正 setFlying(true)。
-     * 二段跳不依赖飞行权限判定：定时任务始终为宝石持有者保持 allowFlight=true（禁飞时也能触发二段跳），
-     * 飞行本身由 SweetFlight 通过假事件把关 → 禁飞时二段跳可用、但不会直接起飞。
-     * 绝不修改 allowFlight/flying 之外的状态；已 flying 玩家按空格不触发本事件。</p>
+     * <p>右键方案彻底解耦"飞行"与"二段跳"：
+     * <ul>
+     *   <li>空格双击 = 飞行（回归原版/SweetFlight 处理，战斗禁飞/额度/禁飞世界由 SweetFlight 把关并提示，不再有仲裁窗口问题）；</li>
+     *   <li>空中右键 = 二段跳（不依赖 allowFlight，禁飞时天然可用；无窗口/计数，触发 100% 可靠）。</li>
+     * </ul>
+     * 例外（避免与物品右键动作冲突）：
+     * <ul>
+     *   <li>主手或副手持盾 → 跳过（右键=格挡，不吞格挡）；</li>
+     *   <li>主手三叉戟 → 跳过（右键=投掷，避免误扔）；</li>
+     *   <li>仅空中触发（RIGHT_CLICK_AIR；点方块右键如开箱/放置不触发）；</li>
+     *   <li>冷却内 / 本次空中已用过 → 不触发。</li>
+     * </ul>
+     * 等级越高冷却越短（蓄力越快）。</p>
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onDoubleJumpToggle(org.bukkit.event.player.PlayerToggleFlightEvent event) {
-        if (processingFakeFly) return; // 假起飞事件（SweetFlight 裁决用）不参与连按计数
+    public void onDoubleJumpInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        if (event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_AIR) return;
         Player p = event.getPlayer();
         if (p.getGameMode() == org.bukkit.GameMode.CREATIVE || p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
         int lv = getDoubleJumpLevel(p);
-        if (lv <= 0) return;
-        if (!event.isFlying()) return; // 空中按空格尝试起飞
-        event.setCancelled(true);
+        if (lv <= 0) { djUsed.remove(p.getUniqueId()); return; }
+        // 持盾（主手或副手）：右键=格挡，不触发二段跳
+        if (p.getInventory().getItemInOffHand().getType() == Material.SHIELD
+                || p.getInventory().getItemInMainHand().getType() == Material.SHIELD) return;
+        // 三叉戟：右键=投掷，避免误扔（弓/弩拉弓装填无消耗副作用，允许）
+        if (p.getInventory().getItemInMainHand().getType() == Material.TRIDENT) return;
+        // 仅空中触发；落地时顺带清理本次空中标记
+        if (p.isOnGround()) { djUsed.remove(p.getUniqueId()); return; }
         long now = System.currentTimeMillis();
-
-        // 本次空中已用过二段跳：吞掉直到落地（不再连按计数，也不触发）
-        if (djUsed.contains(p.getUniqueId())) {
-            djPressCount.remove(p.getUniqueId());
-            return;
-        }
-
-        // 连按计数：需要 空中按空格次数 = presses - 1（presses=3 → 空中 2 连按）
-        int need = Math.max(1, plugin.getEliteConfig().getDoubleJumpPresses() - 1);
-        long lastPress = djLastPress.getOrDefault(p.getUniqueId(), 0L);
-        int count = (now - lastPress <= 1200L) ? djPressCount.getOrDefault(p.getUniqueId(), 0) + 1 : 1;
-        djPressCount.put(p.getUniqueId(), count);
-        djLastPress.put(p.getUniqueId(), now);
-
-        if (count < need) {
-            // 第 1 次空中连按：本次起飞被取消，仲裁窗口内无第 2 次连按则补发起飞（双击=飞行）
-            scheduleLateFly(p);
-            return;
-        }
-
-        // 达到次数（三连）：取消延迟起飞，进入二段跳判定
-        cancelLateFly(p);
-        long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
-        djPressCount.remove(p.getUniqueId());
-        if (p.isOnGround() || now - last < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;
-
-        // 触发二段跳：不修改 allowFlight/flying（保留玩家飞行状态），靠 djUsed 落地前防连跳
+        if (now - lastDoubleJump.getOrDefault(p.getUniqueId(), 0L)
+                < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;
+        if (djUsed.contains(p.getUniqueId())) return; // 本次空中已用过
         djUsed.add(p.getUniqueId());
+
         // 二段跳 = 向前冲 + 向上跳（玩家朝向水平方向，等级越高冲得越远）
         org.bukkit.util.Vector dir = p.getLocation().getDirection();
         dir.setY(0).normalize();
@@ -281,65 +259,12 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.put(p.getUniqueId(), now);
     }
 
-    /** 双击飞行：第 1 次空中连按后仲裁窗口内无第二次 → 尝试补发起飞（双击=飞行）。
-     *  先抛"假 PlayerToggleFlightEvent"让 SweetFlight 裁决：战斗/额度/禁飞世界会被它取消并提示（不飞）；
-     *  未被取消才真正 setFlying(true)（SweetFlight 未装/放行时正常起飞）。 */
-    private void scheduleLateFly(Player p) {
-        cancelLateFly(p);
-        UUID uuid = p.getUniqueId();
-        long delay = Math.max(3, plugin.getEliteConfig().getDoubleJumpFlyWindowTicks());
-        org.bukkit.scheduler.BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            djFlyTasks.remove(uuid);
-            if (!p.isOnline() || p.isDead()) return;
-            if (djUsed.contains(uuid)) return;      // 期间已触发二段跳
-            if (getDoubleJumpLevel(p) <= 0) return; // 已换下宝石
-            if (!p.getAllowFlight() || p.isFlying()) return;
-            // 假起飞事件 → SweetFlight（NORMAL）按自身规则裁决并提示（战斗禁飞/额度/禁飞世界 → 取消）
-            org.bukkit.event.player.PlayerToggleFlightEvent fake =
-                    new org.bukkit.event.player.PlayerToggleFlightEvent(p, true);
-            processingFakeFly = true;
-            try {
-                org.bukkit.Bukkit.getPluginManager().callEvent(fake);
-            } finally {
-                processingFakeFly = false;
-            }
-            if (!fake.isCancelled()) p.setFlying(true); // SweetFlight 放行 → 双击起飞
-        }, delay);
-        djFlyTasks.put(uuid, task);
-    }
-
-    private void cancelLateFly(Player p) {
-        org.bukkit.scheduler.BukkitTask t = djFlyTasks.remove(p.getUniqueId());
-        if (t != null) t.cancel();
-    }
-
-    /** 定时任务：清理二段跳状态；始终为宝石持有者保持 allowFlight（禁飞时二段跳仍可触发；
-     *  飞行本身由 SweetFlight 通过假起飞事件把关，不会被绕过）。 */
+    /** 定时任务：落地/卸下宝石时清理二段跳"本次空中已用"标记（防 Map 泄漏）。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
-                int lv = getDoubleJumpLevel(p);
-                if (lv <= 0) {
-                    // 不再持有二段跳宝石：清理计数/延迟起飞/状态，防止 Map 泄漏
-                    djPressCount.remove(p.getUniqueId());
-                    djLastPress.remove(p.getUniqueId());
+                if (getDoubleJumpLevel(p) <= 0 || p.isOnGround()) {
                     djUsed.remove(p.getUniqueId());
-                    cancelLateFly(p);
-                    continue;
-                }
-                // 落地：重置连按计数与本次空中已用标记，取消未触发的延迟起飞
-                if (p.isOnGround()) {
-                    djPressCount.remove(p.getUniqueId());
-                    djLastPress.remove(p.getUniqueId());
-                    djUsed.remove(p.getUniqueId());
-                    cancelLateFly(p);
-                }
-                // 保持 allowFlight（SweetFlight 禁飞时重新打开，让二段跳事件可触发）
-                if (!p.isOnGround() || p.getAllowFlight()) continue;
-                long now = System.currentTimeMillis();
-                long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
-                if (now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
-                    p.setAllowFlight(true);
                 }
             }
         }, 20L, 20L);
