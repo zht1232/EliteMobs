@@ -485,7 +485,7 @@ public class EliteCombatListener implements Listener {
         addProfKillProgress(p, hand, amount);
     }
 
-    /** 增加武器击杀进度并按指数阈值升星（含提示/音效/粒子）。 */
+    /** 增加武器击杀进度并按指数阈值升星（含提示/音效/粒子；实时刷新 Lore 显示进度）。 */
     private void addProfKillProgress(Player p, ItemStack hand, int amount) {
         EliteConfig cfg = plugin.getEliteConfig();
         int stars = com.clawx.elitemobs.essence.EliteGemFactory.getProf(hand);
@@ -507,6 +507,10 @@ public class EliteCombatListener implements Listener {
         if (stars != com.clawx.elitemobs.essence.EliteGemFactory.getProf(hand)) {
             com.clawx.elitemobs.essence.EliteGemFactory.setProf(hand, stars);
         }
+        // 实时刷新 Lore（熟练进度/星级行），并确保背包槽位引用同步
+        p.getInventory().setItemInMainHand(hand);
+        com.clawx.elitemobs.essence.EliteEssenceUpgradeListener ess = plugin.getEssenceListener();
+        if (ess != null) ess.refreshWeaponLore(hand);
         if (leveled) {
             double crit = Math.min(stars * cfg.getProfCritPerStar(), cfg.getProfMaxCritChance());
             p.sendMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "[EliteMobs] " + ChatColor.YELLOW

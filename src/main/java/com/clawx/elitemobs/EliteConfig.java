@@ -187,8 +187,10 @@ public class EliteConfig {
     // 宝石合成（铁砧 2 个同级宝石合成高一级）
     private boolean gemCombineEnabled = true;
     // 武器/护甲品质（quality）：首次淬炼时按权重掷定，影响后续淬炼成功率
-    private int[] qualityWeights = {50, 30, 12, 6, 2};          // 普通/优秀/传说/史诗/神话
-    private double[] qualitySuccessBonus = {0.0, 0.02, 0.05, 0.08, 0.12};
+    // 9 档：残次 < 粗劣 < 普通 < 优秀 < 传说 < 史诗 < 神话 < 至臻 < 不朽
+    private int[] qualityWeights = {8, 12, 30, 20, 12, 10, 5, 2, 1};          // 合计 100
+    private double[] qualitySuccessBonus = {-0.15, -0.08, 0.0, 0.03, 0.06, 0.09, 0.12, 0.15, 0.18};
+    private double qualityMinRate = 0.05;      // 淬炼成功率下限（劣质品质也不能锁死）
     // 武器熟练度（weapon-proficiency）：击杀驱动升星（指数增长），提升暴击率
     private boolean profEnabled = true;
     private int profMaxStars = 5;
@@ -569,21 +571,22 @@ public class EliteConfig {
         runeDropMaxLevel = Math.max(1, config.getInt("rune.drops.max-level", 10));
         runeCombineEnabled = config.getBoolean("rune.combine.enabled", true);
         gemCombineEnabled = config.getBoolean("essence-upgrade.gem-combine-enabled", true);
-        // 武器/护甲品质（quality）
+        // 武器/护甲品质（quality）——旧 5 档配置自动回退到新版 9 档默认值
         List<Integer> qw = config.getIntegerList("quality.weights");
-        if (!qw.isEmpty() && qw.size() >= 5) {
-            qualityWeights = new int[5];
-            for (int i = 0; i < 5; i++) qualityWeights[i] = Math.max(0, qw.get(i));
+        if (qw.size() >= 9) {
+            qualityWeights = new int[9];
+            for (int i = 0; i < 9; i++) qualityWeights[i] = Math.max(0, qw.get(i));
         } else {
-            qualityWeights = new int[]{50, 30, 12, 6, 2};
+            qualityWeights = new int[]{8, 12, 30, 20, 12, 10, 5, 2, 1};
         }
         List<Double> qb = config.getDoubleList("quality.success-bonus");
-        if (qb.size() >= 5) {
-            qualitySuccessBonus = new double[5];
-            for (int i = 0; i < 5; i++) qualitySuccessBonus[i] = Math.max(0.0, qb.get(i));
+        if (qb.size() >= 9) {
+            qualitySuccessBonus = new double[9];
+            for (int i = 0; i < 9; i++) qualitySuccessBonus[i] = qb.get(i);
         } else {
-            qualitySuccessBonus = new double[]{0.0, 0.02, 0.05, 0.08, 0.12};
+            qualitySuccessBonus = new double[]{-0.15, -0.08, 0.0, 0.03, 0.06, 0.09, 0.12, 0.15, 0.18};
         }
+        qualityMinRate = Math.max(0.0, Math.min(1.0, config.getDouble("quality.min-rate", 0.05)));
         // 武器熟练度（weapon-proficiency）
         profEnabled = config.getBoolean("weapon-proficiency.enabled", true);
         profMaxStars = Math.max(1, Math.min(5, config.getInt("weapon-proficiency.max-stars", 5)));
@@ -808,11 +811,14 @@ public class EliteConfig {
     // ========== 武器/护甲品质 & 熟练度 ==========
     public int[] getQualityWeights() { return qualityWeights; }
 
-    /** 品质对淬炼成功率的加成（0-4：普通/优秀/传说/史诗/神话）。 */
+    /** 品质对淬炼成功率的加成（0-8：残次/粗劣/普通/优秀/传说/史诗/神话/至臻/不朽；劣质为负数=削弱）。 */
     public double getQualitySuccessBonus(int quality) {
         if (quality < 0 || quality >= qualitySuccessBonus.length) return 0.0;
         return qualitySuccessBonus[quality];
     }
+
+    /** 淬炼成功率下限（劣质品质不能锁死）。 */
+    public double getQualityMinRate() { return qualityMinRate; }
 
     public boolean isProfEnabled() { return profEnabled; }
     public int getProfMaxStars() { return profMaxStars; }

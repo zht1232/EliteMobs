@@ -83,7 +83,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s,"");
         msg(s,ChatColor.GOLD+"\u2501\u2501\u2501 \u7ba1\u7406\u6307\u4ee4 \u2501\u2501\u2501");
         msg(s,ChatColor.YELLOW+"/em fixgear [\u73a9\u5bb6\u540d]"+ChatColor.GRAY+" \u2014 \u4fee\u590d\u5386\u53f2\u5347\u7ea7\u4e0b\u754c\u5408\u91d1\u7684\u6dec\u70bc\u88c5\u5907\u5c5e\u6027\uff08\u9ed8\u8ba4\u5168\u4f53\u5728\u7ebf\u73a9\u5bb6\uff09");
-        msg(s,ChatColor.YELLOW+"/em quality [set <0-4> | prof <0-5> | info]"+ChatColor.GRAY+" \u2014 \u8bbe\u7f6e/\u67e5\u770b\u624b\u6301\u88c5\u5907\u54c1\u8d28\u4e0e\u719f\u7ec3\u5ea6\uff080\u666e\u901a/1\u4f18\u79c0/2\u4f20\u8bf4/3\u53f2\u8bd7/4\u795e\u8bdd\uff09");    }
+        msg(s,ChatColor.YELLOW+"/em quality [set <0-8> | prof <0-5> | info]"+ChatColor.GRAY+" \u2014 \u8bbe\u7f6e/\u67e5\u770b\u624b\u6301\u88c5\u5907\u54c1\u8d28\u4e0e\u719f\u7ec3\u5ea6\uff080\u6b8b\u6b21/1\u7c97\u52a3/2\u666e\u901a/3\u4f18\u79c0/4\u4f20\u8bf4/5\u53f2\u8bd7/6\u795e\u8bdd/7\u81f3\u81fb/8\u4e0d\u673d\uff09");    }
 
     // ---- 修复历史下界合金装备属性（全体在线玩家 / 指定玩家） ----
     private void fixNetheriteGear(CommandSender s, String[] args) {
@@ -118,7 +118,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         msg(s, ChatColor.GREEN + "✔ 已扫描 " + targets.size() + " 名玩家，修复 " + fixed + " 件下界合金装备（含末影箱）");
     }
 
-    // ---- 品质/熟练度管理（/em quality set <0-4> | prof <0-5> | info） ----
+    // ---- 品质/熟练度管理（/em quality set <0-8> | prof <0-5> | info） ----
     private void qualityCmd(CommandSender s, String[] args) {
         if (!has(s, "elitemobs.admin")) return;
         if (!(s instanceof Player p)) { msg(s, ChatColor.RED + "✘ 请在游戏内手持装备执行！"); return; }
@@ -134,9 +134,9 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if ("set".equalsIgnoreCase(args[1])) {
-            if (args.length < 3) { msg(s, ChatColor.RED + "✘ 用法: /em quality set <0-4>（0普通/1优秀/2传说/3史诗/4神话）"); return; }
+            if (args.length < 3) { msg(s, ChatColor.RED + "✘ 用法: /em quality set <0-8>（0残次/1粗劣/2普通/3优秀/4传说/5史诗/6神话/7至臻/8不朽）"); return; }
             int q;
-            try { q = Integer.parseInt(args[2]); } catch (Exception e) { msg(s, ChatColor.RED + "✘ 品质必须是 0-4"); return; }
+            try { q = Integer.parseInt(args[2]); } catch (Exception e) { msg(s, ChatColor.RED + "✘ 品质必须是 0-8"); return; }
             com.clawx.elitemobs.essence.EliteGemFactory.setQuality(hand, q);
             p.getInventory().setItemInMainHand(hand);
             msg(s, ChatColor.GREEN + "✔ 已将手持装备品质设为: " + ChatColor.translateAlternateColorCodes('&',
@@ -156,7 +156,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             msg(s, ChatColor.GREEN + "✔ 已将手持装备熟练度设为 " + stars + " 星");
             return;
         }
-        msg(s, ChatColor.RED + "✘ 用法: /em quality [set <0-4> | prof <0-5> | info]");
+        msg(s, ChatColor.RED + "✘ 用法: /em quality [set <0-8> | prof <0-5> | info]");
     }
 
     // ---- \u72b6\u6001 ----
@@ -707,7 +707,7 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
         if(a.length==2&&a[0].equalsIgnoreCase("quality"))
             return Arrays.asList("set","prof","info").stream().filter(x->x.startsWith(a[1].toLowerCase())).collect(Collectors.toList());
         if(a.length==3&&a[0].equalsIgnoreCase("quality")&&a[1].equalsIgnoreCase("set"))
-            return Arrays.asList("0","1","2","3","4").stream().filter(x->x.startsWith(a[2].toLowerCase())).collect(Collectors.toList());
+            return Arrays.asList("0","1","2","3","4","5","6","7","8").stream().filter(x->x.startsWith(a[2].toLowerCase())).collect(Collectors.toList());
         if(a.length==3&&a[0].equalsIgnoreCase("quality")&&a[1].equalsIgnoreCase("prof"))
             return Arrays.asList("0","1","2","3","4","5").stream().filter(x->x.startsWith(a[2].toLowerCase())).collect(Collectors.toList());
         if(a.length==3&&(a[0].equalsIgnoreCase("spawn")||a[0].equalsIgnoreCase("test")||a[0].equalsIgnoreCase("stat")))

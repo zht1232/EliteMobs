@@ -278,10 +278,10 @@ public class EliteEssenceUpgradeListener implements Listener {
         // 品质：首次淬炼时掷定并固化（影响本次及后续成功率）；旧版已淬炼装备自动迁移为普通
         int quality = ensureQuality(equip);
 
-        // 熟练度：当前星级（每次淬炼成功 +1 星，封顶；提升暴击率）
+        // 熟练度：当前星级（击杀驱动升星；提升暴击率与成功率）
         int profStars = EliteGemFactory.getProf(equip);
 
-        // 成功率: 基础 + 宝石等级加成 + 品质加成 + 熟练度加成（封顶 maxRate）
+        // 成功率: 基础 + 宝石等级加成 + 品质加成(劣质为负=削弱) + 熟练度加成（封顶 maxRate，下限 min-rate）
         // 测试宝石可用 gem_success_rate 覆盖（0=必失败 / 1=必成功）
         double rate = EliteGemFactory.getGemSuccessRate(gem);
         if (rate < 0) {
@@ -290,6 +290,7 @@ public class EliteEssenceUpgradeListener implements Listener {
             rate = Math.min(cfg.getEssenceUpgradeBaseRate() + (gemLevel - 1) * cfg.getEssenceUpgradePerLevel()
                             + qualityBonus + profBonus,
                     cfg.getEssenceUpgradeMaxRate());
+            rate = Math.max(rate, cfg.getQualityMinRate());
         }
         boolean ok = rng.nextDouble() < rate;
 
@@ -802,27 +803,46 @@ public class EliteEssenceUpgradeListener implements Listener {
 
     /**
      * 读取/初始化装备品质：
-     * - 首次淬炼（无升级标记）：按权重掷定品质并固化，品质加成作用于本次及后续成功率
-     * - 旧版已淬炼装备（有升级标记但无品质标记）：自动迁移为普通（0）并固化
+     * - 首次淬炼（无升级标记）：按权重掷定品质（9 档）并固化
+     * - 旧版已淬炼装备（有升级标记但无品质标记）：自动迁移为普通
+     * - 旧刻度品质（0-4，无版本标记）：迁移到新刻度（+2）并写版本标记
      */
     private int ensureQuality(ItemStack equip) {
-        int q = EliteGemFactory.getQuality(equip);
         ItemMeta meta = equip.getItemMeta();
-        if (meta == null) return q;
+        if (meta == null) return EliteGemFactory.getQuality(equip);
         var pdc = meta.getPersistentDataContainer();
-        if (pdc.has(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER)) return q;
+        Integer raw = pdc.get(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER);
+        if (raw != null) {
+            // 已存在品质：若无版本标记且为旧刻度（0-4）→ 迁移 +2 并固化版本
+            if (!pdc.has(EliteGemFactory.KEY_QUALITY_VER, PersistentDataType.BYTE) && raw <= 4) {
+                int migrated = Math.max(0, Math.min(4, raw)) + 2;
+                pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, migrated);
+                pdc.set(EliteGemFactory.KEY_QUALITY_VER, PersistentDataType.BYTE, (byte) 1);
+                equip.setItemMeta(meta);
+                return migrated;
+            }
+            return EliteGemFactory.getQuality(equip);
+        }
         boolean refined = pdc.has(isWeapon(equip) ? UK : AUK, PersistentDataType.BYTE);
         if (refined) {
-            // 旧版已淬炼装备：迁移为普通品质
-            pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, 0);
+            // 旧版已淬炼装备：迁移为普通品质（新刻度 2）+ 版本标记
+            pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, 2);
+            pdc.set(EliteGemFactory.KEY_QUALITY_VER, PersistentDataType.BYTE, (byte) 1);
             equip.setItemMeta(meta);
-            return 0;
+            return 2;
         }
         // 首次淬炼：按权重掷品质
-        q = EliteGemFactory.rollQuality(rng, plugin.getEliteConfig().getQualityWeights());
+        int q = EliteGemFactory.rollQuality(rng, plugin.getEliteConfig().getQualityWeights());
         pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, q);
+        pdc.set(EliteGemFactory.KEY_QUALITY_VER, PersistentDataType.BYTE, (byte) 1);
         equip.setItemMeta(meta);
         return q;
+    }
+
+    /** 刷新武器 Lore（熟练度击杀进度/星级变化后调用；击杀计数写入 PDC 后实时反映到 Lore）。 */
+    public void refreshWeaponLore(ItemStack equip) {
+        if (equip == null || !equip.hasItemMeta()) return;
+        rebuildLore(equip, plugin.getMessages());
     }
 
     /** 重建装备 Lore：基础属性（品质/淬炼等级/主属性/熟练度）+ 宝石槽 + 符文槽。 */
@@ -842,19 +862,35 @@ public class EliteEssenceUpgradeListener implements Listener {
         lore.add(ChatColor.translateAlternateColorCodes('&',
                 msg(msgs, "essence-upgrade.lore.stat-title", "&b❖ 基础属性")));
 
-        // 品质（首次淬炼掷定；旧版已淬炼装备自动迁移为普通）
+        // 品质（首次淬炼掷定；旧版 5 档自动迁移；劣质削弱/优质加成）
         int quality = EliteGemFactory.getQuality(equip);
         boolean hasQuality = pdc.has(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER);
+        boolean hasQualityVer = pdc.has(EliteGemFactory.KEY_QUALITY_VER, PersistentDataType.BYTE);
         boolean refined = pdc.has(isW ? UK : AUK, PersistentDataType.BYTE);
         if (!hasQuality && refined) {
-            quality = 0;
-            pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, 0);
+            // 旧版已淬炼装备无品质：迁移为普通（新刻度 2）
+            quality = 2;
+            pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, 2);
+            pdc.set(EliteGemFactory.KEY_QUALITY_VER, PersistentDataType.BYTE, (byte) 1);
+        } else if (hasQuality && !hasQualityVer) {
+            // 旧刻度品质（0-4）：迁移 +2 并写版本标记
+            Integer raw = pdc.get(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER);
+            int migrated = raw == null ? 2 : Math.max(0, Math.min(4, raw)) + 2;
+            pdc.set(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER, migrated);
+            pdc.set(EliteGemFactory.KEY_QUALITY_VER, PersistentDataType.BYTE, (byte) 1);
+            quality = migrated;
         }
         String qKey = isW ? "essence-upgrade.lore.quality-weapon" : "armor-upgrade.lore.quality-armor";
         String qLabel = isW ? "   &7武器品质&8：" : "   &7护甲品质&8：";
+        // 成功率加成/削弱提示（残次-15% 粗劣-8% ... 神话+12% 至臻+15% 不朽+18%）
+        double qb = plugin.getEliteConfig().getQualitySuccessBonus(quality);
+        String mod = qb == 0.0 ? "" : (qb > 0
+                ? " &8(成功率+" + String.format("%.0f", qb * 100) + "%)"
+                : " &8(成功率" + String.format("%.0f", qb * 100) + "%)");
         lore.add(ChatColor.translateAlternateColorCodes('&',
-                msg(msgs, qKey, qLabel + "{quality}")
-                        .replace("{quality}", EliteGemFactory.qualityName(quality))));
+                msg(msgs, qKey, qLabel + "{quality}{mod}")
+                        .replace("{quality}", EliteGemFactory.qualityName(quality))
+                        .replace("{mod}", mod)));
 
         // 淬炼等级（从显示名移入基础属性）
         int totalLevel = EliteGemFactory.totalGemLevel(equip);

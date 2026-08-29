@@ -198,53 +198,77 @@ public final class EliteGemFactory {
     public static int jumpCooldown(int level) { return Math.max(400, 3000 - level * 260); }
 
     // ==================== 武器/护甲品质（首次淬炼时掷定，影响后续成功率） ====================
+    // 9 档品质：残次 < 粗劣 < 普通 < 优秀 < 传说 < 史诗 < 神话 < 至臻 < 不朽
+    // 劣质（残次/粗劣）削弱淬炼成功率，优质加成；颜色各档独立。
 
     public static final NamespacedKey KEY_QUALITY = new NamespacedKey("elitemobs", "quality");
+    public static final NamespacedKey KEY_QUALITY_VER = new NamespacedKey("elitemobs", "quality_ver");
     public static final NamespacedKey KEY_PROF = new NamespacedKey("elitemobs", "prof");
     public static final NamespacedKey KEY_PROF_KILLS = new NamespacedKey("elitemobs", "prof_kills");
 
-    public static final int Q_COMMON = 0;    // 普通
-    public static final int Q_UNCOMMON = 1;  // 优秀
-    public static final int Q_RARE = 2;      // 传说
-    public static final int Q_EPIC = 3;      // 史诗
-    public static final int Q_MYTHIC = 4;    // 神话
-    public static final int MAX_QUALITY = 4;
+    public static final int Q_TRASH = 0;     // 残次
+    public static final int Q_POOR = 1;      // 粗劣
+    public static final int Q_COMMON = 2;    // 普通
+    public static final int Q_UNCOMMON = 3;  // 优秀
+    public static final int Q_LEGENDARY = 4; // 传说
+    public static final int Q_EPIC = 5;      // 史诗
+    public static final int Q_MYTHIC = 6;    // 神话
+    public static final int Q_ULTRA = 7;     // 至臻
+    public static final int Q_IMMORTAL = 8;  // 不朽
+    public static final int MAX_QUALITY = 8;
 
-    /** 读取装备品质（无标记返回普通 0）。 */
+    /** 读取装备品质。旧版 5 档（普通=0..神话=4）自动迁移到新版刻度（普通=2..神话=6，即 +2）。 */
     public static int getQuality(ItemStack equip) {
         if (equip == null || !equip.hasItemMeta()) return Q_COMMON;
-        Integer q = equip.getItemMeta().getPersistentDataContainer().get(KEY_QUALITY, PersistentDataType.INTEGER);
-        return q == null ? Q_COMMON : Math.max(Q_COMMON, Math.min(MAX_QUALITY, q));
+        var pdc = equip.getItemMeta().getPersistentDataContainer();
+        Integer q = pdc.get(KEY_QUALITY, PersistentDataType.INTEGER);
+        if (q == null) return Q_COMMON;
+        // 无版本标记且旧刻度（0-4）→ 迁移到新刻度
+        if (!pdc.has(KEY_QUALITY_VER, PersistentDataType.BYTE) && q <= 4) {
+            return Math.max(0, Math.min(MAX_QUALITY, q + 2));
+        }
+        return Math.max(0, Math.min(MAX_QUALITY, q));
     }
 
-    /** 写入装备品质（自动夹取到 0-4）。 */
+    /** 写入装备品质（自动夹取到 0-8，并写版本标记）。 */
     public static void setQuality(ItemStack equip, int q) {
         if (equip == null) return;
-        equip.editMeta(meta -> meta.getPersistentDataContainer().set(KEY_QUALITY, PersistentDataType.INTEGER,
-                Math.max(Q_COMMON, Math.min(MAX_QUALITY, q))));
+        final int v = Math.max(0, Math.min(MAX_QUALITY, q));
+        equip.editMeta(meta -> {
+            var pdc = meta.getPersistentDataContainer();
+            pdc.set(KEY_QUALITY, PersistentDataType.INTEGER, v);
+            pdc.set(KEY_QUALITY_VER, PersistentDataType.BYTE, (byte) 1);
+        });
     }
 
-    /** 按权重掷定品质（返回 0-4）。 */
+    /** 按权重掷定品质（返回 0-8；权重数组需 9 个，不足时按 0 补全）。 */
     public static int rollQuality(java.util.Random rng, int[] weights) {
         if (weights == null || weights.length == 0) return Q_COMMON;
         int total = 0;
-        for (int w : weights) total += Math.max(0, w);
+        for (int i = 0; i <= MAX_QUALITY; i++) {
+            total += Math.max(0, i < weights.length ? weights[i] : 0);
+        }
         if (total <= 0) return Q_COMMON;
         int roll = rng.nextInt(total);
-        for (int i = 0; i < weights.length && i <= MAX_QUALITY; i++) {
-            roll -= Math.max(0, weights[i]);
+        for (int i = 0; i <= MAX_QUALITY; i++) {
+            roll -= Math.max(0, i < weights.length ? weights[i] : 0);
             if (roll < 0) return i;
         }
         return Q_COMMON;
     }
 
-    /** 品质显示名（含颜色，与宝石品质命名一致：普通/优秀/传说/史诗/神话）。 */
+    /** 品质显示名（含颜色，9 档各档独立配色）。 */
     public static String qualityName(int q) {
         return switch (q) {
-            case Q_UNCOMMON -> "&e&l优秀";
-            case Q_RARE -> "&a&l传说";
-            case Q_EPIC -> "&b&l史诗";
-            case Q_MYTHIC -> "&2&l神话";
+            case Q_TRASH -> "&8残次";
+            case Q_POOR -> "&7粗劣";
+            case Q_COMMON -> "&f普通";
+            case Q_UNCOMMON -> "&e优秀";
+            case Q_LEGENDARY -> "&6传说";
+            case Q_EPIC -> "&5史诗";
+            case Q_MYTHIC -> "&4神话";
+            case Q_ULTRA -> "&2至臻";
+            case Q_IMMORTAL -> "&c不朽";
             default -> "&f普通";
         };
     }
