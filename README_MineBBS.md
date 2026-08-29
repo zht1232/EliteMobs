@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.19.2.jar`
+1. 下载 `EliteMobs-29.19.3.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,10 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.19.3
+- 🔧 **修复 `/sweetflight toggle` 误伤普通玩家**：v29.19.1 的兼容逻辑对所有玩家生效，导致非宝石武器玩家落地后 toggle 变成"重新起飞"（关不掉飞行）。现在只在**手持二段跳宝石武器且未在飞**时干预 toggle（→ 开启飞行）；飞行中/非宝石武器完全按 SweetFlight 原版语义（能正常关闭）
+- 🎨 **修正启动 Banner**：补齐 E/L 字母底部横线
 
 ### v29.19.2
 - 🎨 **炫酷启动界面**：启动日志新增 ASCII Art 大标题（`/ \ | _` 等符号排成的 EliteMobs 字样，纯 ASCII 兼容 GBK 控制台）

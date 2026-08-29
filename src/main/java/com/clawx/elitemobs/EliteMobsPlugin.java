@@ -35,13 +35,13 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private EliteEssenceUpgradeListener essenceListener;
     private org.bukkit.configuration.file.FileConfiguration messages;
 
-    /** 启动 ASCII Art Banner（纯 ASCII：/ \ | _ 等符号，76 列 x 5 行，避免 GBK 控制台乱码）。 */
+    /** 启动 ASCII Art Banner（纯 ASCII：/ \ | _ 等符号，78 列 x 5 行，避免 GBK 控制台乱码）。 */
     private static final String[] STARTUP_BANNER = {
-            " ______    _      _    _____    _____    __  __     ____     _        ____  ",
-            "|  ____|  | |    | |  |_   _|  |  ___|  |  \\/  |   / __ \\   | |      / ___| ",
-            "| |__     | |    | |    | |    | |__    | \\  / |  | |  | |  | |__    \\___ \\ ",
-            "|  __|    | |    | |    | |    |  __|   | |\\/| |  | |__| |  | '_ \\    ___) |",
-            "|_|       |_|    |_|    |_|    |_|      |_|  |_|   \\____/   |_.__/   |____/ ",
+            " ______    _        _    _____    _____    __  __     ____     _        ____  ",
+            "|  ____|  | |      | |  |_   _|  |  ___|  |  \\/  |   / __ \\   | |      / ___| ",
+            "| |__     | |      | |    | |    | |__    | \\  / |  | |  | |  | |__    \\___ \\ ",
+            "|  __|    | |__    | |    | |    |  __|   | |\\/| |  | |__| |  | '_ \\    ___) |",
+            "|_____|   |____|   |_|    |_|    |_|      |_|  |_|   \\____/   |_.__/   |____/ ",
     };
 
     @Override public void onEnable() {

@@ -269,10 +269,10 @@ public class EliteCombatListener implements Listener {
     }
 
     /** 兼容 SweetFlight 的 <code>/sweetflight toggle</code>：其判定基于 getAllowFlight()，而本插件
-     *  武装（allowFlight=true）会让 toggle 永远切到 off。这里在命令执行前把 allowFlight 预置为
-     *  "是否在飞"——未飞 → toggle 走 on 分支（开启飞行）；飞行中 → 走 off 分支（关闭飞行）。
-     *  只影响 toggle 子命令；非宝石武器玩家同样生效（落地后 toggle = 重新起飞，语义更直觉）。
-     *  flying=true 时只 setAllowFlight(true)（无副作用），不会让飞行中的玩家掉落。 */
+     *  武装（手持宝石武器时 allowFlight=true）会让 toggle 永远切到 off。这里仅在
+     *  "手持二段跳宝石武器且未在飞"时，把 allowFlight 预置为 false，使 toggle 走 on 分支
+     *  （开启飞行，切掉武器后飞行生效）；其余情况（飞行中 / 非宝石武器）完全不动，
+     *  保持 SweetFlight 原版语义（飞行中 toggle=关闭；落地后 allowFlight=true 时 toggle=关闭，可正常关闭）。 */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onSweetflyToggleCommand(org.bukkit.event.player.PlayerCommandPreprocessEvent e) {
         String raw = e.getMessage();
@@ -292,7 +292,9 @@ public class EliteCombatListener implements Listener {
             if (t == null) return;   // 目标不在线：交给 SweetFlight 报错
             target = t;
         }
-        target.setAllowFlight(target.isFlying());
+        if (target.isFlying()) return;                 // 飞行中：原版 allowFlight=true → toggle 走 off，正常关闭
+        if (getDoubleJumpLevel(target) <= 0) return;   // 非宝石武器：原版语义（落地后 allowFlight=true → off，能关闭）
+        target.setAllowFlight(false);                  // 手持宝石武器且未飞：让 toggle 走 on（开启飞行）
     }
 
     /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */
