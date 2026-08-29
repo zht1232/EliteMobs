@@ -36,6 +36,10 @@ public class EliteCombatListener implements Listener {
     private final Map<UUID, Integer> comboKills = new HashMap<>();
     /** 二段跳宝石：上次二段跳时间戳（毫秒） */
     private final Map<UUID, Long> lastDoubleJump = new HashMap<>();
+    /** 二段跳宝石：上次右键时间戳（毫秒），用于双击右键判定 */
+    private final Map<UUID, Long> lastRightClick = new HashMap<>();
+    /** 二段跳双击右键判定窗口（毫秒）：两次右键间隔不超过此值视为双击 */
+    private static final long DOUBLE_CLICK_MS = 500L;
     /** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem。
      *  仅限主线程使用（Bukkit 事件处理均在主线程），无需 ThreadLocal。 */
     private boolean processingGemAttack = false;
@@ -211,18 +215,18 @@ public class EliteCombatListener implements Listener {
     private final Set<UUID> djUsed = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /**
-     * 二段跳宝石（v29.17.9 起）：<b>空中右键触发</b>（RIGHT_CLICK_AIR）。
+     * 二段跳宝石：<b>双击右键触发</b>（RIGHT_CLICK_AIR）。
      *
-     * <p>右键方案彻底解耦"飞行"与"二段跳"：
+     * <p>双击右键方案彻底解耦"飞行"与"二段跳"：
      * <ul>
      *   <li>空格双击 = 飞行（回归原版/SweetFlight 处理，战斗禁飞/额度/禁飞世界由 SweetFlight 把关并提示，不再有仲裁窗口问题）；</li>
-     *   <li>空中右键 = 二段跳（不依赖 allowFlight，禁飞时天然可用；无窗口/计数，触发 100% 可靠）。</li>
+     *   <li>双击右键 = 二段跳（不依赖 allowFlight，禁飞时天然可用；无需先跳起来，平地连续点两次右键即触发）。</li>
      * </ul>
      * 例外（避免与物品右键动作冲突）：
      * <ul>
      *   <li>主手或副手持盾 → 跳过（右键=格挡，不吞格挡）；</li>
-     *   <li>主手三叉戟 → 跳过（右键=投掷，避免误扔）；</li>
-     *   <li>仅空中触发（RIGHT_CLICK_AIR；点方块右键如开箱/放置不触发）；</li>
+     *   <li>主手三叉戟 → 跳过（右键=投掷，避免误扔；且三叉戟已禁止镶嵌二段跳宝石）；</li>
+     *   <li>仅右键空气触发（RIGHT_CLICK_AIR；点方块右键如开箱/放置不触发）；</li>
      *   <li>冷却内 / 本次空中已用过 → 不触发。</li>
      * </ul>
      * 等级越高冷却越短（蓄力越快）。</p>
@@ -233,15 +237,25 @@ public class EliteCombatListener implements Listener {
         Player p = event.getPlayer();
         if (p.getGameMode() == org.bukkit.GameMode.CREATIVE || p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
         int lv = getDoubleJumpLevel(p);
-        if (lv <= 0) { djUsed.remove(p.getUniqueId()); return; }
+        if (lv <= 0) { djUsed.remove(p.getUniqueId()); lastRightClick.remove(p.getUniqueId()); return; }
         // 持盾（主手或副手）：右键=格挡，不触发二段跳
         if (p.getInventory().getItemInOffHand().getType() == Material.SHIELD
                 || p.getInventory().getItemInMainHand().getType() == Material.SHIELD) return;
         // 三叉戟：右键=投掷，避免误扔（弓/弩拉弓装填无消耗副作用，允许）
         if (p.getInventory().getItemInMainHand().getType() == Material.TRIDENT) return;
-        // 仅空中触发；落地时顺带清理本次空中标记
-        if (p.isOnGround()) { djUsed.remove(p.getUniqueId()); return; }
+
+        // 双击右键判定：两次右键间隔 <= DOUBLE_CLICK_MS 视为双击
         long now = System.currentTimeMillis();
+        long last = lastRightClick.getOrDefault(p.getUniqueId(), 0L);
+        if (now - last > DOUBLE_CLICK_MS) {
+            // 第一次右键（或间隔过长重新计时）：仅记录时间，不触发
+            lastRightClick.put(p.getUniqueId(), now);
+            return;
+        }
+        // 双击达成：清掉计数，进入二段跳判定
+        lastRightClick.remove(p.getUniqueId());
+
+        // 冷却内不触发
         if (now - lastDoubleJump.getOrDefault(p.getUniqueId(), 0L)
                 < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;
         if (djUsed.contains(p.getUniqueId())) return; // 本次空中已用过
@@ -259,11 +273,14 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.put(p.getUniqueId(), now);
     }
 
-    /** 定时任务：落地/卸下宝石时清理二段跳"本次空中已用"标记（防 Map 泄漏）。 */
+    /** 定时任务：落地/卸下宝石时清理二段跳"本次空中已用"标记与双击计数（防 Map 泄漏）。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
-                if (getDoubleJumpLevel(p) <= 0 || p.isOnGround()) {
+                if (getDoubleJumpLevel(p) <= 0) {
+                    djUsed.remove(p.getUniqueId());
+                    lastRightClick.remove(p.getUniqueId());
+                } else if (p.isOnGround()) {
                     djUsed.remove(p.getUniqueId());
                 }
             }

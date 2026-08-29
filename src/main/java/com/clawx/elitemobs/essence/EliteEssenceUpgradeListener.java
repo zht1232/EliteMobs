@@ -554,12 +554,17 @@ public class EliteEssenceUpgradeListener implements Listener {
     /**
      * 宝石是否匹配装备类型：
      * 攻击/击退/雷电/稀有/二段跳/吸血/火焰附加 → 武器；防御 → 护甲（含鞘翅）；
-     * 磁力/耐久 → 均可；盾牌特例：只允许耐久宝石（防御/攻击属性对盾牌无效）。
+     * 磁力/耐久 → 均可；盾牌特例：只允许耐久宝石（防御/攻击属性对盾牌无效）；
+     * 三叉戟特例：禁止二段跳宝石（右键=投掷，与双击右键二段跳冲突）。
      */
     private boolean gemFitsEquip(ItemStack equip, String effect) {
         boolean weapon = isWeapon(equip);
         if (equip != null && equip.getType() == Material.SHIELD) {
             return "unbreaking".equalsIgnoreCase(effect == null ? "" : effect);
+        }
+        // 三叉戟不能镶嵌二段跳宝石：右键是投掷，会与双击右键二段跳冲突
+        if (equip != null && equip.getType() == Material.TRIDENT && "doublejump".equalsIgnoreCase(effect == null ? "" : effect)) {
+            return false;
         }
         return switch (effect == null ? "" : effect.toLowerCase()) {
             case "attack", "knockback", "thunder", "rare", "doublejump", "lifesteal", "fire_aspect" -> weapon;
