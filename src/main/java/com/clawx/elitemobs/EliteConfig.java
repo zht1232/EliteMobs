@@ -191,6 +191,9 @@ public class EliteConfig {
     // 二段跳/飞行仲裁窗口（tick）：起跳后连按组合内，空中第 1 次按延迟这么久补发起飞（双击=飞行）；
     // 窗口内第 2 次连按到达则三连触发二段跳。默认 12 tick = 600ms（250ms 太短真人按不完三连）
     private int doubleJumpFlyWindowTicks = 12;
+    // 飞行权限被禁用（SweetFlight 战斗禁飞/额度用尽/禁飞世界）时，是否强制重新开启 allowFlight 让二段跳继续可用。
+    // false（默认）= 二段跳与飞行同进退（尊重 SweetFlight 规则）；true = 二段跳无视禁飞，但会绕过 SweetFlight 的战斗禁飞/额度
+    private boolean doubleJumpRearmWhenDisabled = false;
     // 武器/护甲品质（quality）：首次淬炼时按权重掷定，影响后续淬炼成功率
     // 9 档：残次 < 粗劣 < 普通 < 优秀 < 传说 < 史诗 < 神话 < 至臻 < 不朽
     private int[] qualityWeights = {8, 12, 30, 20, 12, 10, 5, 2, 1};          // 合计 100
@@ -595,6 +598,7 @@ public class EliteConfig {
         // 二段跳宝石：连按空格次数 + 飞行仲裁窗口
         doubleJumpPresses = Math.max(1, Math.min(5, config.getInt("double-jump.presses", 3)));
         doubleJumpFlyWindowTicks = Math.max(3, Math.min(40, config.getInt("double-jump.fly-window-ticks", 12)));
+        doubleJumpRearmWhenDisabled = config.getBoolean("double-jump.re-arm-when-disabled", false);
         // 武器熟练度（weapon-proficiency）
         profEnabled = config.getBoolean("weapon-proficiency.enabled", true);
         profMaxStars = Math.max(1, Math.min(5, config.getInt("weapon-proficiency.max-stars", 5)));
@@ -833,6 +837,9 @@ public class EliteConfig {
 
     /** 二段跳/飞行仲裁窗口（tick，默认 12=600ms）。 */
     public int getDoubleJumpFlyWindowTicks() { return doubleJumpFlyWindowTicks; }
+
+    /** 飞行权限被禁用时是否强制重新开启 allowFlight 让二段跳继续可用（默认 false=尊重 SweetFlight 规则）。 */
+    public boolean isDoubleJumpRearmWhenDisabled() { return doubleJumpRearmWhenDisabled; }
 
     public boolean isProfEnabled() { return profEnabled; }
     public int getProfMaxStars() { return profMaxStars; }

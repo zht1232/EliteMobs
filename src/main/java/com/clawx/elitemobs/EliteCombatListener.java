@@ -210,28 +210,24 @@ public class EliteCombatListener implements Listener {
     /** 二段跳连按计数：空中按空格的次数（相邻两次间隔 >1.2s 重新计数；落地清零）。 */
     private final Map<UUID, Integer> djPressCount = new HashMap<>();
     private final Map<UUID, Long> djLastPress = new HashMap<>();
-    /** 起跳时间戳：起跳后 1.5s 内视为"连按组合"窗口（三连=二段跳）；窗口外空中单按 = 立即起飞。 */
-    private final Map<UUID, Long> djLastJump = new HashMap<>();
     /** 本次空中已用过二段跳：落地前不再触发（替代旧 setAllowFlight(false) 的防连跳，且不干扰玩家飞行状态）。 */
     private final Set<UUID> djUsed = java.util.concurrent.ConcurrentHashMap.newKeySet();
-    /** 第 1 次空中连按后的延迟起飞任务：窗口（默认 600ms）内无第 2 次连按 → 补发起飞（双击=飞行）。 */
+    /** 第 1 次空中连按后的延迟起飞任务：仲裁窗口（默认 600ms）内无第 2 次连按 → 补发起飞（双击=飞行）。 */
     private final Map<UUID, org.bukkit.scheduler.BukkitTask> djFlyTasks = new HashMap<>();
-
-    /** 记录起跳时间（PlayerJumpEvent，地面起跳才会触发；注意此版本事件在 Paper 的 destroystokyo 包下）。 */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onJump(com.destroystokyo.paper.event.player.PlayerJumpEvent event) {
-        djLastJump.put(event.getPlayer().getUniqueId(), System.currentTimeMillis());
-    }
 
     /**
      * 二段跳宝石：空中连按空格触发（默认 3 次 = 起跳 + 空中 2 连按；config double-jump.presses 可调 2-5）。
      *
-     * <p><b>双击=飞行 / 三连=二段跳 共存（v29.17.6 修正）</b>：
-     * 起跳后 1.5s 内（连按组合窗口）空中按空格先取消并延迟仲裁 —— 窗口内无第 2 次连按则补发起飞（双击=飞行），
-     * 有第 2 次连按则三连触发二段跳；<b>组合窗口外</b>（如走悬崖掉落中按空格）直接放行 = 立即起飞，无延迟。
-     * 仲裁窗口 = `double-jump.fly-window-ticks`（默认 12 tick=600ms；v29.17.5 的 250ms 太短，
-     * 真人三连第 2/3 下间隔常超 250ms → 补发起飞抢先生效变成只会飞行）。
+     * <p><b>双击=飞行 / 三连=二段跳（v29.17.7 修正）</b>：
+     * 所有空中按空格（无论起跳后还是掉落中）都先取消并进入连按计数；
+     * 达到次数（默认空中 2 连按=三连）→ 二段跳；未达到且仲裁窗口（`double-jump.fly-window-ticks`，
+     * 默认 12tick=600ms）内无下一次连按 → 补发起飞（双击=飞行，落地后也会武装飞行模式，
+     * 修复 v29.17.6"平地双击不能起飞"：原 isOnGround 检查把落地后的补发拒了）。
      * 绝不修改 allowFlight/flying 之外的状态；已 flying 玩家按空格不触发本事件。</p>
+     *
+     * <p><b>飞行权限（SweetFlight 战斗禁飞/额度/禁飞世界）</b>：二段跳与飞行共用 PlayerToggleFlightEvent，
+     * 依赖 allowFlight —— 飞行被禁用时二段跳也随之失效（同进退）。默认尊重 SweetFlight；
+     * 若需二段跳无视禁飞，配置 `double-jump.re-arm-when-disabled: true`（会绕过战斗禁飞/额度）。</p>
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDoubleJumpToggle(org.bukkit.event.player.PlayerToggleFlightEvent event) {
@@ -240,16 +236,8 @@ public class EliteCombatListener implements Listener {
         int lv = getDoubleJumpLevel(p);
         if (lv <= 0) return;
         if (!event.isFlying()) return; // 空中按空格尝试起飞
-        long now = System.currentTimeMillis();
-
-        // 组合窗口外（非起跳后 1.5s 内，如掉落中单按空格）：视为明确起飞意图 → 不取消，立即飞行
-        if (now - djLastJump.getOrDefault(p.getUniqueId(), 0L) > 1500L) {
-            djPressCount.remove(p.getUniqueId());
-            djLastPress.remove(p.getUniqueId());
-            return;
-        }
-
         event.setCancelled(true);
+        long now = System.currentTimeMillis();
 
         // 本次空中已用过二段跳：吞掉直到落地（不再连按计数，也不触发）
         if (djUsed.contains(p.getUniqueId())) {
@@ -290,18 +278,18 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.put(p.getUniqueId(), now);
     }
 
-    /** 双击飞行：第 1 次空中连按后仲裁窗口内无第二次 → 补发起飞（手动 setFlying）。 */
+    /** 双击飞行：第 1 次空中连按后仲裁窗口内无第二次 → 补发起飞（手动 setFlying；落地后也武装飞行模式）。 */
     private void scheduleLateFly(Player p) {
         cancelLateFly(p);
         UUID uuid = p.getUniqueId();
         long delay = Math.max(3, plugin.getEliteConfig().getDoubleJumpFlyWindowTicks());
         org.bukkit.scheduler.BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             djFlyTasks.remove(uuid);
-            if (!p.isOnline() || p.isDead() || p.isOnGround()) return;
+            if (!p.isOnline() || p.isDead()) return;
             if (djUsed.contains(uuid)) return;      // 期间已触发二段跳
             if (getDoubleJumpLevel(p) <= 0) return; // 已换下宝石
             if (!p.getAllowFlight() || p.isFlying()) return;
-            p.setFlying(true); // 双击空格 = 飞行
+            p.setFlying(true); // 双击空格 = 飞行（平地双击落地后也武装飞行模式，下一跳即飞）
         }, delay);
         djFlyTasks.put(uuid, task);
     }
@@ -311,16 +299,15 @@ public class EliteCombatListener implements Listener {
         if (t != null) t.cancel();
     }
 
-    /** 定时恢复二段跳：玩家落地且冷却已过 → 重新允许飞行（下一次二段跳）；落地重置连按计数与 djUsed。 */
+    /** 定时任务：清理二段跳状态；可选在飞行权限被禁用时重新武装 allowFlight（默认尊重 SweetFlight，不重开）。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
                 int lv = getDoubleJumpLevel(p);
                 if (lv <= 0) {
-                    // 不再持有二段跳宝石：清理计数/起跳/延迟起飞/状态，防止 Map 泄漏
+                    // 不再持有二段跳宝石：清理计数/延迟起飞/状态，防止 Map 泄漏
                     djPressCount.remove(p.getUniqueId());
                     djLastPress.remove(p.getUniqueId());
-                    djLastJump.remove(p.getUniqueId());
                     djUsed.remove(p.getUniqueId());
                     cancelLateFly(p);
                     continue;
@@ -329,15 +316,17 @@ public class EliteCombatListener implements Listener {
                 if (p.isOnGround()) {
                     djPressCount.remove(p.getUniqueId());
                     djLastPress.remove(p.getUniqueId());
-                    djLastJump.remove(p.getUniqueId());
                     djUsed.remove(p.getUniqueId());
                     cancelLateFly(p);
                 }
-                if (!p.isOnGround() || p.getAllowFlight()) continue;
-                long now = System.currentTimeMillis();
-                long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
-                if (now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
-                    p.setAllowFlight(true);
+                // 可选：飞行权限被禁用时强制重新武装（绕过 SweetFlight 战斗禁飞/额度；默认 false 不重开）
+                if (plugin.getEliteConfig().isDoubleJumpRearmWhenDisabled()) {
+                    if (!p.isOnGround() || p.getAllowFlight()) continue;
+                    long now = System.currentTimeMillis();
+                    long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
+                    if (now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
+                        p.setAllowFlight(true);
+                    }
                 }
             }
         }, 20L, 20L);

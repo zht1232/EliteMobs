@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.17.6.jar`
+1. 下载 `EliteMobs-29.17.7.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,13 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.17.7
+- 🐛 **二段跳/飞行行为修正**：
+  - 平地双击起飞修复：补发起飞不再因"已落地"被拒（落地后也会武装飞行模式，下一跳即飞）
+  - 滞空（掉落中）三连也能二段跳：去掉"起跳组合窗口"限制，所有空中按空格统一走连按计数（v29.17.6 掉落中按空格被直接放行成飞行，不计数）
+  - 起跳后按得慢（超 1.5s）也能触发三连二段跳
+- ⚖️ **尊重 SweetFlight 飞行规则**：二段跳与飞行共用 allowFlight（PlayerToggleFlightEvent 机制）——SweetFlight 战斗禁飞/额度用尽/禁飞世界时，二段跳随之失效（同进退）。新增 `double-jump.re-arm-when-disabled`（默认 false=尊重规则；true=二段跳无视禁飞，但会绕过 SweetFlight 战斗禁飞/额度）
 
 ### v29.17.6
 - 🐛 **修复"三连空格只会飞行、二段跳失效"**：v29.17.5 的飞行仲裁窗口只有 250ms，真人连按三下第 2/3 下间隔常超 250ms → "补发起飞"抢先生效。窗口加大到 600ms（可配 `double-jump.fly-window-ticks`，12=600ms）
