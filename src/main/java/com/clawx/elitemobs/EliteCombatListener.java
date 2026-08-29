@@ -210,10 +210,18 @@ public class EliteCombatListener implements Listener {
     /** 二段跳连按计数：空中按空格的次数（相邻两次间隔 >1.2s 重新计数；落地清零）。 */
     private final Map<UUID, Integer> djPressCount = new HashMap<>();
     private final Map<UUID, Long> djLastPress = new HashMap<>();
+    /** 本次空中已用过二段跳：落地前不再触发（替代旧 setAllowFlight(false) 的防连跳，且不干扰玩家飞行状态）。 */
+    private final Set<UUID> djUsed = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /**
      * 二段跳宝石：空中连按空格触发（默认 3 次 = 起跳 + 空中 2 连按；config double-jump.presses 可调 2-5）。
      * 等级越高冷却越短（蓄力越快）。冷却期间连按不计入（吞掉重新计数）。
+     *
+     * <p>与飞行插件的兼容约定（2026-08-29 验证）：<b>绝不修改玩家 allowFlight/flying 状态</b>
+     * （旧版触发后 setAllowFlight(false) 会把 SweetFlight//fly 的飞行关掉）。
+     * 已 flying 的玩家按空格不会触发本事件 → 飞行中不受二段跳干扰；
+     * 未 flying 的宝石持有者，空中按空格会被二段跳连按计数占用（同事件机制，无法两全：
+     * 想用"双击起飞"请切换到非宝石武器）。
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDoubleJumpToggle(org.bukkit.event.player.PlayerToggleFlightEvent event) {
@@ -224,6 +232,12 @@ public class EliteCombatListener implements Listener {
         if (!event.isFlying()) return; // 空中按空格尝试起飞
         event.setCancelled(true);
         long now = System.currentTimeMillis();
+
+        // 本次空中已用过二段跳：吞掉直到落地（不再连按计数，也不触发）
+        if (djUsed.contains(p.getUniqueId())) {
+            djPressCount.remove(p.getUniqueId());
+            return;
+        }
 
         // 连按计数：需要 空中按空格次数 = presses - 1（presses=3 → 空中 2 连按）
         int need = Math.max(1, plugin.getEliteConfig().getDoubleJumpPresses() - 1);
@@ -238,8 +252,8 @@ public class EliteCombatListener implements Listener {
         djPressCount.remove(p.getUniqueId());
         if (p.isOnGround() || now - last < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;
 
-        p.setFlying(false);
-        p.setAllowFlight(false); // 消耗一次，落地后按冷却恢复
+        // 触发二段跳：不修改 allowFlight/flying（保留玩家飞行状态），靠 djUsed 落地前防连跳
+        djUsed.add(p.getUniqueId());
         // 二段跳 = 向前冲 + 向上跳（玩家朝向水平方向，等级越高冲得越远）
         org.bukkit.util.Vector dir = p.getLocation().getDirection();
         dir.setY(0).normalize();
@@ -252,21 +266,23 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.put(p.getUniqueId(), now);
     }
 
-    /** 定时恢复二段跳：玩家落地且冷却已过 → 重新允许飞行（下一次二段跳）；落地重置连按计数。 */
+    /** 定时恢复二段跳：玩家落地且冷却已过 → 重新允许飞行（下一次二段跳）；落地重置连按计数与 djUsed。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
                 int lv = getDoubleJumpLevel(p);
                 if (lv <= 0) {
-                    // 不再持有二段跳宝石：清理连按计数，防止 Map 泄漏
+                    // 不再持有二段跳宝石：清理计数与状态，防止 Map 泄漏
                     djPressCount.remove(p.getUniqueId());
                     djLastPress.remove(p.getUniqueId());
+                    djUsed.remove(p.getUniqueId());
                     continue;
                 }
-                // 落地：重置连按计数
+                // 落地：重置连按计数与本次空中已用标记
                 if (p.isOnGround()) {
                     djPressCount.remove(p.getUniqueId());
                     djLastPress.remove(p.getUniqueId());
+                    djUsed.remove(p.getUniqueId());
                 }
                 if (!p.isOnGround() || p.getAllowFlight()) continue;
                 long now = System.currentTimeMillis();
