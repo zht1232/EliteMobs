@@ -36,10 +36,6 @@ public class EliteCombatListener implements Listener {
     private final Map<UUID, Integer> comboKills = new HashMap<>();
     /** 二段跳宝石：上次二段跳时间戳（毫秒） */
     private final Map<UUID, Long> lastDoubleJump = new HashMap<>();
-    /** 二段跳宝石：上次右键时间戳（毫秒），用于双击右键判定 */
-    private final Map<UUID, Long> lastRightClick = new HashMap<>();
-    /** 二段跳双击右键判定窗口（毫秒）：两次右键间隔不超过此值视为双击 */
-    private static final long DOUBLE_CLICK_MS = 500L;
     /** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem。
      *  仅限主线程使用（Bukkit 事件处理均在主线程），无需 ThreadLocal。 */
     private boolean processingGemAttack = false;
@@ -215,52 +211,34 @@ public class EliteCombatListener implements Listener {
     private final Set<UUID> djUsed = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /**
-     * 二段跳宝石：<b>双击右键触发</b>（RIGHT_CLICK_AIR）。
+     * 二段跳宝石：<b>双击空格触发</b>（拦截 PlayerToggleFlightEvent）。
      *
-     * <p>双击右键方案彻底解耦"飞行"与"二段跳"：
+     * <p>手持二段跳宝石武器时，双击空格（起跳后空中按空格）不再交给 SweetFlight 起飞，
+     * 而是改为二段跳：连按两下空格 = 起跳 + 二段跳，空中/地面均可触发；
+     * 不手持宝石武器时完全放行，双击空格 = SweetFlight 正常飞行（额度/战斗/禁飞世界由它把关）。</p>
      * <ul>
-     *   <li>空格双击 = 飞行（回归原版/SweetFlight 处理，战斗禁飞/额度/禁飞世界由 SweetFlight 把关并提示，不再有仲裁窗口问题）；</li>
-     *   <li>双击右键 = 二段跳（不依赖 allowFlight，禁飞时天然可用；无需先跳起来，平地连续点两次右键即触发）。</li>
-     * </ul>
-     * 例外（避免与物品右键动作冲突）：
-     * <ul>
-     *   <li>主手或副手持盾 → 跳过（右键=格挡，不吞格挡）；</li>
-     *   <li>主手三叉戟 → 跳过（右键=投掷，避免误扔；且三叉戟已禁止镶嵌二段跳宝石）；</li>
-     *   <li>仅右键空气触发（RIGHT_CLICK_AIR；点方块右键如开箱/放置不触发）；</li>
-     *   <li>冷却内 / 本次空中已用过 → 不触发。</li>
+     *   <li>/sweetfly 指令直接 setFlying/setAllowFlight，不经过本事件 → 指令飞行不受影响；</li>
+     *   <li>绝不修改 allowFlight/flying → 切换物品后飞行状态保留；</li>
+     *   <li>战斗禁飞由 SweetFlight 负责（非宝石武器时它照常拦截提示）；
+     *       手持宝石武器时本监听器先取消并二段跳 → 战斗状态二段跳依然可用；</li>
+     *   <li>冷却内 / 本次空中已用过 → 取消但不跳（一次空中一次，落地/卸宝石清除）；</li>
+     *   <li>落地事件（isFlying=false）放行，SweetFlight 正常清 BossBar/落地逻辑。</li>
      * </ul>
      * 等级越高冷却越短（蓄力越快）。</p>
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onDoubleJumpInteract(org.bukkit.event.player.PlayerInteractEvent event) {
-        if (event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_AIR) return;
+    public void onDoubleJumpToggleFlight(org.bukkit.event.player.PlayerToggleFlightEvent event) {
         Player p = event.getPlayer();
         if (p.getGameMode() == org.bukkit.GameMode.CREATIVE || p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
         int lv = getDoubleJumpLevel(p);
-        if (lv <= 0) { djUsed.remove(p.getUniqueId()); lastRightClick.remove(p.getUniqueId()); return; }
-        // 持盾（主手或副手）：右键=格挡，不触发二段跳
-        if (p.getInventory().getItemInOffHand().getType() == Material.SHIELD
-                || p.getInventory().getItemInMainHand().getType() == Material.SHIELD) return;
-        // 三叉戟：右键=投掷，避免误扔（弓/弩拉弓装填无消耗副作用，允许）
-        if (p.getInventory().getItemInMainHand().getType() == Material.TRIDENT) return;
-
-        // 双击右键判定：两次右键间隔 <= DOUBLE_CLICK_MS 视为双击
+        if (lv <= 0) { djUsed.remove(p.getUniqueId()); return; }  // 无宝石：完全放行（含落地事件）
+        if (!event.isFlying()) return;                             // 落地（关飞行）事件：放行，让 SweetFlight 处理
+        event.setCancelled(true);                                  // 手持宝石武器：拦截起飞（SweetFlight HIGHEST 见 cancelled 跳过）
         long now = System.currentTimeMillis();
-        long last = lastRightClick.getOrDefault(p.getUniqueId(), 0L);
-        if (now - last > DOUBLE_CLICK_MS) {
-            // 第一次右键（或间隔过长重新计时）：仅记录时间，不触发
-            lastRightClick.put(p.getUniqueId(), now);
-            return;
-        }
-        // 双击达成：清掉计数，进入二段跳判定
-        lastRightClick.remove(p.getUniqueId());
-
-        // 冷却内不触发
         if (now - lastDoubleJump.getOrDefault(p.getUniqueId(), 0L)
-                < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;
-        if (djUsed.contains(p.getUniqueId())) return; // 本次空中已用过
+                < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;  // 冷却内：取消但不跳
+        if (djUsed.contains(p.getUniqueId())) return;              // 本次空中已用过
         djUsed.add(p.getUniqueId());
-
         // 二段跳 = 向前冲 + 向上跳（玩家朝向水平方向，等级越高冲得越远）
         org.bukkit.util.Vector dir = p.getLocation().getDirection();
         dir.setY(0).normalize();
@@ -273,15 +251,18 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.put(p.getUniqueId(), now);
     }
 
-    /** 定时任务：落地/卸下宝石时清理二段跳"本次空中已用"标记与双击计数（防 Map 泄漏）。 */
+    /** 定时任务：落地/卸下宝石时清理"本次空中已用"标记；手持宝石武器时确保 allowFlight 武装
+     *  （SweetFlight 额度耗尽会 toggleOff 收回 allowFlight，重新武装后二段跳仍可用；
+     *   不与 /sweetfly off 冲突：flying=false 即无飞行，双击空格只触发二段跳）。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
-                if (getDoubleJumpLevel(p) <= 0) {
+                int lv = getDoubleJumpLevel(p);
+                if (lv <= 0) {
                     djUsed.remove(p.getUniqueId());
-                    lastRightClick.remove(p.getUniqueId());
-                } else if (p.isOnGround()) {
-                    djUsed.remove(p.getUniqueId());
+                } else {
+                    if (!p.getAllowFlight()) p.setAllowFlight(true);  // 手持宝石武器：保证双击空格能触发事件（二段跳不依赖飞行额度）
+                    if (p.isOnGround()) djUsed.remove(p.getUniqueId());
                 }
             }
         }, 20L, 20L);
