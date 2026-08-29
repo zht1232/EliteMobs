@@ -254,24 +254,33 @@ public class EliteCombatListener implements Listener {
     }
 
     /** 定时任务：落地/卸下宝石时清理"本次空中已用"标记（防 Map 泄漏）。
-     *  <b>不再修改 allowFlight</b>：飞行状态完全由 SweetFlight 管理（两插件解耦），
-     *  二段跳依赖 SweetFlight 的飞行武装（allowFlight=true 时双击空格才有事件信号）。 */
+     *  同时把"手持二段跳宝石武器"状态写入玩家 PDC（elitemobs:dj_armed = true/false）——
+     *  与 SweetFlight 的约定：SweetFlight 读这个标记决定 /sweetfly off 时是否保留飞行武装给二段跳。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
-                if (getDoubleJumpLevel(p) <= 0 || p.isOnGround()) {
+                int lv = getDoubleJumpLevel(p);
+                org.bukkit.persistence.PersistentDataContainer pdc = p.getPersistentDataContainer();
+                org.bukkit.NamespacedKey djKey = new org.bukkit.NamespacedKey(plugin, "dj_armed");
+                if (lv > 0) {
+                    pdc.set(djKey, org.bukkit.persistence.PersistentDataType.BOOLEAN, true);
+                } else {
+                    pdc.remove(djKey);
+                }
+                if (lv <= 0 || p.isOnGround()) {
                     djUsed.remove(p.getUniqueId());
                 }
             }
         }, 20L, 20L);
     }
 
-    /** 玩家退出时清理二段跳状态（djUsed / lastDoubleJump），防 UUID 残留累积。 */
+    /** 玩家退出时清理二段跳状态（djUsed / lastDoubleJump / PDC 标记），防 UUID 残留累积。 */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onDoubleJumpQuit(org.bukkit.event.player.PlayerQuitEvent e) {
         UUID id = e.getPlayer().getUniqueId();
         djUsed.remove(id);
         lastDoubleJump.remove(id);
+        e.getPlayer().getPersistentDataContainer().remove(new org.bukkit.NamespacedKey(plugin, "dj_armed"));
     }
 
     /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */
