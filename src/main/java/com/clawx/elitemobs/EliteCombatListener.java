@@ -562,10 +562,11 @@ public class EliteCombatListener implements Listener {
         if (stars != com.clawx.elitemobs.essence.EliteGemFactory.getProf(hand)) {
             com.clawx.elitemobs.essence.EliteGemFactory.setProf(hand, stars);
         }
-        // 实时刷新 Lore（熟练进度/星级行），并确保背包槽位引用同步
-        p.getInventory().setItemInMainHand(hand);
+        // 实时刷新 Lore（熟练进度/星级行）：必须先刷新（修改 hand 引用）再放回背包——
+        // Paper 的 setItemInMainHand 经 NMS 转换会复制物品，先放回再刷新改的是副本，Lore 不会更新。
         com.clawx.elitemobs.essence.EliteEssenceUpgradeListener ess = plugin.getEssenceListener();
         if (ess != null) ess.refreshWeaponLore(hand);
+        p.getInventory().setItemInMainHand(hand);
         if (leveled) {
             double crit = Math.min(stars * cfg.getProfCritPerStar(), cfg.getProfMaxCritChance());
             p.sendMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "[EliteMobs] " + ChatColor.YELLOW

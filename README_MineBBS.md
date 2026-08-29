@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.19.8.jar`
+1. 下载 `EliteMobs-29.19.9.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,9 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.19.9
+- 🐛 **修复熟练进度 Lore 不自动更新**：`onKillForProficiency` 里刷新顺序反了（先 `setItemInMainHand` 再 `refreshWeaponLore`）——Paper 的 `setItemInMainHand` 经 NMS 转换会复制物品，先放回再刷新改的是副本，背包里 Lore 停在旧值。改为**先刷新再放回**
 
 ### v29.19.8
 - 🛡 **PJ 飞行附魔装备最高优先级**：玩家穿 PJ 飞行套装（翅膀/升空=胸甲、反重力=靴、磁力=四件套）时，二段跳宝石完全放行（PJ 接管二段跳/滑翔），与 SweetFlight 开/关无关。检测 = 读胸甲/靴 Lore 匹配 PJ 附魔名（不依赖 PJ 类）
