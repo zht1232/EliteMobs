@@ -212,16 +212,17 @@ public class EliteCombatListener implements Listener {
     private final Map<UUID, Long> djLastPress = new HashMap<>();
     /** 本次空中已用过二段跳：落地前不再触发（替代旧 setAllowFlight(false) 的防连跳，且不干扰玩家飞行状态）。 */
     private final Set<UUID> djUsed = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** 第 1 次空中连按后的延迟起飞任务：250ms 内无第 2 次连按 → 补发起飞（双击=飞行）。 */
+    private final Map<UUID, org.bukkit.scheduler.BukkitTask> djFlyTasks = new HashMap<>();
 
     /**
      * 二段跳宝石：空中连按空格触发（默认 3 次 = 起跳 + 空中 2 连按；config double-jump.presses 可调 2-5）。
-     * 等级越高冷却越短（蓄力越快）。冷却期间连按不计入（吞掉重新计数）。
      *
-     * <p>与飞行插件的兼容约定（2026-08-29 验证）：<b>绝不修改玩家 allowFlight/flying 状态</b>
-     * （旧版触发后 setAllowFlight(false) 会把 SweetFlight//fly 的飞行关掉）。
-     * 已 flying 的玩家按空格不会触发本事件 → 飞行中不受二段跳干扰；
-     * 未 flying 的宝石持有者，空中按空格会被二段跳连按计数占用（同事件机制，无法两全：
-     * 想用"双击起飞"请切换到非宝石武器）。
+     * <p><b>双击=飞行 / 三连=二段跳 共存（v29.17.5）</b>：
+     * 空中第 1 次按空格先取消并延迟 250ms 补发起飞 —— 若 250ms 内没有第 2 次连按，
+     * 判定为"双击起飞"（手动 setFlying(true)，SweetFlight/原版双击飞行照常）；
+     * 若第 2 次连按到达 → 取消延迟起飞，进入二段跳判定（三连触发）。
+     * 已 flying 的玩家按空格不触发本事件 → 飞行中不受干扰；绝不修改 allowFlight/flying 之外的状态。</p>
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDoubleJumpToggle(org.bukkit.event.player.PlayerToggleFlightEvent event) {
@@ -245,9 +246,15 @@ public class EliteCombatListener implements Listener {
         int count = (now - lastPress <= 1200L) ? djPressCount.getOrDefault(p.getUniqueId(), 0) + 1 : 1;
         djPressCount.put(p.getUniqueId(), count);
         djLastPress.put(p.getUniqueId(), now);
-        if (count < need) return; // 还需要更多连按
 
-        // 达到次数：仅在空中且冷却已过才触发二段跳；冷却未过则吞掉本次重新计数
+        if (count < need) {
+            // 第 1 次空中连按：本次起飞被取消，250ms 内无第 2 次连按则补发起飞（双击=飞行）
+            scheduleLateFly(p);
+            return;
+        }
+
+        // 达到次数（三连）：取消延迟起飞，进入二段跳判定
+        cancelLateFly(p);
         long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
         djPressCount.remove(p.getUniqueId());
         if (p.isOnGround() || now - last < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;
@@ -266,23 +273,45 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.put(p.getUniqueId(), now);
     }
 
+    /** 双击飞行：第 1 次空中连按后 250ms 内无第二次 → 补发起飞（手动 setFlying）。 */
+    private void scheduleLateFly(Player p) {
+        cancelLateFly(p);
+        UUID uuid = p.getUniqueId();
+        org.bukkit.scheduler.BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            djFlyTasks.remove(uuid);
+            if (!p.isOnline() || p.isDead() || p.isOnGround()) return;
+            if (djUsed.contains(uuid)) return;      // 期间已触发二段跳
+            if (getDoubleJumpLevel(p) <= 0) return; // 已换下宝石
+            if (!p.getAllowFlight() || p.isFlying()) return;
+            p.setFlying(true); // 双击空格 = 飞行
+        }, 5L); // 250ms
+        djFlyTasks.put(uuid, task);
+    }
+
+    private void cancelLateFly(Player p) {
+        org.bukkit.scheduler.BukkitTask t = djFlyTasks.remove(p.getUniqueId());
+        if (t != null) t.cancel();
+    }
+
     /** 定时恢复二段跳：玩家落地且冷却已过 → 重新允许飞行（下一次二段跳）；落地重置连按计数与 djUsed。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
                 int lv = getDoubleJumpLevel(p);
                 if (lv <= 0) {
-                    // 不再持有二段跳宝石：清理计数与状态，防止 Map 泄漏
+                    // 不再持有二段跳宝石：清理计数/延迟起飞/状态，防止 Map 泄漏
                     djPressCount.remove(p.getUniqueId());
                     djLastPress.remove(p.getUniqueId());
                     djUsed.remove(p.getUniqueId());
+                    cancelLateFly(p);
                     continue;
                 }
-                // 落地：重置连按计数与本次空中已用标记
+                // 落地：重置连按计数与本次空中已用标记，取消未触发的延迟起飞
                 if (p.isOnGround()) {
                     djPressCount.remove(p.getUniqueId());
                     djLastPress.remove(p.getUniqueId());
                     djUsed.remove(p.getUniqueId());
+                    cancelLateFly(p);
                 }
                 if (!p.isOnGround() || p.getAllowFlight()) continue;
                 long now = System.currentTimeMillis();
@@ -425,7 +454,7 @@ public class EliteCombatListener implements Listener {
                 String eff = gemEffectFor(gemIds[i]);
                 int lv = gemLvs[i];
                 if ("lifesteal".equals(eff)) {
-                    double heal = 1.0 + lv * 0.5; // 吸血：基础 1 + 每级 0.5 颗心
+                    double heal = com.clawx.elitemobs.essence.EliteGemFactory.lifestealHeal(lv);
                     org.bukkit.attribute.AttributeInstance maxHp = p.getAttribute(Attribute.MAX_HEALTH);
                     if (maxHp != null) {
                         p.setHealth(Math.min(p.getHealth() + heal, maxHp.getValue()));
@@ -434,7 +463,7 @@ public class EliteCombatListener implements Listener {
                             p.getLocation().add(0, 1, 0), 3);
                 }
                 if ("fire_aspect".equals(eff)) {
-                    target.setFireTicks(20 * (2 + lv / 2)); // 火焰附加：燃烧 2 + 等级/2 秒
+                    target.setFireTicks(20 * com.clawx.elitemobs.essence.EliteGemFactory.fireAspectSeconds(lv));
                 }
             }
         } finally {
@@ -459,7 +488,8 @@ public class EliteCombatListener implements Listener {
         if (lv >= 10) {
             event.setCancelled(true); // 无限耐久
         } else {
-            int reduced = (int) Math.max(0, Math.round(event.getDamage() * (1.0 - lv * 0.1)));
+            int reduced = (int) Math.max(0, Math.round(event.getDamage()
+                    * (1.0 - com.clawx.elitemobs.essence.EliteGemFactory.unbreakingReduction(lv))));
             event.setDamage(reduced);
         }
     }

@@ -551,9 +551,16 @@ public class EliteEssenceUpgradeListener implements Listener {
         return null;
     }
 
-    /** 宝石是否匹配装备类型（attack/knockback/thunder/rare/doublejump→武器；defense→护甲；magnet→两者均可）。 */
+    /**
+     * 宝石是否匹配装备类型：
+     * 攻击/击退/雷电/稀有/二段跳/吸血/火焰附加 → 武器；防御 → 护甲（含鞘翅）；
+     * 磁力/耐久 → 均可；盾牌特例：只允许耐久宝石（防御/攻击属性对盾牌无效）。
+     */
     private boolean gemFitsEquip(ItemStack equip, String effect) {
         boolean weapon = isWeapon(equip);
+        if (equip != null && equip.getType() == Material.SHIELD) {
+            return "unbreaking".equalsIgnoreCase(effect == null ? "" : effect);
+        }
         return switch (effect == null ? "" : effect.toLowerCase()) {
             case "attack", "knockback", "thunder", "rare", "doublejump", "lifesteal", "fire_aspect" -> weapon;
             case "defense" -> isArmor(equip);
@@ -637,10 +644,10 @@ public class EliteEssenceUpgradeListener implements Listener {
                 default -> {}
             }
         }
-        // 武器：攻击力；护甲：减伤（全量重建，避免累积）
+        // 武器：攻击力；护甲（含鞘翅）：减伤（全量重建，避免累积）；盾牌：无属性加成（只吃耐久宝石）
         if (isWeapon(equip)) {
             setWeaponAttack(equip, attack);
-        } else if (isArmor(equip)) {
+        } else if (isArmor(equip) && !isShield(equip)) {
             setArmorDefense(equip, defense);
         }
         // 移速宝石（写入 MOVEMENT_SPEED modifier，key=elite_speed，全量重建避免累积）
@@ -650,8 +657,8 @@ public class EliteEssenceUpgradeListener implements Listener {
         if (meta != null) {
             var pdc = meta.getPersistentDataContainer();
             pdc.set(new NamespacedKey(plugin, "gem_knockback"), PersistentDataType.INTEGER, knockback);
-            if (isArmor(equip)) {
-                // 同步护甲套装等级（套装加成系统依赖 armor_lv；淬炼后按宝石总等级写入）
+            if (isArmor(equip) && !isShield(equip)) {
+                // 同步护甲套装等级（套装加成系统依赖 armor_lv；淬炼后按宝石总等级写入；盾牌不计入套装）
                 pdc.set(EliteMobManager.ARMOR_LV_KEY, PersistentDataType.INTEGER,
                         EliteGemFactory.totalGemLevel(equip));
             }
@@ -905,7 +912,7 @@ public class EliteEssenceUpgradeListener implements Listener {
             lore.add(ChatColor.translateAlternateColorCodes('&',
                     msg(msgs, "essence-upgrade.lore.attack", "   &7攻击力&8：&c+{total} &4❤")
                             .replace("{total}", String.format("%.1f", totalDmg))));
-        } else if (isArmor(equip)) {
+        } else if (isArmor(equip) && !isShield(equip)) {
             double def = gemDefenseTotal(equip);
             lore.add(ChatColor.translateAlternateColorCodes('&',
                     msg(msgs, "armor-upgrade.lore.defense", "   &7减伤&8：&b{reduction}%")
@@ -1013,14 +1020,20 @@ public class EliteEssenceUpgradeListener implements Listener {
             }
             String eff = gemEffectFor(ids[i]);
             String gemName = gemDisplayName(ids[i]);
+            int gemLv = lvs[i];
             String effectDesc = switch (eff == null ? "" : eff) {
-                case "attack" -> "&7→ &c攻击力 +" + String.format("%.1f", EliteGemFactory.attackBonus(lvs[i]));
-                case "defense" -> "&7→ &b减伤 +" + String.format("%.1f", EliteGemFactory.defenseBonus(lvs[i]));
-                case "knockback" -> "&7→ &f击退 Lv." + EliteGemFactory.knockbackLevel(lvs[i]);
-                case "thunder" -> "&7→ &e雷电 " + String.format("%.0f%%", EliteGemFactory.thunderChance(lvs[i]) * 100);
-                case "magnet" -> "&7→ &b磁力拾取 &f+" + EliteGemFactory.magnetRadius(lvs[i]) + " &7格";
-                case "doublejump" -> "&7→ &a二段跳 &f蓄力" + String.format("%.1f", EliteGemFactory.jumpCooldown(lvs[i]) / 1000.0) + "s";
+                case "attack" -> "&7→ &c攻击力 +" + String.format("%.1f", EliteGemFactory.attackBonus(gemLv));
+                case "defense" -> "&7→ &b减伤 +" + String.format("%.1f", EliteGemFactory.defenseBonus(gemLv));
+                case "knockback" -> "&7→ &f击退 Lv." + EliteGemFactory.knockbackLevel(gemLv);
+                case "thunder" -> "&7→ &e雷电 " + String.format("%.0f%%", EliteGemFactory.thunderChance(gemLv) * 100);
+                case "magnet" -> "&7→ &b磁力拾取 &f+" + EliteGemFactory.magnetRadius(gemLv) + " &7格";
+                case "doublejump" -> "&7→ &a二段跳 &f蓄力" + String.format("%.1f", EliteGemFactory.jumpCooldown(gemLv) / 1000.0) + "s";
                 case "rare" -> "&7→ &6稀有";
+                case "lifesteal" -> "&7→ &c吸血 &f+" + String.format("%.1f", EliteGemFactory.lifestealHeal(gemLv)) + " &7颗心/击";
+                case "fire_aspect" -> "&7→ &6火焰附加 &f" + EliteGemFactory.fireAspectSeconds(gemLv) + " &7秒";
+                case "unbreaking" -> gemLv >= 10
+                        ? "&7→ &b无限耐久"
+                        : "&7→ &b耐久减免 &f" + Math.round(EliteGemFactory.unbreakingReduction(gemLv) * 100) + "%";
                 default -> "";
             };
             // 超出当前容量的槽位标注"锁定"（宝石仍生效）
@@ -1247,7 +1260,13 @@ public class EliteEssenceUpgradeListener implements Listener {
     private boolean isArmor(ItemStack item) {
         if (item == null) return false;
         String n = item.getType().name();
-        return n.contains("HELMET") || n.contains("CHESTPLATE") || n.contains("LEGGINGS") || n.contains("BOOTS");
+        return n.contains("HELMET") || n.contains("CHESTPLATE") || n.contains("LEGGINGS") || n.contains("BOOTS")
+                || item.getType() == Material.ELYTRA || item.getType() == Material.SHIELD;
+    }
+
+    /** 是否为盾牌（盾牌只接受耐久宝石，且不计入护甲套装等级）。 */
+    private boolean isShield(ItemStack item) {
+        return item != null && item.getType() == Material.SHIELD;
     }
 
     private void updateAnvilResult(Inventory inv) {

@@ -197,6 +197,15 @@ public final class EliteGemFactory {
     /** 二段跳宝石：再次起跳冷却（毫秒），等级越高蓄力越快（冷却越短，Lv1≈2.7s → Lv10=0.4s）。 */
     public static int jumpCooldown(int level) { return Math.max(400, 3000 - level * 260); }
 
+    /** 吸血宝石：每击吸血量 = 1 + 等级×0.5（颗心）。 */
+    public static double lifestealHeal(int level) { return 1.0 + level * 0.5; }
+
+    /** 火焰附加宝石：燃烧秒数 = 2 + 等级/2。 */
+    public static int fireAspectSeconds(int level) { return 2 + level / 2; }
+
+    /** 耐久宝石：减免比例（Lv.10 = 1.0 = 无限耐久），0.1~0.9 为减免 10%~90%。 */
+    public static double unbreakingReduction(int level) { return level >= 10 ? 1.0 : level * 0.1; }
+
     // ==================== 武器/护甲品质（首次淬炼时掷定，影响后续成功率） ====================
     // 9 档品质：残次 < 粗劣 < 普通 < 优秀 < 传说 < 史诗 < 神话 < 至臻 < 不朽
     // 劣质（残次/粗劣）削弱淬炼成功率，优质加成；颜色各档独立。
