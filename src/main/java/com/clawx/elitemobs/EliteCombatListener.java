@@ -297,6 +297,14 @@ public class EliteCombatListener implements Listener {
         target.setAllowFlight(false);                  // 手持宝石武器且未飞：让 toggle 走 on（开启飞行）
     }
 
+    /** 玩家退出时清理二段跳状态（djUsed / lastDoubleJump），防 UUID 残留累积。 */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDoubleJumpQuit(org.bukkit.event.player.PlayerQuitEvent e) {
+        UUID id = e.getPlayer().getUniqueId();
+        djUsed.remove(id);
+        lastDoubleJump.remove(id);
+    }
+
     /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */
     public void startMagnetTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
