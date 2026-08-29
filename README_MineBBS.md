@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.19.1.jar`
+1. 下载 `EliteMobs-29.19.2.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,9 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.19.2
+- 🎨 **炫酷启动界面**：启动日志新增 ASCII Art 大标题（`/ \ | _` 等符号排成的 EliteMobs 字样，纯 ASCII 兼容 GBK 控制台）
 
 ### v29.19.1
 - 🔧 **修复 `/sweetflight toggle` 切不到开启**：SweetFlight 的 toggle 判定基于 `getAllowFlight()`，而本插件武装（手持宝石武器时保持 allowFlight=true）会让 toggle 永远切到 off。现在 EliteMobs 在命令执行前把 allowFlight 预置为"是否在飞"——未飞 → toggle 开启飞行（切掉武器后飞行生效），飞行中 → toggle 关闭飞行。二段跳不受影响（依旧永远可用）
