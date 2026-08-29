@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.19.4.jar`
+1. 下载 `EliteMobs-29.19.5.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,10 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.19.5
+- 🧹 **彻底解耦 EliteMobs 与 SweetFlight**：移除手持宝石武器强制武装逻辑（不再 setAllowFlight），删除 toggle 兼容代码——**飞行状态完全由 SweetFlight 管理**，`/sweetfly on/off/toggle` 手持任何武器都照常生效（切到二段跳武器不再自动开启飞行，也能正常关闭）
+- ⚠️ **行为变化**：二段跳依赖 SweetFlight 的飞行武装（allowFlight=true，加入时默认武装）；`/sweetfly off` 关闭飞行后二段跳随之失效（双击空格无反应），重新 `/sweetfly on` 或重新加入后恢复
 
 ### v29.19.4
 - 🎨 **修正启动 Banner**：补齐 e 字母底部横线（E/L/e 底横齐全）

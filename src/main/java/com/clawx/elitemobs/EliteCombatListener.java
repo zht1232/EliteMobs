@@ -217,10 +217,12 @@ public class EliteCombatListener implements Listener {
      * 而是改为二段跳：连按两下空格 = 起跳 + 二段跳，空中/地面均可触发；
      * 不手持宝石武器时完全放行，双击空格 = SweetFlight 正常飞行（额度/战斗/禁飞世界由它把关）。</p>
      * <ul>
-     *   <li>/sweetfly 指令直接 setFlying/setAllowFlight，不经过本事件 → 指令飞行不受影响；</li>
-     *   <li>绝不修改 allowFlight/flying → 切换物品后飞行状态保留；</li>
-     *   <li>战斗禁飞由 SweetFlight 负责（非宝石武器时它照常拦截提示）；
-     *       手持宝石武器时本监听器先取消并二段跳 → 战斗状态二段跳依然可用；</li>
+     *   <li>本插件<b>绝不修改</b> allowFlight/flying —— 飞行状态完全由 SweetFlight 管理（两插件解耦），
+     *       /sweetfly on/off/toggle 手持任何武器都照常生效；</li>
+     *   <li>二段跳依赖 SweetFlight 的飞行武装（allowFlight=true，加入时默认武装）：飞行可用时双击空格 = 二段跳；
+     *       /sweetfly off 关闭飞行后二段跳随之失效（双击空格无反应），重新 /sweetfly on 或重新加入后恢复；</li>
+     *   <li>切换物品不改变飞行状态；</li>
+     *   <li>战斗禁飞（未飞行时受伤）不收回 allowFlight → 战斗中二段跳照常可用；</li>
      *   <li>冷却内 / 本次空中已用过 → 取消但不跳（一次空中一次，落地/卸宝石清除）；</li>
      *   <li>落地事件（isFlying=false）放行，SweetFlight 正常清 BossBar/落地逻辑。</li>
      * </ul>
@@ -251,50 +253,17 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.put(p.getUniqueId(), now);
     }
 
-    /** 定时任务：落地/卸下宝石时清理"本次空中已用"标记；手持宝石武器时确保 allowFlight 武装
-     *  （SweetFlight 额度耗尽会 toggleOff 收回 allowFlight，重新武装后二段跳仍可用；
-     *   不与 /sweetfly off 冲突：flying=false 即无飞行，双击空格只触发二段跳）。 */
+    /** 定时任务：落地/卸下宝石时清理"本次空中已用"标记（防 Map 泄漏）。
+     *  <b>不再修改 allowFlight</b>：飞行状态完全由 SweetFlight 管理（两插件解耦），
+     *  二段跳依赖 SweetFlight 的飞行武装（allowFlight=true 时双击空格才有事件信号）。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
-                int lv = getDoubleJumpLevel(p);
-                if (lv <= 0) {
+                if (getDoubleJumpLevel(p) <= 0 || p.isOnGround()) {
                     djUsed.remove(p.getUniqueId());
-                } else {
-                    if (!p.getAllowFlight()) p.setAllowFlight(true);  // 手持宝石武器：保证双击空格能触发事件（二段跳不依赖飞行额度）
-                    if (p.isOnGround()) djUsed.remove(p.getUniqueId());
                 }
             }
         }, 20L, 20L);
-    }
-
-    /** 兼容 SweetFlight 的 <code>/sweetflight toggle</code>：其判定基于 getAllowFlight()，而本插件
-     *  武装（手持宝石武器时 allowFlight=true）会让 toggle 永远切到 off。这里仅在
-     *  "手持二段跳宝石武器且未在飞"时，把 allowFlight 预置为 false，使 toggle 走 on 分支
-     *  （开启飞行，切掉武器后飞行生效）；其余情况（飞行中 / 非宝石武器）完全不动，
-     *  保持 SweetFlight 原版语义（飞行中 toggle=关闭；落地后 allowFlight=true 时 toggle=关闭，可正常关闭）。 */
-    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
-    public void onSweetflyToggleCommand(org.bukkit.event.player.PlayerCommandPreprocessEvent e) {
-        String raw = e.getMessage();
-        if (raw == null) return;
-        String lower = raw.trim().toLowerCase(java.util.Locale.ROOT);
-        if (!lower.startsWith("/")) return;
-        String[] parts = lower.substring(1).split("\\s+");
-        if (parts.length < 2 || parts.length > 3) return;
-        if (!parts[1].equals("toggle")) return;
-        switch (parts[0]) {   // sweetflight / sweetfly / sflight / sfly / sf
-            case "sweetflight": case "sweetfly": case "sflight": case "sfly": case "sf": break;
-            default: return;
-        }
-        org.bukkit.entity.Player target = e.getPlayer();
-        if (parts.length == 3) {
-            org.bukkit.entity.Player t = Bukkit.getPlayerExact(parts[2]);
-            if (t == null) return;   // 目标不在线：交给 SweetFlight 报错
-            target = t;
-        }
-        if (target.isFlying()) return;                 // 飞行中：原版 allowFlight=true → toggle 走 off，正常关闭
-        if (getDoubleJumpLevel(target) <= 0) return;   // 非宝石武器：原版语义（落地后 allowFlight=true → off，能关闭）
-        target.setAllowFlight(false);                  // 手持宝石武器且未飞：让 toggle 走 on（开启飞行）
     }
 
     /** 玩家退出时清理二段跳状态（djUsed / lastDoubleJump），防 UUID 残留累积。 */
