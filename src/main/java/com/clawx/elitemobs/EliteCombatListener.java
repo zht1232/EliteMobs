@@ -214,23 +214,26 @@ public class EliteCombatListener implements Listener {
     private final Set<UUID> djUsed = java.util.concurrent.ConcurrentHashMap.newKeySet();
     /** 第 1 次空中连按后的延迟起飞任务：仲裁窗口（默认 600ms）内无第 2 次连按 → 补发起飞（双击=飞行）。 */
     private final Map<UUID, org.bukkit.scheduler.BukkitTask> djFlyTasks = new HashMap<>();
+    /** 防重入：补发起飞前抛"假 PlayerToggleFlightEvent"让 SweetFlight 判断（战斗/额度/禁飞世界 → 取消+提示），
+     *  此时本监听器必须跳过，避免把假事件也当作连按计数。 */
+    private boolean processingFakeFly = false;
 
     /**
      * 二段跳宝石：空中连按空格触发（默认 3 次 = 起跳 + 空中 2 连按；config double-jump.presses 可调 2-5）。
      *
-     * <p><b>双击=飞行 / 三连=二段跳（v29.17.7 修正）</b>：
+     * <p><b>双击=飞行 / 三连=二段跳（v29.17.8 与 SweetFlight 联动）</b>：
      * 所有空中按空格（无论起跳后还是掉落中）都先取消并进入连按计数；
      * 达到次数（默认空中 2 连按=三连）→ 二段跳；未达到且仲裁窗口（`double-jump.fly-window-ticks`，
-     * 默认 12tick=600ms）内无下一次连按 → 补发起飞（双击=飞行，落地后也会武装飞行模式，
-     * 修复 v29.17.6"平地双击不能起飞"：原 isOnGround 检查把落地后的补发拒了）。
+     * 默认 12tick=600ms）内无下一次连按 → 尝试补发起飞（双击=飞行）。
+     * 补发起飞前抛"假起飞事件"让 SweetFlight 裁决：战斗禁飞/额度用尽/禁飞世界 → SweetFlight 取消并提示
+     * （玩家不飞，但仍显示"战斗期间无法起飞"等原版消息）；SweetFlight 放行 → 才真正 setFlying(true)。
+     * 二段跳不依赖飞行权限判定：定时任务始终为宝石持有者保持 allowFlight=true（禁飞时也能触发二段跳），
+     * 飞行本身由 SweetFlight 通过假事件把关 → 禁飞时二段跳可用、但不会直接起飞。
      * 绝不修改 allowFlight/flying 之外的状态；已 flying 玩家按空格不触发本事件。</p>
-     *
-     * <p><b>飞行权限（SweetFlight 战斗禁飞/额度/禁飞世界）</b>：二段跳与飞行共用 PlayerToggleFlightEvent，
-     * 依赖 allowFlight —— 飞行被禁用时二段跳也随之失效（同进退）。默认尊重 SweetFlight；
-     * 若需二段跳无视禁飞，配置 `double-jump.re-arm-when-disabled: true`（会绕过战斗禁飞/额度）。</p>
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDoubleJumpToggle(org.bukkit.event.player.PlayerToggleFlightEvent event) {
+        if (processingFakeFly) return; // 假起飞事件（SweetFlight 裁决用）不参与连按计数
         Player p = event.getPlayer();
         if (p.getGameMode() == org.bukkit.GameMode.CREATIVE || p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
         int lv = getDoubleJumpLevel(p);
@@ -278,7 +281,9 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.put(p.getUniqueId(), now);
     }
 
-    /** 双击飞行：第 1 次空中连按后仲裁窗口内无第二次 → 补发起飞（手动 setFlying；落地后也武装飞行模式）。 */
+    /** 双击飞行：第 1 次空中连按后仲裁窗口内无第二次 → 尝试补发起飞（双击=飞行）。
+     *  先抛"假 PlayerToggleFlightEvent"让 SweetFlight 裁决：战斗/额度/禁飞世界会被它取消并提示（不飞）；
+     *  未被取消才真正 setFlying(true)（SweetFlight 未装/放行时正常起飞）。 */
     private void scheduleLateFly(Player p) {
         cancelLateFly(p);
         UUID uuid = p.getUniqueId();
@@ -289,7 +294,16 @@ public class EliteCombatListener implements Listener {
             if (djUsed.contains(uuid)) return;      // 期间已触发二段跳
             if (getDoubleJumpLevel(p) <= 0) return; // 已换下宝石
             if (!p.getAllowFlight() || p.isFlying()) return;
-            p.setFlying(true); // 双击空格 = 飞行（平地双击落地后也武装飞行模式，下一跳即飞）
+            // 假起飞事件 → SweetFlight（NORMAL）按自身规则裁决并提示（战斗禁飞/额度/禁飞世界 → 取消）
+            org.bukkit.event.player.PlayerToggleFlightEvent fake =
+                    new org.bukkit.event.player.PlayerToggleFlightEvent(p, true);
+            processingFakeFly = true;
+            try {
+                org.bukkit.Bukkit.getPluginManager().callEvent(fake);
+            } finally {
+                processingFakeFly = false;
+            }
+            if (!fake.isCancelled()) p.setFlying(true); // SweetFlight 放行 → 双击起飞
         }, delay);
         djFlyTasks.put(uuid, task);
     }
@@ -299,7 +313,8 @@ public class EliteCombatListener implements Listener {
         if (t != null) t.cancel();
     }
 
-    /** 定时任务：清理二段跳状态；可选在飞行权限被禁用时重新武装 allowFlight（默认尊重 SweetFlight，不重开）。 */
+    /** 定时任务：清理二段跳状态；始终为宝石持有者保持 allowFlight（禁飞时二段跳仍可触发；
+     *  飞行本身由 SweetFlight 通过假起飞事件把关，不会被绕过）。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
@@ -319,14 +334,12 @@ public class EliteCombatListener implements Listener {
                     djUsed.remove(p.getUniqueId());
                     cancelLateFly(p);
                 }
-                // 可选：飞行权限被禁用时强制重新武装（绕过 SweetFlight 战斗禁飞/额度；默认 false 不重开）
-                if (plugin.getEliteConfig().isDoubleJumpRearmWhenDisabled()) {
-                    if (!p.isOnGround() || p.getAllowFlight()) continue;
-                    long now = System.currentTimeMillis();
-                    long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
-                    if (now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
-                        p.setAllowFlight(true);
-                    }
+                // 保持 allowFlight（SweetFlight 禁飞时重新打开，让二段跳事件可触发）
+                if (!p.isOnGround() || p.getAllowFlight()) continue;
+                long now = System.currentTimeMillis();
+                long last = lastDoubleJump.getOrDefault(p.getUniqueId(), 0L);
+                if (now - last >= com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) {
+                    p.setAllowFlight(true);
                 }
             }
         }, 20L, 20L);

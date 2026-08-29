@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.17.7.jar`
+1. 下载 `EliteMobs-29.17.8.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,10 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.17.8
+- 🔗 **与 SweetFlight 联动（假起飞事件）**：禁飞时二段跳可用、但双击不会直接起飞，仍显示 SweetFlight 原版提示（"战斗期间无法起飞"/额度不足等）——补发起飞前抛"假 PlayerToggleFlightEvent"由 SweetFlight 裁决（战斗/额度/禁飞世界 → 取消+提示；放行 → 才起飞）
+- ⚙️ 移除 `double-jump.re-arm-when-disabled`（联动方案取代：插件始终保持宝石持有者 allowFlight=true 供二段跳触发，飞行本身由 SweetFlight 把关，不再有绕过禁飞的副作用）
 
 ### v29.17.7
 - 🐛 **二段跳/飞行行为修正**：
