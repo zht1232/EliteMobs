@@ -57,6 +57,8 @@ public class EliteBossManager implements Listener {
     /** 强制晋升为Boss（指令调用，跳过概率） */
     public void forcePromoteToBoss(LivingEntity entity, int level) {
         promoteToBoss(entity, Math.max(level, 15));
+        // 同步持久化记录为 Boss（记录由 makeElite 创建，此时为普通精英）
+        if (plugin.getPersistence() != null) plugin.getPersistence().markBoss(entity);
     }
 
     /** 尝试将精英怪晋升为Boss（由生成系统调用） */
@@ -71,6 +73,39 @@ public class EliteBossManager implements Listener {
     }
 
     private void promoteToBoss(LivingEntity entity, int level) {
+        applyBossCore(entity, level);
+
+        // 生成特效（真闪电：Boss 登场落雷，可对附近实体造成真实伤害/充电；打标记取消引燃，避免烧毁建筑/掉落物）
+        Location loc = entity.getLocation();
+        org.bukkit.entity.LightningStrike ls = loc.getWorld().strikeLightning(loc);
+        if (ls != null) ls.setMetadata("elitemobs_lightning", new FixedMetadataValue(plugin, true));
+        loc.getWorld().playSound(loc, Sound.ENTITY_WITHER_SPAWN, 3.0f, 0.5f);
+        for (int i = 0; i < 50; i++) {
+            EliteMobManager.spawnParticleSafe(loc.getWorld(), Particle.SOUL_FIRE_FLAME,
+                loc.clone().add(rng.nextDouble() - 0.5, rng.nextDouble() * 2, rng.nextDouble() - 0.5), 1);
+        }
+
+        // 全服广播（含坐标；受 spawn-announce.enabled 控制，关掉后 Boss 警报也不播）
+        String bossName = buildBossDisplayName(entity.getType().name(), level);
+        String announce = ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
+            + ChatColor.RED + "" + ChatColor.BOLD + "Boss\u8b66\u62a5\uff01"
+            + ChatColor.GRAY + " \u2014 " + bossName + ChatColor.GRAY + " \u5728 "
+            + ChatColor.WHITE + loc.getWorld().getName()
+            + ChatColor.GRAY + " \u5750\u6807 ("
+            + ChatColor.YELLOW + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
+            + ChatColor.GRAY + ") \u964d\u751f\u4e86\uff01";
+        if (plugin.getEliteConfig().isBossAlertEnabled()) {
+            Bukkit.broadcastMessage(announce);
+            // 动态彩色标题（打字机+双色渐变）——最初版：含 Boss 名
+            StringColorAnimator.animateTitleAll(plugin,
+                ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 BOSS\u8b66\u62a5\uff01",
+                ChatColor.RED + bossName + ChatColor.GRAY + " \u964d\u4e34\u4e86\uff01",
+                ChatColor.RED, ChatColor.GOLD);
+        }
+    }
+
+    /** 晋升与物化共用的 Boss 核心：身份标记 + 血量/体型/药水/词缀 + 血条。 */
+    private void applyBossCore(LivingEntity entity, int level) {
         entity.setMetadata("elite_boss", new FixedMetadataValue(plugin, true));
         // PDC 持久化标记：metadata 不跨 chunk 持久化，区块卸载重载后会丢失，
         // 用 PDC 兜底保证 Boss 身份在重载后仍可识别（掉落/血条/二阶段依赖它）
@@ -117,10 +152,7 @@ public class EliteBossManager implements Listener {
         }
 
         // 创建Boss血条
-        String bossName = ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
-            + ChatColor.RED + entity.getType().name().toLowerCase().replace('_', ' ')
-            + ChatColor.GRAY + " [Lv." + level + "] "
-            + ChatColor.DARK_RED + "" + ChatColor.BOLD + "BOSS";
+        String bossName = buildBossDisplayName(entity.getType().name(), level);
         BossBar bar = Bukkit.createBossBar(bossName, BarColor.RED, BarStyle.SEGMENTED_12);
         bar.setProgress(1.0);
         bossBars.put(entity.getUniqueId(), bar);
@@ -131,8 +163,25 @@ public class EliteBossManager implements Listener {
                 bar.addPlayer(p);
             }
         }
+    }
 
-        // 生成特效（真闪电：Boss 登场落雷，可对附近实体造成真实伤害/充电；打标记取消引燃，避免烧毁建筑/掉落物）
+    /** Boss 显示名（血条/广播共用）。 */
+    public static String buildBossDisplayName(String typeName, int level) {
+        return ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
+            + ChatColor.RED + (typeName == null ? "" : typeName.toLowerCase().replace('_', ' '))
+            + ChatColor.GRAY + " [Lv." + level + "] "
+            + ChatColor.DARK_RED + "" + ChatColor.BOLD + "BOSS";
+    }
+
+    /**
+     * 从数据库记录物化 Boss（BossSpawner 布署后，玩家接近时由 ElitePersistence 调用）。
+     * 与 promoteToBoss 的区别：不重复全服广播（布署时已广播），只做登场特效 + 附近玩家提示。
+     */
+    public void materializeBoss(LivingEntity entity, int level, boolean phase2AlreadyTriggered) {
+        applyBossCore(entity, level);
+        if (phase2AlreadyTriggered) phase2Triggered.add(entity.getUniqueId());
+
+        // 登场特效（真闪电 + 粒子 + 音效）
         Location loc = entity.getLocation();
         org.bukkit.entity.LightningStrike ls = loc.getWorld().strikeLightning(loc);
         if (ls != null) ls.setMetadata("elitemobs_lightning", new FixedMetadataValue(plugin, true));
@@ -141,22 +190,13 @@ public class EliteBossManager implements Listener {
             EliteMobManager.spawnParticleSafe(loc.getWorld(), Particle.SOUL_FIRE_FLAME,
                 loc.clone().add(rng.nextDouble() - 0.5, rng.nextDouble() * 2, rng.nextDouble() - 0.5), 1);
         }
-
-        // 全服广播（含坐标；受 spawn-announce.enabled 控制，关掉后 Boss 警报也不播）
-        String announce = ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
-            + ChatColor.RED + "" + ChatColor.BOLD + "Boss\u8b66\u62a5\uff01"
-            + ChatColor.GRAY + " \u2014 " + bossName + ChatColor.GRAY + " \u5728 "
-            + ChatColor.WHITE + loc.getWorld().getName()
-            + ChatColor.GRAY + " \u5750\u6807 ("
-            + ChatColor.YELLOW + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
-            + ChatColor.GRAY + ") \u964d\u751f\u4e86\uff01";
-        if (plugin.getEliteConfig().isBossAlertEnabled()) {
-            Bukkit.broadcastMessage(announce);
-            // 动态彩色标题（打字机+双色渐变）——最初版：含 Boss 名
-            StringColorAnimator.animateTitleAll(plugin,
-                ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 BOSS\u8b66\u62a5\uff01",
-                ChatColor.RED + bossName + ChatColor.GRAY + " \u964d\u4e34\u4e86\uff01",
-                ChatColor.RED, ChatColor.GOLD);
+        // 附近玩家提示（不广播）
+        String bossName = buildBossDisplayName(entity.getType().name(), level);
+        for (Player p : entity.getWorld().getPlayers()) {
+            if (p.getLocation().distance(loc) <= 80) {
+                p.sendMessage(ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
+                    + ChatColor.RED + "Boss " + bossName + ChatColor.GRAY + " \u73b0\u8eab\u4e86\uff01");
+            }
         }
     }
 
@@ -949,6 +989,8 @@ public class EliteBossManager implements Listener {
         if (hp == null || hp.getValue() <= 0) return;
         if (boss.getHealth() / hp.getValue() > ratio) return;
         phase2Triggered.add(boss.getUniqueId());
+        // 持久化二阶段标记：Boss 卸载重物化后不重复触发二阶段广播
+        if (plugin.getPersistence() != null) plugin.getPersistence().markPhase2(boss);
 
         String name = boss.getCustomName() != null
                 ? ChatColor.stripColor(boss.getCustomName())

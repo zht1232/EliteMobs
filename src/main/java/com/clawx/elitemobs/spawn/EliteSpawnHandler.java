@@ -71,13 +71,11 @@ public class EliteSpawnHandler implements Listener {
         // 高等级精英生成到更远的地方（等级越高要求离玩家越远，避免刷在玩家/基地旁）
         int level = EliteMobManager.getEliteLevel(entity);
         relocateHighLevelElite(entity, level);
+        // 精英已入库（makeElite 时创建记录）；传送后刷新记录位置，保证物化点与实体一致
+        if (plugin.getPersistence() != null) plugin.getPersistence().refreshPosition(entity);
 
-        // 尝试晋升为Boss（Lv.15+）；晋升成功由 Boss 逻辑自己广播（避免双重广播）
-        boolean promoted = plugin.getBossManager().tryPromoteToBoss(entity, level);
-        if (!promoted) {
-            // 高等级精英生成广播
-            announceSpawn(entity);
-        }
+        // 高等级精英生成广播（Boss 不再由玩家附近精英晋升，改由 BossSpawner 在世界远端布署、玩家接近时物化）
+        announceSpawn(entity);
     }
 
     /**

@@ -15,6 +15,8 @@ import com.clawx.elitemobs.combat.DamageScaler;
 import com.clawx.elitemobs.combat.WeaponEnhancer;
 import com.clawx.elitemobs.essence.EliteEssenceUpgradeListener;
 import com.clawx.elitemobs.spawn.EliteSpawnHandler;
+import com.clawx.elitemobs.spawn.BossSpawner;
+import com.clawx.elitemobs.db.ElitePersistence;
 import com.clawx.elitemobs.commands.EliteMobsCommand;
 import java.io.File;
 import java.util.Objects;
@@ -34,6 +36,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private EliteCombatListener combatListener;
     private EliteEssenceUpgradeListener essenceListener;
     private org.bukkit.configuration.file.FileConfiguration messages;
+    private ElitePersistence persistence;
+    private BossSpawner bossSpawner;
 
     /** 启动 ASCII Art Banner（纯 ASCII：/ \ | _ 等符号，78 列 x 5 行，避免 GBK 控制台乱码）。 */
     private static final String[] STARTUP_BANNER = {
@@ -54,6 +58,11 @@ public final class EliteMobsPlugin extends JavaPlugin {
         saveDefaultMobs();
         EconomyHook.init();
         eliteConfig = new EliteConfig(this);
+        // SQLite 持久化：精英/Boss 数据入库，玩家接近时物化（失败则降级为无持久化运行）
+        persistence = new ElitePersistence(this);
+        if (persistence.init()) {
+            getServer().getPluginManager().registerEvents(persistence, this);
+        }
         mobManager = new EliteMobManager(this);
         damageScaler = new DamageScaler(this);
         weaponEnhancer = new WeaponEnhancer(this);
@@ -63,6 +72,9 @@ public final class EliteMobsPlugin extends JavaPlugin {
         eliteClassAI = new EliteClassAI(this);
         bossManager = new EliteBossManager(this);
         getServer().getPluginManager().registerEvents(bossManager, this); // Boss 技能事件（跳跃扑击等）
+        // Boss 直接布署器：世界远端布署 Boss（数据入库），玩家接近时物化现身
+        bossSpawner = new BossSpawner(this);
+        bossSpawner.start();
         affixHandler = new EliteAffixHandler(this);
         essenceListener = new EliteEssenceUpgradeListener(this);
         getServer().getPluginManager().registerEvents(essenceListener, this);
@@ -92,6 +104,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
         Objects.requireNonNull(getCommand("emmenu")).setExecutor(eliteMenu);
         startAITask();
         registerPapi();
+        // 广播仍潜伏的 Boss 位置（重启后玩家知道哪里还有 Boss）
+        if (bossSpawner != null) bossSpawner.reAnnouncePending();
         long elapsed = System.currentTimeMillis() - start;
         for (String line : STARTUP_BANNER) getLogger().info(line);
         getLogger().info("========== EliteMobs v" + getDescription().getVersion() + " ==========");
@@ -105,13 +119,20 @@ public final class EliteMobsPlugin extends JavaPlugin {
         if (eliteConfig.isLuckPermsEnabled())
             getLogger().info("  LuckPerms: " + eliteConfig.getLuckPermsGroups().size() + " 个组");
         getLogger().info("  掉落模式: " + eliteConfig.getGemDropMode());
+        getLogger().info("  Boss 布署: " + (eliteConfig.isBossSpawnEnabled() ? ChatColor.GREEN + "ON" : ChatColor.RED + "OFF")
+                + ChatColor.RESET + " \u6bcf " + eliteConfig.getBossSpawnIntervalSeconds() + "s | \u6301\u4e45\u5316: "
+                + (persistence != null && persistence.isEnabled() ? ChatColor.GREEN + "SQLite" : ChatColor.RED + "OFF"));
         getLogger().info("  经济: Vault " + (EconomyHook.isVaultReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装")
                 + ChatColor.RESET + " | PlayerPoints " + (EconomyHook.isPlayerPointsReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装"));
         getLogger().info("  作者: crystalkingdom团队 | Paper 1.21+ | JDK 21");
         getLogger().info("==================================================");
     }
 
-    @Override public void onDisable() { getLogger().info("EliteMobs 已停用。"); }
+    @Override public void onDisable() {
+        // 全量回写存活精英/Boss 数据并关闭 SQLite（避免停服丢失血量/位置）
+        if (persistence != null) persistence.saveAllAndClose();
+        getLogger().info("EliteMobs 已停用。");
+    }
 
     private void startAITask() {
         getServer().getScheduler().runTaskTimer(this, () -> {
@@ -159,6 +180,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
     public EliteAffixHandler getAffixHandler() { return affixHandler; }
     public EliteCombatListener getCombatListener() { return combatListener; }
     public EliteEssenceUpgradeListener getEssenceListener() { return essenceListener; }
+    public ElitePersistence getPersistence() { return persistence; }
+    public BossSpawner getBossSpawner() { return bossSpawner; }
 
     /** 注册 PlaceholderAPI 占位符（软依赖，未装 PAPI 时静默跳过） */
     private void registerPapi() {

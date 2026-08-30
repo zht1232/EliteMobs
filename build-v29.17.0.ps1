@@ -48,6 +48,16 @@ Copy-Item "$Root\src\main\resources\gems\*" "$Tmp\gems\" -Force
 
 $JarOut = "$Root\EliteMobs-$Ver.jar"
 if (Test-Path $JarOut) { Remove-Item $JarOut -Force }
+
+# Bundle SQLite JDBC driver (org.xerial:sqlite-jdbc, 含各平台原生库) into the plugin jar
+# so EliteMobs persistence works without Paper library-loader / internet.
+$SqliteJdbc = "$Server\libraries\org\xerial\sqlite-jdbc\3.49.1.0\sqlite-jdbc-3.49.1.0.jar"
+if (-not (Test-Path $SqliteJdbc)) { Write-Host "SQLITE DRIVER NOT FOUND: $SqliteJdbc"; exit 1 }
+
+Push-Location $Tmp
+& $JAR "xf" $SqliteJdbc
+Pop-Location
+
 Push-Location $Tmp
 & $JAR "cf" $JarOut "."
 Pop-Location

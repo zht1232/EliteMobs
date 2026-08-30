@@ -75,6 +75,24 @@ public class EliteAffixHandler implements Listener {
         }
     }
 
+    /**
+     * 按持久化记录恢复词缀（物化时调用）：覆盖随机掷定，保持原词缀。
+     * raw 为逗号分隔的词缀枚举名，如 "FROST,CHAIN"。
+     */
+    public void applyAffixesFromString(LivingEntity e, String raw) {
+        if (e == null || raw == null || raw.isEmpty()) return;
+        e.setMetadata(META_AFFIX, new FixedMetadataValue(plugin, raw));
+        e.getPersistentDataContainer().set(new org.bukkit.NamespacedKey("elitemobs", "elite_affix"),
+                org.bukkit.persistence.PersistentDataType.STRING, raw);
+        for (String s : raw.split(",")) {
+            EliteAffix a = EliteAffix.fromString(s);
+            if (a == EliteAffix.BLOCK_BREAK && plugin.getEliteConfig().isBlockBreakEnabled()) {
+                plugin.getMobManager().getBlockBreakers().add(e.getUniqueId());
+            }
+        }
+        appendAffixSuffix(e);
+    }
+
     /** 读取精英怪携带的词缀（metadata 优先 + PDC 兜底） */
     public static Set<EliteAffix> getAffixes(LivingEntity e) {
         Set<EliteAffix> set = new HashSet<>();

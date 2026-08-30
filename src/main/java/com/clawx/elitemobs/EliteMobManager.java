@@ -128,6 +128,9 @@ public class EliteMobManager {
         }
 
         if (entity instanceof Creeper c) c.setExplosionRadius((int) Math.round(Math.min(3.0f + (level * 0.3f), 10.0f)));
+
+        // 入库持久化：精英数据写入 SQLite（区块卸载后实体移除，玩家接近时按记录物化还原）
+        if (plugin.getPersistence() != null) plugin.getPersistence().registerElite(entity);
     }
 
     private void applyEquipment(LivingEntity entity, int level, EliteConfig config, EliteConfig.EliteMobProfile profile) {

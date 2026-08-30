@@ -302,6 +302,8 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
                 owners.add(le.getUniqueId());
                 le.remove();
                 cleared++;
+                // 同步删除持久化记录，避免 /em clear 后精英又物化回来
+                if (plugin.getPersistence() != null) plugin.getPersistence().forgetEntity(le.getUniqueId());
             } else if (e instanceof org.bukkit.entity.Item it
                     && (it.getPersistentDataContainer().has(decorKey, org.bukkit.persistence.PersistentDataType.STRING)
                         || it.getPersistentDataContainer().has(bossDecorKey, org.bukkit.persistence.PersistentDataType.BOOLEAN))) {
