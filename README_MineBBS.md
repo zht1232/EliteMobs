@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.20.1.jar`
+1. 下载 `EliteMobs-29.20.2.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,9 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.20.2
+- 🧹 **社区版（无 SweetFlight）改回最简原生方案**：不依赖 `flyingFallDamage` 等 Paper 特有 API——手持二段跳宝石武器时武装（allowFlight=true），**不手持且未在飞时收回武装**（allowFlight=false，摔落伤害恢复，任何 Paper 版本行为一致）；飞行中不收回（防突然掉落）
 
 ### v29.20.1
 - 🐛 **修复社区模式摔落伤害**（无 SweetFlight 时）：自带武装/武装残留会让 Paper 26.2 免疫摔落伤害（allowFlight=true 默认免摔）——社区模式玩家加入时也设置 `flyingFallDamage=TRUE`（反射，兼容旧版 Paper），未飞摔落正常受伤、飞行落地仍免摔

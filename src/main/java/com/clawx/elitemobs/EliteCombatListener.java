@@ -293,14 +293,19 @@ public class EliteCombatListener implements Listener {
     /** 定时任务：落地/卸下宝石时清理"本次空中已用"标记（防 Map 泄漏）。
      *  社区兼容双逻辑：
      *  装了 SweetFlight → 完全不碰飞行武装（解耦，二段跳跟随 SweetFlight 的 allowFlight）；
-     *  没装 SweetFlight → 手持二段跳宝石武器时保持 allowFlight=true（自带武装，社区玩家也能用二段跳），
-     *  切掉武器后不再维护（武装是否残留交给其他飞行插件/原版，本插件不主动收回以免破坏 /fly 等）。 */
+     *  没装 SweetFlight → 最简原生方案：手持二段跳宝石武器时武装（allowFlight=true），
+     *  不手持且未在飞时收回武装（allowFlight=false）——武装收回后摔落伤害正常（Paper 26.2 只在
+     *  allowFlight=true 时免疫摔落），不依赖 flyingFallDamage 等 Paper 特有 API；飞行中不收回（防突然掉落）。 */
     public void startDoubleJumpTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : plugin.getServer().getOnlinePlayers()) {
                 int lv = getDoubleJumpLevel(p);
-                if (!sweetFlightMode && lv > 0 && !p.getAllowFlight()) {
-                    p.setAllowFlight(true);  // 无 SweetFlight：自带武装（仅手持宝石武器时）
+                if (!sweetFlightMode) {
+                    if (lv > 0) {
+                        if (!p.getAllowFlight()) p.setAllowFlight(true);   // 手持宝石武器：武装（二段跳有信号）
+                    } else if (!p.isFlying() && p.getAllowFlight()) {
+                        p.setAllowFlight(false);                            // 不手持且未在飞：收回武装（摔落伤害恢复）
+                    }
                 }
                 if (lv <= 0 || p.isOnGround()) {
                     djUsed.remove(p.getUniqueId());
@@ -315,21 +320,6 @@ public class EliteCombatListener implements Listener {
         UUID id = e.getPlayer().getUniqueId();
         djUsed.remove(id);
         lastDoubleJump.remove(id);
-    }
-
-    /** 社区模式（无 SweetFlight）玩家加入时设置 flyingFallDamage=TRUE：
-     *  Paper 26.2 的 allowFlight=true 默认免疫摔落伤害（Player.causeFallDamage 检查 mayfly + flyingFallDamage），
-     *  自带武装/武装残留（切掉武器）会导致永久免摔；TRUE 后未飞摔落正常受伤，飞行中落地仍免摔。
-     *  反射调用兼容旧版 Paper（无此方法时跳过，旧版无此免摔行为，无副作用）。 */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onJoinFallDamage(org.bukkit.event.player.PlayerJoinEvent e) {
-        if (sweetFlightMode) return;  // 装了 SweetFlight：由 SweetFlight 的 onPlayerJoin 设置
-        try {
-            java.lang.reflect.Method m = org.bukkit.entity.Player.class.getMethod(
-                    "setFlyingFallDamage", net.kyori.adventure.util.TriState.class);
-            m.invoke(e.getPlayer(), net.kyori.adventure.util.TriState.TRUE);
-        } catch (Throwable ignored) {
-        }
     }
 
     /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */
