@@ -120,7 +120,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
             getLogger().info("  LuckPerms: " + eliteConfig.getLuckPermsGroups().size() + " 个组");
         getLogger().info("  掉落模式: " + eliteConfig.getGemDropMode());
         getLogger().info("  Boss 布署: " + (eliteConfig.isBossSpawnEnabled() ? ChatColor.GREEN + "ON" : ChatColor.RED + "OFF")
-                + ChatColor.RESET + " \u6bcf " + eliteConfig.getBossSpawnIntervalSeconds() + "s | \u6301\u4e45\u5316: "
+                + ChatColor.RESET + " \u57fa\u7840\u95f4\u9694 " + eliteConfig.getBossSpawnBaseIntervalSeconds()
+                + "s(\u52a8\u6001\u6743\u91cd) | \u6301\u4e45\u5316: "
                 + (persistence != null && persistence.isEnabled() ? ChatColor.GREEN + "SQLite" : ChatColor.RED + "OFF"));
         getLogger().info("  经济: Vault " + (EconomyHook.isVaultReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装")
                 + ChatColor.RESET + " | PlayerPoints " + (EconomyHook.isPlayerPointsReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装"));

@@ -61,18 +61,31 @@ public class EliteConfig {
     private double sealRadius = 12;                    // 影响半径
     // Boss 直接布署（boss.spawn，替代"玩家附近精英晋升"）
     private boolean bossSpawnEnabled = true;
-    private int bossSpawnIntervalSeconds = 600;        // 布署间隔（秒）
+    private int bossSpawnBaseIntervalSeconds = 1200;   // 基础布署间隔（秒），由权重因子动态缩放
+    private int bossSpawnMinIntervalSeconds = 300;     // 间隔下限（秒），防服务器疯狂刷
     private int bossSpawnMaxConcurrent = 3;            // 同时存在的 Boss 数（含潜伏等待接近的）
     private double bossSpawnMinDistance = 150;         // 距玩家最小距离（格）
     private double bossSpawnMaxDistance = 800;         // 距玩家最大距离（格）
     private int bossSpawnMinLevel = 15;
     private int bossSpawnMaxLevel = 20;
+    // 动态间隔权重因子
+    private int bossPlayerCountSweetSpot = 10;         // 在线玩家数的"甜点"（10 人时人数因子=1.0）
+    private double bossDayIntervalMultiplier = 1.3;    // 白天间隔倍率（>1 更慢）
+    private double bossNightIntervalMultiplier = 0.7;  // 夜间间隔倍率（<1 更快）
+    private int bossKillActivityWindowMinutes = 30;    // 击杀活跃统计窗口（分钟）
+    private double bossKillActivityBaseFactor = 0.1;   // 窗口内每击杀 10 只精英/Boss 间隔缩短 10%
+    private double bossKillActivityMinFactor = 0.6;    // 击杀因子下限（间隔最短缩到基础 ×0.6）
+    // 动态距离因子
+    private double bossNightDistanceMultiplier = 0.9;  // 夜间生成距离倍率（<1 更近，玩家夜间活动半径小）
+    private Map<String, Double> bossBiomeWeights = new LinkedHashMap<>(); // 群系权重（空=均匀随机）
+    private int bossSpawnExpireHours = 168;            // 潜伏 Boss 过期清理时限（小时，防 DB 膨胀）
     private double bossMaterializeDistance = 48;       // 玩家进入该范围时 Boss 物化现身
     private boolean bossAnnounceOnStart = true;        // 启动时广播仍潜伏的 Boss 位置
     // 精英/Boss 持久化（persistence，SQLite）
     private boolean persistenceEnabled = true;
     private int persistenceSaveInterval = 10;          // 血量/位置入库间隔（秒）
     private double persistenceMaterializeDistance = 32; // 玩家进入该范围时精英物化现身
+    private int persistencePendingExpireHours = 72;    // 潜伏精英过期清理时限（小时，防 DB 无限膨胀）
     private Set<EntityType> enabledMobTypes;
     private Map<EntityType, EliteMobProfile> mobProfiles;
     private boolean wallClimbEnabled, blockBreakEnabled, itemStealEnabled, damageScalingEnabled, weaponEnhancementEnabled;
@@ -269,7 +282,9 @@ public class EliteConfig {
         sealRadius = config.getDouble("boss-skills.seal.radius", 12);
         // Boss 直接布署（boss.spawn）
         bossSpawnEnabled = config.getBoolean("boss.spawn.enabled", true);
-        bossSpawnIntervalSeconds = Math.max(6, config.getInt("boss.spawn.interval-seconds", 600));
+        bossSpawnBaseIntervalSeconds = Math.max(60, config.getInt("boss.spawn.base-interval-seconds", 1200));
+        bossSpawnMinIntervalSeconds = Math.max(60, Math.min(bossSpawnBaseIntervalSeconds,
+                config.getInt("boss.spawn.min-interval-seconds", 300)));
         bossSpawnMaxConcurrent = Math.max(1, config.getInt("boss.spawn.max-concurrent", 3));
         bossSpawnMinDistance = Math.max(16, config.getDouble("boss.spawn.min-distance", 150));
         bossSpawnMaxDistance = Math.max(bossSpawnMinDistance, config.getDouble("boss.spawn.max-distance", 800));
@@ -277,10 +292,28 @@ public class EliteConfig {
         bossSpawnMaxLevel = Math.max(bossSpawnMinLevel, config.getInt("boss.spawn.max-level", 20));
         bossMaterializeDistance = Math.max(8, config.getDouble("boss.spawn.materialize-distance", 48));
         bossAnnounceOnStart = config.getBoolean("boss.spawn.announce-on-start", true);
+        // 动态间隔权重因子
+        bossPlayerCountSweetSpot = Math.max(1, config.getInt("boss.spawn.player-count-sweet-spot", 10));
+        bossDayIntervalMultiplier = Math.max(0.2, config.getDouble("boss.spawn.day-interval-multiplier", 1.3));
+        bossNightIntervalMultiplier = Math.max(0.2, config.getDouble("boss.spawn.night-interval-multiplier", 0.7));
+        bossKillActivityWindowMinutes = Math.max(5, config.getInt("boss.spawn.kill-activity-window-minutes", 30));
+        bossKillActivityBaseFactor = Math.max(0.01, config.getDouble("boss.spawn.kill-activity-base-factor", 0.1));
+        bossKillActivityMinFactor = Math.max(0.2, Math.min(1.0, config.getDouble("boss.spawn.kill-activity-min-factor", 0.6)));
+        bossNightDistanceMultiplier = Math.max(0.5, Math.min(2.0, config.getDouble("boss.spawn.night-distance-multiplier", 0.9)));
+        bossBiomeWeights = new LinkedHashMap<>();
+        org.bukkit.configuration.ConfigurationSection biomeSec = config.getConfigurationSection("boss.spawn.biome-weights");
+        if (biomeSec != null) {
+            for (String k : biomeSec.getKeys(false)) {
+                try { bossBiomeWeights.put(k.toUpperCase(), biomeSec.getDouble(k)); }
+                catch (Exception ignored) {}
+            }
+        }
+        bossSpawnExpireHours = Math.max(1, config.getInt("boss.spawn.expire-hours", 168));
         // 持久化（persistence）
         persistenceEnabled = config.getBoolean("persistence.enabled", true);
         persistenceSaveInterval = Math.max(5, config.getInt("persistence.save-interval-seconds", 10));
         persistenceMaterializeDistance = Math.max(8, config.getDouble("persistence.materialize-distance", 32));
+        persistencePendingExpireHours = Math.max(1, config.getInt("persistence.pending-expire-hours", 72));
         enabledMobTypes = new HashSet<>();
         List<String> typeList = config.getStringList("general.enabled-mob-types");
         if (typeList.isEmpty()) {
@@ -736,7 +769,8 @@ public class EliteConfig {
     public double getSealRadius() { return sealRadius; }
     // ========== Boss 直接布署（boss.spawn） ==========
     public boolean isBossSpawnEnabled() { return bossSpawnEnabled; }
-    public int getBossSpawnIntervalSeconds() { return bossSpawnIntervalSeconds; }
+    public int getBossSpawnBaseIntervalSeconds() { return bossSpawnBaseIntervalSeconds; }
+    public int getBossSpawnMinIntervalSeconds() { return bossSpawnMinIntervalSeconds; }
     public int getBossSpawnMaxConcurrent() { return bossSpawnMaxConcurrent; }
     public double getBossSpawnMinDistance() { return bossSpawnMinDistance; }
     public double getBossSpawnMaxDistance() { return bossSpawnMaxDistance; }
@@ -744,10 +778,20 @@ public class EliteConfig {
     public int getBossSpawnMaxLevel() { return bossSpawnMaxLevel; }
     public double getBossMaterializeDistance() { return bossMaterializeDistance; }
     public boolean isBossAnnounceOnStart() { return bossAnnounceOnStart; }
+    public int getBossPlayerCountSweetSpot() { return bossPlayerCountSweetSpot; }
+    public double getBossDayIntervalMultiplier() { return bossDayIntervalMultiplier; }
+    public double getBossNightIntervalMultiplier() { return bossNightIntervalMultiplier; }
+    public int getBossKillActivityWindowMinutes() { return bossKillActivityWindowMinutes; }
+    public double getBossKillActivityBaseFactor() { return bossKillActivityBaseFactor; }
+    public double getBossKillActivityMinFactor() { return bossKillActivityMinFactor; }
+    public double getBossNightDistanceMultiplier() { return bossNightDistanceMultiplier; }
+    public Map<String, Double> getBossBiomeWeights() { return bossBiomeWeights; }
+    public int getBossSpawnExpireHours() { return bossSpawnExpireHours; }
     // ========== 持久化（persistence） ==========
     public boolean isPersistenceEnabled() { return persistenceEnabled; }
     public int getPersistenceSaveInterval() { return persistenceSaveInterval; }
     public double getPersistenceMaterializeDistance() { return persistenceMaterializeDistance; }
+    public int getPersistencePendingExpireHours() { return persistencePendingExpireHours; }
     public Set<EntityType> getEnabledMobTypes() { return enabledMobTypes; }
     public EliteMobProfile getProfile(EntityType type) { return mobProfiles.getOrDefault(type, DEFAULT_PROFILE); }
     public boolean isWallClimbEnabled() { return wallClimbEnabled; }

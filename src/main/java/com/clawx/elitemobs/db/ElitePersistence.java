@@ -77,6 +77,8 @@ public class ElitePersistence implements Listener {
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::sweepAttached, 100L, interval * 20L);
         // 潜伏记录物化扫描（每 2 秒，玩家接近即现身）
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::materializeRecords, 40L, 40L);
+        // 过期潜伏记录清理（每小时，防数据库无限膨胀）
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::expirePending, 72000L, 72000L);
         plugin.getLogger().info("  持久化: SQLite 已启用 (" + new File(plugin.getDataFolder(), "elitemobs.db").getName()
                 + ", 记录 " + db.getPending().size() + " 潜伏 / " + db.getAllAttached().size() + " 物化, Boss " + db.countBosses() + ")");
         return true;
@@ -222,9 +224,24 @@ public class ElitePersistence implements Listener {
         }
     }
 
+    /** 过期潜伏记录清理：普通精英/潜伏 Boss 超过时限没人接近则删除（防 DB 无限膨胀）。 */
+    private void expirePending() {
+        if (!enabled || db == null) return;
+        EliteConfig cfg = plugin.getEliteConfig();
+        long eliteExpireMs = (long) cfg.getPersistencePendingExpireHours() * 3600000L;
+        long bossExpireMs = (long) cfg.getBossSpawnExpireHours() * 3600000L;
+        long now = System.currentTimeMillis();
+        for (EliteRecord rec : db.getPending()) {
+            long idle = now - rec.updatedAt;
+            long limit = rec.boss ? bossExpireMs : eliteExpireMs;
+            if (idle > limit) db.delete(rec.recordId);
+        }
+    }
+
     /** 扫描潜伏记录：区块已加载且玩家在物化距离内 → 物化实体。 */
     public void materializeRecords() {
         if (!enabled || db == null) return;
+        if (Bukkit.getOnlinePlayers().isEmpty()) return; // 无玩家在线不扫（性能）
         EliteConfig cfg = plugin.getEliteConfig();
         double eliteDist = cfg.getPersistenceMaterializeDistance();
         double bossDist = cfg.getBossMaterializeDistance();
@@ -259,7 +276,14 @@ public class ElitePersistence implements Listener {
             return;
         }
         if (!w.isChunkLoaded(rec.chunkX(), rec.chunkZ())) return;
-        Entity ent = w.spawnEntity(new Location(w, rec.x, rec.y, rec.z), type);
+        // 物化点安全校验：记录位置可能已被方块填埋（玩家在附近建筑）→ 就近找安全点，防窒息暴毙
+        Location spawnLoc = new Location(w, rec.x, rec.y, rec.z);
+        if (!spawnLoc.getBlock().isPassable() || !spawnLoc.clone().add(0, 1, 0).getBlock().isPassable()) {
+            Location safe = com.clawx.elitemobs.spawn.EliteSpawnHandler.findSafeSpot(
+                    w, (int) Math.floor(rec.x), (int) Math.floor(rec.z));
+            if (safe != null) spawnLoc = safe;
+        }
+        Entity ent = w.spawnEntity(spawnLoc, type);
         if (!(ent instanceof LivingEntity le)) {
             ent.remove();
             db.delete(rec.recordId);
@@ -309,6 +333,10 @@ public class ElitePersistence implements Listener {
             if (ent == null || ent.isDead() || !ent.isValid()) {
                 db.detach(rec.recordId);
                 entityToRecord.remove(eid);
+            } else if (ent instanceof LivingEntity le && EliteMobManager.isElite(le)) {
+                // 重启后从区块数据恢复的实体：重新纳入内存管理，
+                // 后续卸载/死亡走正常流程（否则它会游离在管理外，不受"接近才现身"约束）
+                entityToRecord.put(eid, rec.recordId);
             }
         }
     }
@@ -339,11 +367,13 @@ public class ElitePersistence implements Listener {
         }
     }
 
-    /** 精英/Boss 死亡：删除记录。 */
+    /** 精英/Boss 死亡：删除记录 + 上报击杀活跃（供 Boss 布署频率动态调整）。 */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEliteDeath(EntityDeathEvent event) {
         LivingEntity e = event.getEntity();
         if (!EliteMobManager.isElite(e)) return;
+        // 上报击杀活跃（Boss 布署间隔会随击杀变短；与持久化开关无关）
+        if (plugin.getBossSpawner() != null) plugin.getBossSpawner().recordEliteKill();
         if (!enabled || db == null) return;
         String rid = entityToRecord.remove(e.getUniqueId());
         if (rid != null) db.delete(rid);

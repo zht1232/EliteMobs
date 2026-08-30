@@ -61,17 +61,6 @@ public class EliteBossManager implements Listener {
         if (plugin.getPersistence() != null) plugin.getPersistence().markBoss(entity);
     }
 
-    /** 尝试将精英怪晋升为Boss（由生成系统调用） */
-    public boolean tryPromoteToBoss(LivingEntity entity, int level) {
-        if (level < 15) return false;
-        // Lv.15-17: 5%概率, Lv.18-19: 15%, Lv.20+: 30%
-        double chance = level >= 20 ? 0.30 : level >= 18 ? 0.15 : 0.05;
-        if (rng.nextDouble() >= chance) return false;
-
-        promoteToBoss(entity, level);
-        return true;
-    }
-
     private void promoteToBoss(LivingEntity entity, int level) {
         applyBossCore(entity, level);
 
