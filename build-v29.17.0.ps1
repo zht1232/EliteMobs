@@ -2,9 +2,10 @@
 # Usage: pwsh -File build-v29.17.0.ps1
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$JAVAC = "C:\Minecraftserver\DaemonData\Tools\Java\25\bin\javac.exe"
-$JAR = "C:\Minecraftserver\DaemonData\Tools\Java\25\bin\jar.exe"
-$Server = "C:\Minecraftserver\DaemonData\Servers\1"
+# 2026-08-30 服务器已迁移到 G 盘（旧 C:\Minecraftserver 已不存在）
+$JAVAC = "G:\Minecraftserver\DaemonData\Tools\Java\25\bin\javac.exe"
+$JAR = "G:\Minecraftserver\DaemonData\Tools\Java\25\bin\jar.exe"
+$Server = "G:\Minecraftserver\DaemonData\Servers\1"
 $Libs = "$Server\libraries"
 
 # auto version from plugin.yml (e.g. version: '29.17.1')
