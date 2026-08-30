@@ -1,6 +1,8 @@
 package com.clawx.elitemobs.utils;
 
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -96,6 +98,50 @@ public final class StringColorAnimator {
                     String sStr = primary + convert(s.toString());
                     for (Player p : plugin.getServer().getOnlinePlayers()) {
                         if (p != null && p.isOnline()) p.sendTitle(tStr, sStr, 0, 5, 0);
+                    }
+                    subtitleIndex++;
+                    return;
+                }
+                cancel();
+            }
+        }.runTaskTimer(plugin, 0L, 2L);
+    }
+
+    /** 同世界范围内玩家广播动态彩色标题（单任务遍历，range<0 视为全服）。 */
+    public static void animateTitleNear(JavaPlugin plugin, World w, Location loc, double range,
+                                        String title, String subtitle,
+                                        ChatColor primary, ChatColor secondary) {
+        String safeTitle = fitWidth(title);
+        String safeSub = fitWidth(subtitle);
+        double r2 = range < 0 ? Double.POSITIVE_INFINITY : range * range;
+        new BukkitRunnable() {
+            int titleIndex = 1;
+            int subtitleIndex = 1;
+            @Override public void run() {
+                if (titleIndex <= safeTitle.length()) {
+                    StringBuilder t = new StringBuilder(safeTitle).insert(titleIndex, primary);
+                    if (titleIndex > 1) t.insert(titleIndex - 2, secondary);
+                    String tStr = primary + convert(t.toString());
+                    String sStr = secondary + safeSub;
+                    for (Player p : plugin.getServer().getOnlinePlayers()) {
+                        if (p == null || !p.isOnline()) continue;
+                        if (w != null && loc != null && (!p.getWorld().equals(w)
+                                || p.getLocation().distanceSquared(loc) > r2)) continue;
+                        p.sendTitle(tStr, sStr, 0, 5, 0);
+                    }
+                    titleIndex++;
+                    return;
+                }
+                if (subtitleIndex <= safeSub.length()) {
+                    StringBuilder s = new StringBuilder(safeSub).insert(subtitleIndex, primary);
+                    if (subtitleIndex > 1) s.insert(subtitleIndex - 2, secondary);
+                    String tStr = secondary + safeTitle;
+                    String sStr = primary + convert(s.toString());
+                    for (Player p : plugin.getServer().getOnlinePlayers()) {
+                        if (p == null || !p.isOnline()) continue;
+                        if (w != null && loc != null && (!p.getWorld().equals(w)
+                                || p.getLocation().distanceSquared(loc) > r2)) continue;
+                        p.sendTitle(tStr, sStr, 0, 5, 0);
                     }
                     subtitleIndex++;
                     return;

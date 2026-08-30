@@ -29,7 +29,18 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
             case "reload" -> { if (!has(sender,"elitemobs.reload")) return true; plugin.reload(); msg(sender,ChatColor.GREEN+"\u2714 "+ChatColor.WHITE+"\u914d\u7f6e\u5df2\u91cd\u65b0\u52a0\u8f7d\uff01"); }
             case "info" -> { if (!has(sender,"elitemobs.admin")) return true; showInfo(sender); }
             case "spawn" -> { if (!has(sender,"elitemobs.spawn")) return true; doSpawn(sender,args); }
-            case "list" -> { if (!has(sender,"elitemobs.admin")) return true; msg(sender,ChatColor.GOLD+"\u2694 "+ChatColor.WHITE+"\u5f53\u524d\u6d3b\u8dc3\u7cbe\u82f1: "+ChatColor.RED+plugin.getMobManager().getEliteCount()+ChatColor.GRAY+" \u53ea"); }
+            case "list" -> {
+                if (!has(sender,"elitemobs.admin")) return true;
+                int live = plugin.getMobManager().getEliteCount();
+                int pending = plugin.getPersistence() != null ? plugin.getPersistence().countPending() : 0;
+                int bosses = plugin.getPersistence() != null ? plugin.getPersistence().countBosses() : 0;
+                msg(sender, ChatColor.GOLD + "\u2694 " + ChatColor.WHITE + "\u5f53\u524d\u6d3b\u8dc3\u7cbe\u82f1: "
+                        + ChatColor.RED + live + ChatColor.GRAY + " \u53ea"
+                        + ChatColor.GOLD + " | " + ChatColor.WHITE + "\u6f5c\u4f0f(\u6570\u636e\u5e93): "
+                        + ChatColor.YELLOW + pending + ChatColor.GRAY + " \u6761"
+                        + ChatColor.GOLD + " | " + ChatColor.WHITE + "Boss: "
+                        + ChatColor.RED + bosses + ChatColor.GRAY + " \u4e2a");
+            }
             case "toggle" -> { if (!has(sender,"elitemobs.admin")) return true; plugin.getConfig().set("general.enabled",!plugin.getEliteConfig().isEnabled()); plugin.reload(); msg(sender,ChatColor.GREEN+"\u7cbe\u82f1\u751f\u6210: "+(plugin.getEliteConfig().isEnabled()?ChatColor.GREEN+"\u2705 \u5df2\u542f\u7528":ChatColor.RED+"\u274c \u5df2\u7981\u7528")); }
 
             // === 测试指令 ===
@@ -172,6 +183,14 @@ public class EliteMobsCommand implements CommandExecutor, TabCompleter {
                 +" | \u5077\u7a83: "+icon(cfg.isItemStealEnabled())+ChatColor.GRAY
                 +" | \u4f24\u5bb3\u6210\u957f: "+icon(cfg.isDamageScalingEnabled()));
         msg(s,ChatColor.GRAY+"\u2022 \u7cbe\u82f1\u79cd\u7c7b: "+ChatColor.WHITE+cfg.getEnabledMobTypes().size()+ChatColor.GRAY+" \u79cd");
+        msg(s,ChatColor.GRAY+"\u2022 \u6301\u4e45\u5316: "+(plugin.getPersistence()!=null && plugin.getPersistence().isEnabled()
+                ? ChatColor.GREEN+"SQLite \u5df2\u542f\u7528"+ChatColor.GRAY+"\uff08\u6f5c\u4f0f "+plugin.getPersistence().countPending()
+                +" \u6761 / Boss "+plugin.getPersistence().countBosses()+" \u4e2a\uff09"
+                : ChatColor.RED+"\u672a\u542f\u7528"));
+        msg(s,ChatColor.GRAY+"\u2022 Boss \u5e03\u7f72: "+(cfg.isBossSpawnEnabled()?ChatColor.GREEN+"\u5df2\u542f\u7528":ChatColor.RED+"\u5df2\u5173\u95ed")
+                +ChatColor.GRAY+" | \u57fa\u7840\u95f4\u9694 "+ChatColor.WHITE+cfg.getBossSpawnBaseIntervalSeconds()+ChatColor.GRAY+"s"
+                +ChatColor.GRAY+" | \u5e7f\u64ad\u8303\u56f4 "+ChatColor.WHITE
+                +(cfg.getBossAnnounceRange()<0?"\u5168\u670d":cfg.getBossAnnounceRange()+"\u683c"));
         msg(s,ChatColor.GRAY+"\u2022 \u88c5\u5907\u6a21\u5f0f: "+ChatColor.GREEN+"\u6bcf\u90e8\u4f4d\u72ec\u7acb\u968f\u673a"+ChatColor.GRAY+" | "+ChatColor.AQUA+"\u7b49\u7ea7\u52a0\u6743");
         msg(s,ChatColor.GRAY+"\u2022 \u526f\u9b54\u6a21\u5f0f: "+ChatColor.GREEN+"\u6743\u91cd\u968f\u673a"+ChatColor.GRAY+" | "+ChatColor.AQUA+"\u7b49\u7ea7\u63d0\u5347");
     }

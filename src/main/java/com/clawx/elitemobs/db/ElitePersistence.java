@@ -171,6 +171,12 @@ public class ElitePersistence implements Listener {
 
     public int countBosses() { return (enabled && db != null) ? db.countBosses() : 0; }
 
+    /** 潜伏记录数（未物化，仅在数据库）。 */
+    public int countPending() { return (enabled && db != null) ? db.getPending().size() : 0; }
+
+    /** 已物化记录数（实体存活中）。 */
+    public int countAttached() { return (enabled && db != null) ? db.getAllAttached().size() : 0; }
+
     public List<EliteRecord> getPendingBosses() {
         return (enabled && db != null) ? db.getPendingBosses() : new ArrayList<>();
     }

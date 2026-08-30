@@ -61,8 +61,8 @@ public class EliteConfig {
     private double sealRadius = 12;                    // 影响半径
     // Boss 直接布署（boss.spawn，替代"玩家附近精英晋升"）
     private boolean bossSpawnEnabled = true;
-    private int bossSpawnBaseIntervalSeconds = 1200;   // 基础布署间隔（秒），由权重因子动态缩放
-    private int bossSpawnMinIntervalSeconds = 300;     // 间隔下限（秒），防服务器疯狂刷
+    private int bossSpawnBaseIntervalSeconds = 1800;   // 基础布署间隔（秒），由权重因子动态缩放（默认 30 分钟）
+    private int bossSpawnMinIntervalSeconds = 600;     // 间隔下限（秒），防服务器疯狂刷
     private int bossSpawnMaxConcurrent = 3;            // 同时存在的 Boss 数（含潜伏等待接近的）
     private double bossSpawnMinDistance = 150;         // 距玩家最小距离（格）
     private double bossSpawnMaxDistance = 800;         // 距玩家最大距离（格）
@@ -71,15 +71,16 @@ public class EliteConfig {
     // 动态间隔权重因子
     private int bossPlayerCountSweetSpot = 10;         // 在线玩家数的"甜点"（10 人时人数因子=1.0）
     private double bossDayIntervalMultiplier = 1.3;    // 白天间隔倍率（>1 更慢）
-    private double bossNightIntervalMultiplier = 0.7;  // 夜间间隔倍率（<1 更快）
+    private double bossNightIntervalMultiplier = 0.85; // 夜间间隔倍率（<1 更快）
     private int bossKillActivityWindowMinutes = 30;    // 击杀活跃统计窗口（分钟）
     private double bossKillActivityBaseFactor = 0.1;   // 窗口内每击杀 10 只精英/Boss 间隔缩短 10%
-    private double bossKillActivityMinFactor = 0.6;    // 击杀因子下限（间隔最短缩到基础 ×0.6）
+    private double bossKillActivityMinFactor = 0.7;    // 击杀因子下限（间隔最短缩到基础 ×0.7）
     // 动态距离因子
     private double bossNightDistanceMultiplier = 0.9;  // 夜间生成距离倍率（<1 更近，玩家夜间活动半径小）
     private Map<String, Double> bossBiomeWeights = new LinkedHashMap<>(); // 群系权重（空=均匀随机）
     private int bossSpawnExpireHours = 168;            // 潜伏 Boss 过期清理时限（小时，防 DB 膨胀）
     private double bossMaterializeDistance = 48;       // 玩家进入该范围时 Boss 物化现身
+    private int bossAnnounceRange = 1000;              // Boss 广播范围（格，-1=全服；默认 1000 格内）
     private boolean bossAnnounceOnStart = true;        // 启动时广播仍潜伏的 Boss 位置
     // 精英/Boss 持久化（persistence，SQLite）
     private boolean persistenceEnabled = true;
@@ -282,23 +283,24 @@ public class EliteConfig {
         sealRadius = config.getDouble("boss-skills.seal.radius", 12);
         // Boss 直接布署（boss.spawn）
         bossSpawnEnabled = config.getBoolean("boss.spawn.enabled", true);
-        bossSpawnBaseIntervalSeconds = Math.max(60, config.getInt("boss.spawn.base-interval-seconds", 1200));
+        bossSpawnBaseIntervalSeconds = Math.max(60, config.getInt("boss.spawn.base-interval-seconds", 1800));
         bossSpawnMinIntervalSeconds = Math.max(60, Math.min(bossSpawnBaseIntervalSeconds,
-                config.getInt("boss.spawn.min-interval-seconds", 300)));
+                config.getInt("boss.spawn.min-interval-seconds", 600)));
         bossSpawnMaxConcurrent = Math.max(1, config.getInt("boss.spawn.max-concurrent", 3));
         bossSpawnMinDistance = Math.max(16, config.getDouble("boss.spawn.min-distance", 150));
         bossSpawnMaxDistance = Math.max(bossSpawnMinDistance, config.getDouble("boss.spawn.max-distance", 800));
         bossSpawnMinLevel = Math.max(1, config.getInt("boss.spawn.min-level", 15));
         bossSpawnMaxLevel = Math.max(bossSpawnMinLevel, config.getInt("boss.spawn.max-level", 20));
         bossMaterializeDistance = Math.max(8, config.getDouble("boss.spawn.materialize-distance", 48));
+        bossAnnounceRange = config.getInt("boss.spawn.announce-range", 1000);
         bossAnnounceOnStart = config.getBoolean("boss.spawn.announce-on-start", true);
         // 动态间隔权重因子
         bossPlayerCountSweetSpot = Math.max(1, config.getInt("boss.spawn.player-count-sweet-spot", 10));
         bossDayIntervalMultiplier = Math.max(0.2, config.getDouble("boss.spawn.day-interval-multiplier", 1.3));
-        bossNightIntervalMultiplier = Math.max(0.2, config.getDouble("boss.spawn.night-interval-multiplier", 0.7));
+        bossNightIntervalMultiplier = Math.max(0.2, config.getDouble("boss.spawn.night-interval-multiplier", 0.85));
         bossKillActivityWindowMinutes = Math.max(5, config.getInt("boss.spawn.kill-activity-window-minutes", 30));
         bossKillActivityBaseFactor = Math.max(0.01, config.getDouble("boss.spawn.kill-activity-base-factor", 0.1));
-        bossKillActivityMinFactor = Math.max(0.2, Math.min(1.0, config.getDouble("boss.spawn.kill-activity-min-factor", 0.6)));
+        bossKillActivityMinFactor = Math.max(0.2, Math.min(1.0, config.getDouble("boss.spawn.kill-activity-min-factor", 0.7)));
         bossNightDistanceMultiplier = Math.max(0.5, Math.min(2.0, config.getDouble("boss.spawn.night-distance-multiplier", 0.9)));
         bossBiomeWeights = new LinkedHashMap<>();
         org.bukkit.configuration.ConfigurationSection biomeSec = config.getConfigurationSection("boss.spawn.biome-weights");
@@ -777,6 +779,7 @@ public class EliteConfig {
     public int getBossSpawnMinLevel() { return bossSpawnMinLevel; }
     public int getBossSpawnMaxLevel() { return bossSpawnMaxLevel; }
     public double getBossMaterializeDistance() { return bossMaterializeDistance; }
+    public int getBossAnnounceRange() { return bossAnnounceRange; }
     public boolean isBossAnnounceOnStart() { return bossAnnounceOnStart; }
     public int getBossPlayerCountSweetSpot() { return bossPlayerCountSweetSpot; }
     public double getBossDayIntervalMultiplier() { return bossDayIntervalMultiplier; }
@@ -787,6 +790,27 @@ public class EliteConfig {
     public double getBossNightDistanceMultiplier() { return bossNightDistanceMultiplier; }
     public Map<String, Double> getBossBiomeWeights() { return bossBiomeWeights; }
     public int getBossSpawnExpireHours() { return bossSpawnExpireHours; }
+    // ========== Boss 布署运行时调节（/emmenu 管理 → 配置设置 → Boss 布署） ==========
+    public void setBossSpawnEnabled(boolean v) {
+        bossSpawnEnabled = v;
+        plugin.getConfig().set("boss.spawn.enabled", v); plugin.saveConfig();
+    }
+    public void setBossSpawnBaseIntervalSeconds(int v) {
+        bossSpawnBaseIntervalSeconds = Math.max(60, v);
+        plugin.getConfig().set("boss.spawn.base-interval-seconds", bossSpawnBaseIntervalSeconds); plugin.saveConfig();
+    }
+    public void setBossAnnounceRange(int v) {
+        bossAnnounceRange = v;
+        plugin.getConfig().set("boss.spawn.announce-range", bossAnnounceRange); plugin.saveConfig();
+    }
+    public void setBossMaterializeDistance(double v) {
+        bossMaterializeDistance = Math.max(8, v);
+        plugin.getConfig().set("boss.spawn.materialize-distance", bossMaterializeDistance); plugin.saveConfig();
+    }
+    public void setBossSpawnMaxConcurrent(int v) {
+        bossSpawnMaxConcurrent = Math.max(1, v);
+        plugin.getConfig().set("boss.spawn.max-concurrent", bossSpawnMaxConcurrent); plugin.saveConfig();
+    }
     // ========== 持久化（persistence） ==========
     public boolean isPersistenceEnabled() { return persistenceEnabled; }
     public int getPersistenceSaveInterval() { return persistenceSaveInterval; }

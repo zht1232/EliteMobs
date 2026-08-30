@@ -221,7 +221,7 @@ public class BossSpawner {
         announceBoss(r, true);
     }
 
-    /** 全服广播 Boss 布署（含坐标）。 */
+    /** 全服广播 Boss 布署（含坐标；受 announce-range 限制，仅同世界范围内玩家收到）。 */
     private void announceBoss(EliteRecord r, boolean alert) {
         if (!alert || !plugin.getEliteConfig().isBossAlertEnabled()) return;
         String bossName = com.clawx.elitemobs.ai.EliteBossManager.buildBossDisplayName(r.type, r.level);
@@ -231,14 +231,18 @@ public class BossSpawner {
             + ChatColor.WHITE + r.world + ChatColor.GRAY + " \u5750\u6807 ("
             + ChatColor.YELLOW + (int) Math.floor(r.x) + ", " + (int) Math.floor(r.y) + ", " + (int) Math.floor(r.z)
             + ChatColor.GRAY + ") \u964d\u751f\u4e86\uff01";
-        Bukkit.broadcastMessage(announce);
-        com.clawx.elitemobs.utils.StringColorAnimator.animateTitleAll(plugin,
+        World w = Bukkit.getWorld(r.world);
+        if (w == null) return;
+        Location loc = new Location(w, r.x, r.y, r.z);
+        com.clawx.elitemobs.ai.EliteBossManager.announceNear(plugin, w, loc, announce);
+        com.clawx.elitemobs.utils.StringColorAnimator.animateTitleNear(plugin, w, loc,
+            plugin.getEliteConfig().getBossAnnounceRange(),
             ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 BOSS\u8b66\u62a5\uff01",
             ChatColor.RED + bossName + ChatColor.GRAY + " \u964d\u4e34\u4e86\uff01",
             ChatColor.RED, ChatColor.GOLD);
     }
 
-    /** 服务器启动时广播仍潜伏的 Boss 位置（受 boss.spawn.announce-on-start 控制）。 */
+    /** 服务器启动时广播仍潜伏的 Boss 位置（受 boss.spawn.announce-on-start 与 announce-range 控制）。 */
     public void reAnnouncePending() {
         EliteConfig cfg = plugin.getEliteConfig();
         if (!cfg.isBossAnnounceOnStart()) return;
@@ -248,7 +252,11 @@ public class BossSpawner {
         if (pending.isEmpty()) return;
         for (EliteRecord r : pending) {
             String bossName = com.clawx.elitemobs.ai.EliteBossManager.buildBossDisplayName(r.type, r.level);
-            Bukkit.broadcastMessage(ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
+            World w = Bukkit.getWorld(r.world);
+            if (w == null) continue;
+            Location loc = new Location(w, r.x, r.y, r.z);
+            com.clawx.elitemobs.ai.EliteBossManager.announceNear(plugin, w, loc,
+                ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 "
                 + ChatColor.RED + "Boss " + bossName + ChatColor.GRAY + " \u4ecd\u5728 "
                 + ChatColor.WHITE + r.world + ChatColor.GRAY + " (" + ChatColor.YELLOW
                 + (int) Math.floor(r.x) + ", " + (int) Math.floor(r.y) + ", " + (int) Math.floor(r.z)

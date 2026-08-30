@@ -66,24 +66,26 @@ persistence:
 #   · 击杀活跃   = 最近 kill-activity-window-minutes 分钟击杀精英/Boss 越多间隔越短
 #                 （每击杀 10 只缩短 kill-activity-base-factor，最短到 kill-activity-min-factor）
 # 生成距离同样动态：按等级在 min/max 间线性插值 × 夜间倍率 × 随机 ±15%。
+# 生成广播默认只通知同世界 1000 格内玩家（不刷全服）；击杀广播仍为全服聊天栏通知。
 boss:
   spawn:
     enabled: true
-    base-interval-seconds: 1200   # 基础布署间隔（秒；默认 20 分钟，动态权重后约 5~50 分钟一个）
-    min-interval-seconds: 300     # 间隔下限（秒），防服务器疯狂刷
+    base-interval-seconds: 1800   # 基础布署间隔（秒；默认 30 分钟，动态权重后约 15~90 分钟一个）
+    min-interval-seconds: 600     # 间隔下限（秒），防服务器疯狂刷
     max-concurrent: 3             # 同时存在的 Boss 数量（含潜伏等待接近的）
     player-count-sweet-spot: 10   # 人数因子甜点：该人数时因子=1.0
     day-interval-multiplier: 1.3  # 白天间隔倍率（>1 更慢）
-    night-interval-multiplier: 0.7# 夜间间隔倍率（<1 更快）
+    night-interval-multiplier: 0.85# 夜间间隔倍率（<1 更快）
     kill-activity-window-minutes: 30  # 击杀活跃统计窗口
     kill-activity-base-factor: 0.1    # 窗口内每击杀 10 只精英/Boss，间隔缩短 10%
-    kill-activity-min-factor: 0.6     # 击杀因子下限（间隔最短 = 基础 × 0.6）
+    kill-activity-min-factor: 0.7     # 击杀因子下限（间隔最短 = 基础 × 0.7）
     min-distance: 150             # 距所选玩家最小距离（格）
     max-distance: 800             # 距所选玩家最大距离（格）
     night-distance-multiplier: 0.9# 夜间生成距离倍率（<1 更近，玩家夜间活动半径小）
     min-level: 15                 # 布署 Boss 等级范围（默认沿用原晋升等级 15-20）
     max-level: 20
     materialize-distance: 48      # 玩家进入该范围时 Boss 实体现身
+    announce-range: 1000          # Boss 生成广播范围（格，-1=全服；默认仅同世界 1000 格内）
     announce-on-start: true       # 服务器启动时广播仍潜伏的 Boss 位置
     expire-hours: 168             # 潜伏 Boss 超过该时限（小时）没人接近则过期（默认 7 天）
     # 群系权重：Boss 优先布署在权重高的群系（键=群系枚举名，如 DARK_FOREST/BADLANDS/NETHER_WASTES）。

@@ -688,6 +688,7 @@ public class EliteMenu implements Listener, CommandExecutor {
                 else if (cur.startsWith("spawncls:")) onSpawnClsClick(p, cur, raw);
                 else if (cur.startsWith("spawnlv:")) onSpawnLvClick(p, cur, raw);
                 else if (cur.equals("config")) onConfigClick(p, raw);
+                else if (cur.equals("bossconfig")) onBossConfigClick(p, raw);
                 else if (cur.startsWith("priceedit:")) onPriceEditClick(p, cur, raw);
                 else if (cur.startsWith("price:")) onPriceClick(p, cur, raw);
             }
@@ -888,8 +889,47 @@ public class EliteMenu implements Listener, CommandExecutor {
         inv.setItem(38, btn(Material.RED_STAINED_GLASS_PANE, "&c-5%", "&7减少 5%"));
         inv.setItem(40, label(Material.BOOK, String.format("&e%.0f%%", cfg.getAffixChance() * 100), ""));
         inv.setItem(42, btn(Material.LIME_STAINED_GLASS_PANE, "&a+5%", "&7增加 5%"));
+        // Boss 布署设置入口（子页）
+        inv.setItem(51, btn(Material.SKELETON_SKULL, "&e&l☠ Boss 布署", "&7布署开关 / 间隔 / 生成广播范围 / 物化距离"));
         controls(inv, false, false);
         p.openInventory(inv);
+    }
+
+    /** 配置设置-子页：Boss 布署（开关/间隔/生成广播范围/物化距离 + 立即布署）。 */
+    private void openBossConfig(Player p) {
+        page.put(p.getUniqueId(), "bossconfig");
+        Inventory inv = base("&cBoss 布署");
+        paint(inv, T_CONFIG);
+        inv.setItem(4, label(Material.SKELETON_SKULL, "&e&l☠ Boss 布署", "&7点击调整，即时保存到 config.yml"));
+        EliteConfig cfg = plugin.getEliteConfig();
+        // 行1：布署开关
+        inv.setItem(9, label(Material.LEVER, "&fBoss 布署", "&7开启/关闭自动布署"));
+        inv.setItem(11, btn(Material.LIME_STAINED_GLASS_PANE, cfg.isBossSpawnEnabled() ? "&a✔ 开" : "&c✖ 关", "&7点击切换"));
+        inv.setItem(13, label(Material.BOOK, cfg.isBossSpawnEnabled() ? "&a已开启" : "&c已关闭", ""));
+        // 行2：布署间隔（基础，权重动态缩放）
+        inv.setItem(18, label(Material.CLOCK, "&f布署间隔", "&7基础间隔（秒），由人数/昼夜/击杀权重动态缩放"));
+        inv.setItem(20, btn(Material.RED_STAINED_GLASS_PANE, "&c-5分", "&7减少 5 分钟"));
+        inv.setItem(22, label(Material.BOOK, "&e" + formatSeconds(cfg.getBossSpawnBaseIntervalSeconds()), ""));
+        inv.setItem(24, btn(Material.LIME_STAINED_GLASS_PANE, "&a+5分", "&7增加 5 分钟"));
+        // 行3：生成广播范围
+        inv.setItem(27, label(Material.ENDER_PEARL, "&f生成广播范围", "&7Boss 生成广播范围（格，-1=全服）"));
+        inv.setItem(29, btn(Material.RED_STAINED_GLASS_PANE, "&c-100", "&7减少 100 格"));
+        inv.setItem(31, label(Material.BOOK, cfg.getBossAnnounceRange() < 0 ? "&e全服" : "&e" + cfg.getBossAnnounceRange() + " 格", ""));
+        inv.setItem(33, btn(Material.LIME_STAINED_GLASS_PANE, "&a+100", "&7增加 100 格"));
+        // 行4：物化距离
+        inv.setItem(36, label(Material.AMETHYST_SHARD, "&f物化距离", "&7玩家进入该范围时 Boss 现身"));
+        inv.setItem(38, btn(Material.RED_STAINED_GLASS_PANE, "&c-8", "&7减少 8 格"));
+        inv.setItem(40, label(Material.BOOK, "&e" + (int) cfg.getBossMaterializeDistance() + " 格", ""));
+        inv.setItem(42, btn(Material.LIME_STAINED_GLASS_PANE, "&a+8", "&7增加 8 格"));
+        // 立即布署一个 Boss（调试）
+        inv.setItem(51, btn(Material.ZOMBIE_HEAD, "&6&l☠ 立即布署 Boss", "&7立刻在世界远端布署一个 Boss"));
+        controls(inv, false, false);
+        p.openInventory(inv);
+    }
+
+    private static String formatSeconds(int s) {
+        if (s % 60 == 0) return (s / 60) + " 分钟";
+        return s + " 秒";
     }
 
     private void onSpawnListClick(Player p, String cur, int raw) {
@@ -975,11 +1015,38 @@ public class EliteMenu implements Listener, CommandExecutor {
             case 27, 29 -> cfg.setNightEnhancementEnabled(!cfg.isNightEnhancementEnabled());
             case 38 -> cfg.setAffixChance(cfg.getAffixChance() - 0.05);
             case 42 -> cfg.setAffixChance(cfg.getAffixChance() + 0.05);
+            case 51 -> { openBossConfig(p); changed = false; }
             default -> changed = false;
         }
         if (changed) {
             p.playSound(p.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1.5f);
             openConfig(p);
+        }
+    }
+
+    private void onBossConfigClick(Player p, int raw) {
+        EliteConfig cfg = plugin.getEliteConfig();
+        boolean changed = true;
+        switch (raw) {
+            case 9, 11 -> cfg.setBossSpawnEnabled(!cfg.isBossSpawnEnabled());
+            case 20 -> cfg.setBossSpawnBaseIntervalSeconds(cfg.getBossSpawnBaseIntervalSeconds() - 300);
+            case 24 -> cfg.setBossSpawnBaseIntervalSeconds(cfg.getBossSpawnBaseIntervalSeconds() + 300);
+            case 29 -> cfg.setBossAnnounceRange(cfg.getBossAnnounceRange() - 100);
+            case 33 -> cfg.setBossAnnounceRange(cfg.getBossAnnounceRange() + 100);
+            case 38 -> cfg.setBossMaterializeDistance(cfg.getBossMaterializeDistance() - 8);
+            case 42 -> cfg.setBossMaterializeDistance(cfg.getBossMaterializeDistance() + 8);
+            case 51 -> {
+                if (plugin.getBossSpawner() != null) {
+                    plugin.getBossSpawner().tryPlanBoss();
+                    p.sendMessage(ChatColor.GREEN + "\u2714 \u5df2\u5c1d\u8bd5\u5e03\u7f72 Boss\uff08\u82e5\u6570\u91cf\u5df2\u8fbe\u4e0a\u9650\u6216\u6761\u4ef6\u4e0d\u8db3\u5219\u8df3\u8fc7\uff09");
+                }
+                changed = false;
+            }
+            default -> changed = false;
+        }
+        if (changed) {
+            p.playSound(p.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1.5f);
+            openBossConfig(p);
         }
     }
 
@@ -1029,6 +1096,7 @@ public class EliteMenu implements Listener, CommandExecutor {
         else if (cur.startsWith("spawncls:")) openSpawnList(p, 0);
         else if (cur.startsWith("spawnlv:")) openSpawnCls(p, cur.split(":")[1]);
         else if (cur.equals("config")) openAdmin(p);
+        else if (cur.equals("bossconfig")) openConfig(p);
         else if (cur.startsWith("priceedit:")) openPriceAdmin(p, 0);
         else if (cur.startsWith("price:")) openAdmin(p);
         else if (cur.equals("info") || cur.equals("stats") || cur.equals("admin")) openMain(p);

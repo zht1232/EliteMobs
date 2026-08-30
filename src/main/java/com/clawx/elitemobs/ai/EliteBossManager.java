@@ -84,9 +84,10 @@ public class EliteBossManager implements Listener {
             + ChatColor.YELLOW + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
             + ChatColor.GRAY + ") \u964d\u751f\u4e86\uff01";
         if (plugin.getEliteConfig().isBossAlertEnabled()) {
-            Bukkit.broadcastMessage(announce);
-            // 动态彩色标题（打字机+双色渐变）——最初版：含 Boss 名
-            StringColorAnimator.animateTitleAll(plugin,
+            announceNear(plugin, loc.getWorld(), loc, announce);
+            // 动态彩色标题（打字机+双色渐变）——最初版：含 Boss 名；受 announce-range 范围限制
+            StringColorAnimator.animateTitleNear(plugin, loc.getWorld(), loc,
+                plugin.getEliteConfig().getBossAnnounceRange(),
                 ChatColor.DARK_RED + "" + ChatColor.BOLD + "\u2620 BOSS\u8b66\u62a5\uff01",
                 ChatColor.RED + bossName + ChatColor.GRAY + " \u964d\u4e34\u4e86\uff01",
                 ChatColor.RED, ChatColor.GOLD);
@@ -160,6 +161,27 @@ public class EliteBossManager implements Listener {
             + ChatColor.RED + (typeName == null ? "" : typeName.toLowerCase().replace('_', ' '))
             + ChatColor.GRAY + " [Lv." + level + "] "
             + ChatColor.DARK_RED + "" + ChatColor.BOLD + "BOSS";
+    }
+
+    /**
+     * Boss 生成类消息广播：受 boss.spawn.announce-range 控制
+     * （-1=全服广播；&gt;0=仅同世界该范围格内的玩家收到，避免全服刷屏）。
+     * 注意：击杀广播不走这里（保持全服聊天栏通知）。
+     */
+    public static void announceNear(EliteMobsPlugin plugin, World w, Location loc, String message) {
+        if (w == null || loc == null) return;
+        int range = plugin.getEliteConfig().getBossAnnounceRange();
+        if (range < 0) {
+            Bukkit.broadcastMessage(message);
+            return;
+        }
+        double r2 = (double) range * range;
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p != null && p.isOnline() && p.getWorld().equals(w)
+                    && p.getLocation().distanceSquared(loc) <= r2) {
+                p.sendMessage(message);
+            }
+        }
     }
 
     /**
