@@ -236,7 +236,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 下载 `EliteMobs-29.20.0.jar`
+1. 下载 `EliteMobs-29.20.1.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器（或 `/reload`）
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -245,6 +245,9 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.20.1
+- 🐛 **修复社区模式摔落伤害**（无 SweetFlight 时）：自带武装/武装残留会让 Paper 26.2 免疫摔落伤害（allowFlight=true 默认免摔）——社区模式玩家加入时也设置 `flyingFallDamage=TRUE`（反射，兼容旧版 Paper），未飞摔落正常受伤、飞行落地仍免摔
 
 ### v29.20.0
 - 🌍 **社区兼容（无需 SweetFlight）**：自动检测服务器是否装 SweetFlight——

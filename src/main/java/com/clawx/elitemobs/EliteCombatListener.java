@@ -317,6 +317,21 @@ public class EliteCombatListener implements Listener {
         lastDoubleJump.remove(id);
     }
 
+    /** 社区模式（无 SweetFlight）玩家加入时设置 flyingFallDamage=TRUE：
+     *  Paper 26.2 的 allowFlight=true 默认免疫摔落伤害（Player.causeFallDamage 检查 mayfly + flyingFallDamage），
+     *  自带武装/武装残留（切掉武器）会导致永久免摔；TRUE 后未飞摔落正常受伤，飞行中落地仍免摔。
+     *  反射调用兼容旧版 Paper（无此方法时跳过，旧版无此免摔行为，无副作用）。 */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onJoinFallDamage(org.bukkit.event.player.PlayerJoinEvent e) {
+        if (sweetFlightMode) return;  // 装了 SweetFlight：由 SweetFlight 的 onPlayerJoin 设置
+        try {
+            java.lang.reflect.Method m = org.bukkit.entity.Player.class.getMethod(
+                    "setFlyingFallDamage", net.kyori.adventure.util.TriState.class);
+            m.invoke(e.getPlayer(), net.kyori.adventure.util.TriState.TRUE);
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */
     public void startMagnetTask() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
