@@ -1,3 +1,5 @@
+维护入口：请先阅读 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)。当前版本已移除二段跳与玩家飞行管理；默认基础精英概率为 0.5%，夜间和满月增强默认关闭；攻击宝石采用线性加成。请使用 build.ps1 构建。源代码提交与正式服部署是独立步骤。
+
 <div align="center">
 
 # ⚔️ EliteMobs
@@ -38,12 +40,11 @@
 
 | 宝石 | 效果 | 适用 |
 |------|------|------|
-| 🗡 攻击宝石 `attack_gem` | 攻击力 + 等级² × 0.5 | 武器 |
+| 🗡 攻击宝石 `attack_gem` | 攻击力 + 等级 × 0.5（单颗上限 +5） | 武器 |
 | 🛡 防御宝石 `defense_gem` | 护甲减伤 + 等级 × 1.5（上限 15） | 护甲 |
 | ⚡ 雷电宝石 `thunder_gem` | 攻击概率召雷（8% + 7%/级，上限 85%） | 武器 |
 | 💨 击退宝石 `knockback_gem` | 稳定击退（力量 0.4 + 等级×0.12） | 武器 |
 | 🧲 磁力宝石 `magnet_gem` | 自动拾取掉落物（距离 3 + 等级，上限 12 格） | 武器/护甲 |
-| 🦘 二段跳宝石 `double_jump_gem` | 空中双击空格二段跳 | 武器 |
 | 🩸 吸血宝石 `lifesteal_gem` | 攻击吸血 1 + 等级 × 0.5 颗心 | 武器 |
 | 🛠 耐久宝石 `unbreaking_gem` | 每级减免 10% 耐久损耗，Lv.10 后装备无法破坏 | 武器/护甲 |
 | 🔥 火焰附加宝石 `fire_aspect_gem` | 攻击点燃目标 2 + 等级/2 秒 | 武器 |
@@ -207,7 +208,7 @@ essence-upgrade:
   base-rate: 0.35               # 基础成功率（Lv.1 宝石）
   per-level: 0.045              # 每级宝石额外成功率
   max-rate: 0.95                # 成功率上限
-  weapon-damage-multiplier: 0.5 # 武器淬炼攻击力系数（等级²×系数）
+  weapon-damage-multiplier: 0.5 # 武器淬炼攻击力系数（等级 × 0.5，单颗上限 +5）
   armor-bonus-per-level: 1.5    # 护甲每级减伤
   armor-max-bonus: 15.0         # 护甲减伤上限
 ```
@@ -223,7 +224,7 @@ name: "&c&l攻击宝石"
 effect: attack                 # attack / defense / thunder / knockback / magnet / rare
 max-level: 10
 lore:
-  - "&7攻击力 = 等级² × 0.5"
+  - "&7攻击力 = 等级 × 0.5（单颗上限 +5）"
 glow: true
 chance:
   level-1-3: 0.15
@@ -326,7 +327,6 @@ amount-max: 1
 - 🔧 标题宽度自动截断，防溢出屏幕
 
 ### v29.2.0
-- 🎯 **新增二段跳宝石**：空中双击空格二段跳（向前冲 + 向上跳），等级越高蓄力越快（冷却 3s → 0.4s）
 - 🐛 **修复广播关不掉根因**：服务器 config.yml 是 GBK 编码导致 Bukkit 读取失败（配置全失效用默认值）→ 已转 UTF-8；普通精英广播 `spawn-announce.enabled`、Boss 广播独立开关 `boss-alert`（默认开）
 - 🐛 修复：死亡归还被偷物品双份（掉落+背包）、掉落物耐火范围收窄、精英血条 NPE
 - 🎨 修复职业粒子拖尾（法师/坦克/召唤师：降低频率+减量+召唤师换短命粒子）
@@ -346,7 +346,6 @@ amount-max: 1
 - ✅ 词缀/职业 PDC 持久化：区块卸载重载后不丢失
 - ✅ 领地保护兼容（WorldGuard/GriefPrevention/Towny/Factions）：破块 AI 不拆玩家建筑
 - ✅ 武器强化开关生效、广播文案可自定义（messages.yml）、雷电宝石真闪电不引燃方块
-- ✅ 击杀金币奖励提升（per-level 5 → 8，Boss ×3）- ✅ **新增二段跳宝石**：空中双击空格二段跳，等级越高蓄力越快（冷却 3s → 0.4s）- �🔧 编译脚本适配 paper-api 26.2.build.60-beta
 
 ### v29.0.0
 - ✅ **宝石统一淬炼系统重构**（6 种宝石：攻击/防御/雷电/击退/磁力/稀有）

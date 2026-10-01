@@ -553,7 +553,7 @@ public class EliteEssenceUpgradeListener implements Listener {
 
     /**
      * 宝石是否匹配装备类型：
-     * 攻击/击退/雷电/稀有/二段跳/吸血/火焰附加 → 武器；防御 → 护甲（含鞘翅）；
+     * 攻击/击退/雷电/稀有/吸血/火焰附加 → 武器；防御 → 护甲（含鞘翅）；
      * 磁力/耐久 → 均可；盾牌特例：只允许耐久宝石（防御/攻击属性对盾牌无效）。
      */
     private boolean gemFitsEquip(ItemStack equip, String effect) {
@@ -562,7 +562,7 @@ public class EliteEssenceUpgradeListener implements Listener {
             return "unbreaking".equalsIgnoreCase(effect == null ? "" : effect);
         }
         return switch (effect == null ? "" : effect.toLowerCase()) {
-            case "attack", "knockback", "thunder", "rare", "doublejump", "lifesteal", "fire_aspect" -> weapon;
+            case "attack", "knockback", "thunder", "rare", "lifesteal", "fire_aspect" -> weapon;
             case "defense" -> isArmor(equip);
             case "magnet", "unbreaking" -> true;   // 磁力/耐久宝石：武器/护甲均可
             default -> true;
@@ -1027,7 +1027,6 @@ public class EliteEssenceUpgradeListener implements Listener {
                 case "knockback" -> "&7→ &f击退 Lv." + EliteGemFactory.knockbackLevel(gemLv);
                 case "thunder" -> "&7→ &e雷电 " + String.format("%.0f%%", EliteGemFactory.thunderChance(gemLv) * 100);
                 case "magnet" -> "&7→ &b磁力拾取 &f+" + EliteGemFactory.magnetRadius(gemLv) + " &7格";
-                case "doublejump" -> "&7→ &a二段跳 &f蓄力" + String.format("%.1f", EliteGemFactory.jumpCooldown(gemLv) / 1000.0) + "s";
                 case "rare" -> "&7→ &6稀有";
                 case "lifesteal" -> "&7→ &c吸血 &f+" + String.format("%.1f", EliteGemFactory.lifestealHeal(gemLv)) + " &7颗心/击";
                 case "fire_aspect" -> "&7→ &6火焰附加 &f" + EliteGemFactory.fireAspectSeconds(gemLv) + " &7秒";

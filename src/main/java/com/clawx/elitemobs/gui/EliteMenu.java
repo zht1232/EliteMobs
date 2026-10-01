@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
@@ -165,21 +166,15 @@ public class EliteMenu implements Listener, CommandExecutor {
 
     public void openMain(Player p) {
         page.put(p.getUniqueId(), "main");
-        Inventory inv = base("");
-        paint(inv, T_MAIN);
-        inv.setItem(4, label(Material.NETHER_STAR, "&d&l✦ 精英强化菜单 ✦",
-                "&7选择功能，强化你的装备",
-                "&7金币 / 点券 二选一支付"));
-        // 第一行：宝石 / 符文 / 状态（居中对称）
-        inv.setItem(20, btn(Material.DIAMOND, "&b&l💎 宝石商城", "&7购买淬炼宝石 / 保护符 / 拆卸器"));
-        inv.setItem(22, btn(Material.ENCHANTED_BOOK, "&d&l🏷 符文商城", "&7购买生命 / 移速 / 力量等符文"));
-        inv.setItem(24, btn(Material.GOLD_INGOT, "&6&l📊 我的状态", "&7查看金币 / 点券余额"));
-        // 第二行：说明 / 管理
-        inv.setItem(30, btn(Material.PAPER, "&e&l📖 使用说明", "&7宝石 / 符文 / 合成玩法"));
+        Inventory inv = Bukkit.createInventory(null, 27, ChatColor.DARK_PURPLE + TITLE);
+        inv.setItem(10, btn(Material.DIAMOND, "&b&l宝石商城", "&7攻击、防御、吸血等宝石"));
+        inv.setItem(12, btn(Material.ENCHANTED_BOOK, "&d&l符文商城", "&7属性符文和保护符"));
+        inv.setItem(14, btn(Material.GOLD_INGOT, "&6&l我的状态", "&7查看金币和点券"));
+        inv.setItem(16, btn(Material.PAPER, "&e&l使用说明", "&7查看强化和淬炼规则"));
         if (p.hasPermission("elitemobs.admin")) {
-            inv.setItem(32, btn(Material.BARRIER, "&c&l🧰 管理", "&7发放测试物品（管理员）"));
+            inv.setItem(22, btn(Material.COMMAND_BLOCK, "&c&l管理工具", "&7管理员测试功能"));
         }
-        inv.setItem(49, btn(Material.RED_WOOL, "&c✖ 关闭"));
+        inv.setItem(26, btn(Material.BARRIER, "&c关闭"));
         p.openInventory(inv);
     }
 
@@ -643,8 +638,12 @@ public class EliteMenu implements Listener, CommandExecutor {
         if (!ChatColor.stripColor(event.getView().getTitle()).startsWith(strip(TITLE))) return;
         event.setCancelled(true);
         int raw = event.getRawSlot();
-        if (raw < 0 || raw >= 54) return;
+        if (raw < 0 || raw >= event.getView().getTopInventory().getSize()) return;
         String cur = page.getOrDefault(p.getUniqueId(), "main");
+        if (cur.equals("main")) {
+            onMainClick(p, raw);
+            return;
+        }
 
         // 三级购买页：45 返回 / 49 确认 / 53 关闭 + 支付方式 / 数量
         if (cur.equals("buy")) {
@@ -695,12 +694,20 @@ public class EliteMenu implements Listener, CommandExecutor {
         }
     }
 
+    @EventHandler
+    public void onDrag(InventoryDragEvent event) {
+        if (!ChatColor.stripColor(event.getView().getTitle()).startsWith(strip(TITLE))) return;
+        int topSize = event.getView().getTopInventory().getSize();
+        if (event.getRawSlots().stream().anyMatch(slot -> slot < topSize)) event.setCancelled(true);
+    }
+
     private void onMainClick(Player p, int raw) {
-        if (raw == 20) openGemShop(p, 0);
-        else if (raw == 22) openRuneShop(p, 0);
-        else if (raw == 24) openStats(p);
-        else if (raw == 30) openInfo(p);
-        else if (raw == 32 && p.hasPermission("elitemobs.admin")) openAdmin(p);
+        if (raw == 10) openGemShop(p, 0);
+        else if (raw == 12) openRuneShop(p, 0);
+        else if (raw == 14) openStats(p);
+        else if (raw == 16) openInfo(p);
+        else if (raw == 22 && p.hasPermission("elitemobs.admin")) openAdmin(p);
+        else if (raw == 26) p.closeInventory();
     }
 
     private void onAdminClick(Player p, int raw) {

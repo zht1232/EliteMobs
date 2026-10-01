@@ -674,7 +674,6 @@ public class EliteConfig {
             gemShopPrices.put("ATTACK_GEM", new double[]{5000, 200});
             gemShopPrices.put("DEFENSE_GEM", new double[]{5000, 200});
             gemShopPrices.put("MAGNET_GEM", new double[]{5000, 200});
-            gemShopPrices.put("DOUBLE_JUMP_GEM", new double[]{5000, 200});
             gemShopPrices.put("UNBREAKING_GEM", new double[]{5000, 200});
             gemShopPrices.put("THUNDER_GEM", new double[]{5000, 200});
             gemShopPrices.put("KNOCKBACK_GEM", new double[]{5000, 200});
@@ -1288,7 +1287,6 @@ public class EliteConfig {
                 case "knockback" -> "&f";
                 case "thunder" -> "&e";
                 case "magnet" -> "&b";
-                case "doublejump" -> "&a";
                 case "rare" -> "&6";
                 default -> "&f";
             };

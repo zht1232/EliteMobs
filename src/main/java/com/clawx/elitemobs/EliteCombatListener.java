@@ -34,20 +34,13 @@ public class EliteCombatListener implements Listener {
     private final EliteMobsPlugin plugin;
     private final Random rng = new Random();
     private final Map<UUID, Integer> comboKills = new HashMap<>();
-    /** 二段跳宝石：上次二段跳时间戳（毫秒） */
-    private final Map<UUID, Long> lastDoubleJump = new HashMap<>();
-    /** 社区兼容：服务器是否装了 SweetFlight。
-     *  true = 解耦模式（SweetFlight 管理飞行武装，二段跳跟随，本插件绝不碰 allowFlight）；
-     *  false = 自带武装模式（手持二段跳宝石武器时保持 allowFlight=true，切掉武器后自然恢复，社区玩家无需 SweetFlight 也能用二段跳）。 */
-    private final boolean sweetFlightMode;
-    /** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem。
+/** 防重入：target.damage() 会再次派发 EntityDamageByEntityEvent 重入 onPlayerAttackWithGem。
      *  仅限主线程使用（Bukkit 事件处理均在主线程），无需 ThreadLocal。 */
     private boolean processingGemAttack = false;
 
     public EliteCombatListener(EliteMobsPlugin plugin) {
         this.plugin = plugin;
-        this.sweetFlightMode = plugin.getServer().getPluginManager().getPlugin("SweetFlight") != null;
-    }
+}
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEliteTargetPlayer(EntityTargetLivingEntityEvent event) {
@@ -192,135 +185,6 @@ public class EliteCombatListener implements Listener {
         return best;
     }
 
-    // ==================== 二段跳宝石（等级越高蓄力越快/冷却越短） ====================
-
-    /** 计算玩家武器上二段跳宝石的最高等级（只认主手/副手武器，不认护甲）。 */
-    private int getDoubleJumpLevel(Player p) {
-        int best = 0;
-        var inv = p.getInventory();
-        ItemStack[] items = new ItemStack[]{inv.getItemInMainHand(), inv.getItemInOffHand()};
-        for (ItemStack it : items) {
-            if (it == null || !it.hasItemMeta()) continue;
-            String[] ids = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGems(it);
-            int[] lvs = com.clawx.elitemobs.essence.EliteGemFactory.getInstalledGemLevels(it);
-            for (int i = 0; i < com.clawx.elitemobs.essence.EliteGemFactory.MAX_GEM_SLOTS; i++) {
-                if (ids[i] != null && "doublejump".equals(gemEffectFor(ids[i]))) {
-                    best = Math.max(best, lvs[i]);
-                }
-            }
-        }
-        return best;
-    }
-
-    /** 本次空中已用过二段跳：落地前不再触发（防连跳，让二段跳保持"一次空中一次"）。 */
-    private final Set<UUID> djUsed = java.util.concurrent.ConcurrentHashMap.newKeySet();
-
-    /**
-     * 二段跳宝石：<b>双击空格触发</b>（拦截 PlayerToggleFlightEvent）。
-     *
-     * <p>手持二段跳宝石武器时，双击空格（起跳后空中按空格）不再交给飞行插件起飞，
-     * 而是改为二段跳：连按两下空格 = 起跳 + 二段跳，空中/地面均可触发；
-     * 不手持宝石武器时完全放行。</p>
-     * <ul>
-     *   <li><b>装了 SweetFlight（本服）</b>：本插件绝不修改 allowFlight/flying（解耦），
-     *       二段跳跟随 SweetFlight 的飞行武装（allowFlight=true，加入默认武装）；/sweetfly on/off/toggle 照常；</li>
-     *   <li><b>没装 SweetFlight（社区）</b>：本插件自带武装——手持二段跳宝石武器时保持 allowFlight=true，
-     *       双击空格=二段跳；切掉武器后不再维护（交给其他飞行插件/原版）；</li>
-     *   <li>切换物品不改变飞行状态；</li>
-     *   <li>战斗禁飞（未飞行时受伤）不收回 allowFlight → 战斗中二段跳照常可用；</li>
-     *   <li>冷却内 / 本次空中已用过 → 取消但不跳（一次空中一次，落地/卸宝石清除）；</li>
-     *   <li>落地事件（isFlying=false）放行，飞行插件正常清 BossBar/落地逻辑。</li>
-     * </ul>
-     * 等级越高冷却越短（蓄力越快）。</p>
-     */
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onDoubleJumpToggleFlight(org.bukkit.event.player.PlayerToggleFlightEvent event) {
-        Player p = event.getPlayer();
-        if (p.getGameMode() == org.bukkit.GameMode.CREATIVE || p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
-        // PJ 飞行附魔装备最高优先级：穿 PJ 飞行套装时完全放行（PJ 二段跳/滑翔接管，二段跳宝石不生效）
-        if (hasPjFlightGear(p)) return;
-        int lv = getDoubleJumpLevel(p);
-        if (lv <= 0) { djUsed.remove(p.getUniqueId()); return; }  // 无宝石：完全放行（含落地事件）
-        if (!event.isFlying()) return;                             // 落地（关飞行）事件：放行，让 SweetFlight 处理
-        event.setCancelled(true);                                  // 手持宝石武器：拦截起飞（SweetFlight HIGHEST 见 cancelled 跳过）
-        long now = System.currentTimeMillis();
-        if (now - lastDoubleJump.getOrDefault(p.getUniqueId(), 0L)
-                < com.clawx.elitemobs.essence.EliteGemFactory.jumpCooldown(lv)) return;  // 冷却内：取消但不跳
-        if (djUsed.contains(p.getUniqueId())) return;              // 本次空中已用过
-        djUsed.add(p.getUniqueId());
-        // 二段跳 = 向前冲 + 向上跳（玩家朝向水平方向，等级越高冲得越远）
-        org.bukkit.util.Vector dir = p.getLocation().getDirection();
-        dir.setY(0).normalize();
-        double forward = Math.min(0.5 + lv * 0.03, 1.0);
-        org.bukkit.util.Vector vel = dir.multiply(forward);
-        vel.setY(com.clawx.elitemobs.essence.EliteGemFactory.jumpPower(lv));
-        p.setVelocity(vel);
-        p.getWorld().playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 0.9f);
-        p.getWorld().spawnParticle(Particle.CLOUD, p.getLocation(), 12, 0.3, 0.1, 0.3, 0);
-        lastDoubleJump.put(p.getUniqueId(), now);
-    }
-
-    /** 玩家是否穿 PJ 飞行附魔装备（翅膀/升空=胸甲、反重力=靴、磁力=四件套）。
-     *  PJ 附魔写在物品 Lore（中/英文名），这里只做字符串匹配，不依赖 PJ 类，两插件保持独立。 */
-    private static boolean hasPjFlightGear(Player p) {
-        ItemStack chest = p.getInventory().getChestplate();
-        ItemStack boots = p.getInventory().getBoots();
-        if (loreContains(chest, "翅膀", "WINGS", "升空", "LIFT")) return true;
-        if (loreContains(boots, "反重力", "ANTIGRAVITY")) return true;
-        ItemStack helm = p.getInventory().getHelmet();
-        ItemStack legs = p.getInventory().getLeggings();
-        return loreContains(helm, "磁力", "MAGNETIC")
-                && loreContains(chest, "磁力", "MAGNETIC")
-                && loreContains(legs, "磁力", "MAGNETIC")
-                && loreContains(boots, "磁力", "MAGNETIC");
-    }
-
-    /** 物品 Lore 任一行（去掉前 2 个颜色码字符后）是否包含任一关键词（忽略大小写）。 */
-    private static boolean loreContains(ItemStack i, String... names) {
-        if (i == null || !i.hasItemMeta()) return false;
-        java.util.List<String> lore = i.getItemMeta().getLore();
-        if (lore == null) return false;
-        for (String s : lore) {
-            if (s == null || s.length() < 2) continue;
-            String line = s.substring(2).toLowerCase(java.util.Locale.ROOT);
-            for (String n : names) {
-                if (line.contains(n.toLowerCase(java.util.Locale.ROOT))) return true;
-            }
-        }
-        return false;
-    }
-
-    /** 定时任务：落地/卸下宝石时清理"本次空中已用"标记（防 Map 泄漏）。
-     *  社区兼容双逻辑：
-     *  装了 SweetFlight → 完全不碰飞行武装（解耦，二段跳跟随 SweetFlight 的 allowFlight）；
-     *  没装 SweetFlight → 最简原生方案：手持二段跳宝石武器时武装（allowFlight=true），
-     *  不手持且未在飞时收回武装（allowFlight=false）——武装收回后摔落伤害正常（Paper 26.2 只在
-     *  allowFlight=true 时免疫摔落），不依赖 flyingFallDamage 等 Paper 特有 API；飞行中不收回（防突然掉落）。 */
-    public void startDoubleJumpTask() {
-        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            for (Player p : plugin.getServer().getOnlinePlayers()) {
-                int lv = getDoubleJumpLevel(p);
-                if (!sweetFlightMode) {
-                    if (lv > 0) {
-                        if (!p.getAllowFlight()) p.setAllowFlight(true);   // 手持宝石武器：武装（二段跳有信号）
-                    } else if (!p.isFlying() && p.getAllowFlight()) {
-                        p.setAllowFlight(false);                            // 不手持且未在飞：收回武装（摔落伤害恢复）
-                    }
-                }
-                if (lv <= 0 || p.isOnGround()) {
-                    djUsed.remove(p.getUniqueId());
-                }
-            }
-        }, 20L, 20L);
-    }
-
-    /** 玩家退出时清理二段跳状态（djUsed / lastDoubleJump），防 UUID 残留累积。 */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onDoubleJumpQuit(org.bukkit.event.player.PlayerQuitEvent e) {
-        UUID id = e.getPlayer().getUniqueId();
-        djUsed.remove(id);
-        lastDoubleJump.remove(id);
-    }
 
     /** 磁力宝石定时任务：把玩家磁力半径内的掉落物吸向玩家（每 0.5 秒，距离越近吸力越强）。 */
     public void startMagnetTask() {

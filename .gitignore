@@ -2,6 +2,12 @@
 classes/
 jar-temp/
 *.jar
+/build-output/
+.venv/
+*.db
+*.db-wal
+*.db-shm
+.env
 
 # --- IDE / 宸ュ叿 ---
 .idea/
@@ -25,5 +31,5 @@ snowy-patch/
 # --- local session notes ---
 SESSION_SUMMARY.md
 
-# 原版参考源码(不入库)
+# Original reference sources (excluded)
 orig-elitemobs-ref/

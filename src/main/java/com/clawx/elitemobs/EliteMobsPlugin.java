@@ -88,7 +88,6 @@ public final class EliteMobsPlugin extends JavaPlugin {
         combatListener.startSetBonusTask();
         combatListener.startMagnetTask();
         combatListener.startTargetTask();
-        combatListener.startDoubleJumpTask();
         getServer().getPluginManager().registerEvents(wallClimbAI, this);
         getServer().getPluginManager().registerEvents(blockBreakAI, this);
         getServer().getPluginManager().registerEvents(itemStealAI, this);
@@ -125,7 +124,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
                 + (persistence != null && persistence.isEnabled() ? ChatColor.GREEN + "SQLite" : ChatColor.RED + "OFF"));
         getLogger().info("  经济: Vault " + (EconomyHook.isVaultReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装")
                 + ChatColor.RESET + " | PlayerPoints " + (EconomyHook.isPlayerPointsReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装"));
-        getLogger().info("  作者: crystalkingdom团队 | Paper 1.21+ | JDK 21");
+        getLogger().info("  作者: zht | Paper 1.21+ | JDK 21");
         getLogger().info("==================================================");
     }
 
@@ -154,7 +153,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private void saveDefaultGems() {
         File dir = new File(getDataFolder(), "gems");
         if (!dir.isDirectory() && !dir.mkdirs()) return;
-        for (String name : new String[]{"attack_gem.yml", "defense_gem.yml", "rare_skull.yml", "magnet_gem.yml", "thunder_gem.yml", "knockback_gem.yml", "double_jump_gem.yml", "lifesteal_gem.yml", "unbreaking_gem.yml", "fire_aspect_gem.yml"}) {
+        for (String name : new String[]{"attack_gem.yml", "defense_gem.yml", "rare_skull.yml", "magnet_gem.yml", "thunder_gem.yml", "knockback_gem.yml", "lifesteal_gem.yml", "unbreaking_gem.yml", "fire_aspect_gem.yml"}) {
             File f = new File(dir, name);
             if (!f.exists()) saveResource("gems/" + name, false);
         }

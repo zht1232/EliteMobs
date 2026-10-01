@@ -176,8 +176,8 @@ public final class EliteGemFactory {
 
     // ==================== 效果计算（按宝石等级，原算法） ====================
 
-    /** 攻击宝石：攻击力 = 等级² × 0.5。 */
-    public static double attackBonus(int level) { return level * level * 0.5; }
+    /** 攻击宝石：线性攻击加成，Lv.1=0.5，Lv.10=5.0。 */
+    public static double attackBonus(int level) { return Math.min(5.0, Math.max(0.5, level * 0.5)); }
 
     /** 防御宝石：护甲减伤 = 等级 × 1.5。 */
     public static double defenseBonus(int level) { return level * 1.5; }
@@ -190,14 +190,7 @@ public final class EliteGemFactory {
 
     /** 磁力宝石：自动拾取距离 = 3 + 等级（上限 12 格，等级越高吸得越远）。 */
     public static int magnetRadius(int level) { return Math.min(3 + level, 12); }
-
-    /** 二段跳宝石：跳跃力度（向上速度），等级越高跳得越高（上限 1.8）。 */
-    public static double jumpPower(int level) { return Math.min(1.0 + level * 0.06, 1.8); }
-
-    /** 二段跳宝石：再次起跳冷却（毫秒），等级越高蓄力越快（冷却越短，Lv1≈2.7s → Lv10=0.4s）。 */
-    public static int jumpCooldown(int level) { return Math.max(400, 3000 - level * 260); }
-
-    /** 吸血宝石：每击吸血量 = 1 + 等级×0.5（颗心）。 */
+/** 吸血宝石：每击吸血量 = 1 + 等级×0.5（颗心）。 */
     public static double lifestealHeal(int level) { return 1.0 + level * 0.5; }
 
     /** 火焰附加宝石：燃烧秒数 = 2 + 等级/2。 */

@@ -266,7 +266,7 @@ EliteMobs-29.2.0.jar
 
 ## 联系信息
 
-- 作者：ClawX
+- 作者：zht
 - 版本：29.2.0
 - 适用：Paper 1.21+ / Paper 26.x
 
