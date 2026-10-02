@@ -13,7 +13,7 @@ import java.util.UUID;
 /**
  * 精英/Boss 数据 SQLite 存储。
  *
- * <p>驱动使用 org.xerial:sqlite-jdbc（构建时打进 jar，含各平台原生库）。
+ * <p>驱动使用 org.xerial:sqlite-jdbc，由 Paper 根据 plugin.yml 的 libraries 声明加入插件类路径。
  * 所有读写走主线程 + 单连接 + WAL + busy_timeout，避免 "database is locked"。</p>
  */
 public class EliteDatabase {

@@ -5,6 +5,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.EntityType;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import com.clawx.elitemobs.ai.WallClimbAI;
 import com.clawx.elitemobs.ai.BlockBreakAI;
 import com.clawx.elitemobs.ai.ItemStealAI;
@@ -38,6 +39,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private org.bukkit.configuration.file.FileConfiguration messages;
     private ElitePersistence persistence;
     private BossSpawner bossSpawner;
+    private BukkitTask aiTask;
 
     /** 启动 ASCII Art Banner（纯 ASCII：/ \ | _ 等符号，78 列 x 5 行，避免 GBK 控制台乱码）。 */
     private static final String[] STARTUP_BANNER = {
@@ -124,27 +126,40 @@ public final class EliteMobsPlugin extends JavaPlugin {
                 + (persistence != null && persistence.isEnabled() ? ChatColor.GREEN + "SQLite" : ChatColor.RED + "OFF"));
         getLogger().info("  经济: Vault " + (EconomyHook.isVaultReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装")
                 + ChatColor.RESET + " | PlayerPoints " + (EconomyHook.isPlayerPointsReady() ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未安装"));
-        getLogger().info("  作者: zht | Paper 1.21+ | JDK 21");
+        getLogger().info("  作者: zht | Paper 1.21+ | JDK 25");
         getLogger().info("==================================================");
     }
 
     @Override public void onDisable() {
+        if (aiTask != null) aiTask.cancel();
         // 全量回写存活精英/Boss 数据并关闭 SQLite（避免停服丢失血量/位置）
         if (persistence != null) persistence.saveAllAndClose();
         getLogger().info("EliteMobs 已停用。");
     }
 
     private void startAITask() {
-        getServer().getScheduler().runTaskTimer(this, () -> {
+        if (aiTask != null) aiTask.cancel();
+        long interval = Math.max(1, eliteConfig.getAITickInterval());
+        aiTask = getServer().getScheduler().runTaskTimer(this, () -> {
             if (!eliteConfig.isEnabled()) return;
             mobManager.tickAllEliteMobs();
-        }, 20L, eliteConfig.getAITickInterval());
+        }, 20L, interval);
     }
 
-    public void reload() { reloadConfig(); loadMessages(); EconomyHook.init(); eliteConfig = new EliteConfig(this); damageScaler.reload(); weaponEnhancer.reload(); com.clawx.elitemobs.compat.ProtectionHook.reset(); }
+    public void reload() {
+        reloadConfig();
+        loadMessages();
+        EconomyHook.init();
+        eliteConfig = new EliteConfig(this);
+        startAITask();
+        if (persistence != null) persistence.reloadConfiguration();
+        damageScaler.reload();
+        weaponEnhancer.reload();
+        com.clawx.elitemobs.compat.ProtectionHook.reset();
+    }
 
     private void loadMessages() {
-        saveResource("messages.yml", true);
+        saveResource("messages.yml", false);
         File file = new File(getDataFolder(), "messages.yml");
         messages = YamlConfiguration.loadConfiguration(file);
     }

@@ -1,49 +1,57 @@
-# 项目结构与版本管理
+# 项目结构与构建
 
-本仓库保存自写 EliteMobs 的源码、默认配置和构建入口。服务器运行目录、玩家数据库和世界存档是另一套数据，不随源码提交自动恢复。
+当前源码版本以 src/main/resources/plugin.yml 为准（29.21.0）。仓库保存插件源码、默认配置和构建脚本；服务器配置、世界存档和运行数据库不在这里。
 
-## 仓库目录
+## 目录
 
-| 路径 | 用途 |
+| 路径 | 内容 |
 | --- | --- |
-| src/main/java/com/clawx/elitemobs/ | Java 源码；clawx 是历史包名，当前保留以避免无关类路径变更 |
-| ai/ | 怪物行为、职业、Boss 与词缀 |
-| spawn/ | 自然精英转换与 Boss 部署 |
-| combat/ | 怪物伤害缩放、武器强化 |
-| essence/ | 宝石、淬炼和装备属性 |
-| rune/ | 符文创建、镶嵌和效果 |
-| gui/ | 玩家商城和管理菜单 |
-| db/ | 精英与 Boss 持久化 |
-| compat/ | 领地保护接入 |
-| src/main/resources/ | 插件元数据与默认 YAML；不是正式服正在使用的配置 |
-| build.ps1 | 当前构建入口，编译并打包 |
-| build-output/ | 本地生成的 classes、编译参数和 JAR，Git 忽略 |
-| libs/ | 本机编译依赖，JAR 不进入 Git |
-| .git/ | 本地提交历史与远程配置 |
+| src/main/java/com/clawx/elitemobs/ | Java 源码 |
+| ai/ | 职业 AI、Boss 技能和词缀 |
+| spawn/ | 普通精英生成与远端 Boss 布署 |
+| combat/ | 战斗监听、武器属性效果 |
+| essence/、rune/ | 宝石、淬炼与符文 |
+| gui/ | /emmenu 商店和管理菜单 |
+| db/ | SQLite 持久化 |
+| src/main/resources/ | plugin.yml、默认配置、消息和物品定义 |
+| build.ps1 | 当前构建入口 |
+| build-output/ | 本机生成的 classes 和 JAR，不提交 Git |
+| libs/ | PlaceholderAPI 编译库 |
+
+## 主要流程
+
+1. Paper 启动 EliteMobsPlugin，读取配置并注册各个模块。
+2. 自然刷出的怪物由 EliteSpawnHandler 判断；EliteMobManager 应用等级、职业、词缀、装备和属性。
+3. ElitePersistence 保存精英/Boss 的位置与状态；区块卸载后实体移除，玩家接近时再恢复。
+4. BossSpawner 按配置在玩家所在世界远处布署 Boss；BossManager 负责技能、血条和阶段。
 
 ## 构建
 
-目标环境为 Paper 26.2、Java 25。构建会使用已有服务器库和 PlaceholderAPI，路径可通过参数指定：
+需要 Paper 26.2 API 和 Java 25。默认构建命令：
 
     .\build.ps1 -ServerPath 'G:\Minecraftserver\DaemonData\Servers\1'
 
-JDK 不在默认服务器工具目录时，增加 -JavaBin 参数。输出位于 build-output/。打包已有 classes 可使用 -PackageOnly。旧的 compile.bat、make-jar.bat 入口统一调用这个脚本；build-v29.17.0.ps1 保留为历史构建记录。
+JDK 不在脚本推导的位置时，使用 -JavaBin 指定其 bin 目录。脚本编译源码并生成：
 
-## 当前代码状态
+    build-output/EliteMobs-29.21.0-flightless.jar
 
-- 移除二段跳宝石以及玩家飞行权限管理；普通飞行由其他插件处理。
-- 攻击宝石采用每级 +0.5、单颗上限 +5 的公式。
-- 默认基础精英生成概率为 0.5%，夜间与满月增强默认关闭；难度倍率仍在生成代码中。
-- 主菜单采用 27 格，按钮路由与标题识别已补齐。
-- 实际游戏表现仍由玩家测试；提交记录不等于完整玩法验收。
-- 武器攻击力说明仍有原版伤害表兜底；该显示计算的进一步重构属于后续工作。
+构建产物不会自动复制到服务器。部署新 JAR 后应重启服务器；日常配置修改可使用 /em reload。
+重载会重建 AI 与保存间隔任务；修改 persistence.enabled 开关后需要重启服务器。
 
-## 回滚
+## 运行依赖
 
-git commit 保存源码版本，git push 上传到远程仓库。已发布改动需要撤销时，优先用 git revert 生成一条撤销提交，再正常推送。先检查 git status，避免把未提交工作混入撤销。
+SQLite 驱动由 plugin.yml 的 libraries 项声明，Paper 会下载并加入插件类路径。首次启动需要网络或 Paper 已缓存该库。Vault、PlayerPoints、PlaceholderAPI、LuckPerms 和领地保护插件是可选依赖。
 
-回滚源码后还需要重新构建并部署对应 JAR。正式服配置、玩家数据和世界存档需要相应服务器备份。不要把世界、数据库、登录密码和服务器运行日志上传到本仓库。
+## 当前已知边界
 
-## 本机项目维护原则
+- 当前版本不提供二段跳，也不控制玩家飞行。
+- 攻击宝石加成是每级 +0.5，单颗最多 +5。
+- 武器攻击属性优先读取游戏属性修饰符；显示或修复旧装备时，读不到修饰符会使用代码中的原版武器伤害表。
+- README_MineBBS.md 中较早版本的飞行记录属于历史说明，不代表当前功能。
+- 仓库没有自动化测试套件；编译成功不能替代 Paper 服务器内的游戏验收。
 
-本次维护以当前仓库为唯一主开发目录。桌面的旧 EliteMobs-Project 有未提交修改，应保留并比较后再归档。dsh-work 是多个项目与验证产物混合的工作区，应按实际源码入口挑选项目，不能把整个目录当作一个项目提交。MagmaGuy 源码和地图包是参考材料，不自动成为本插件的代码或运行内容。
+## 文档入口
+
+- README.md：当前功能和指令。
+- DEVELOPMENT_GUIDE.md：代码职责和开发步骤。
+- README_MineBBS.md：发布页面与历史版本记录。

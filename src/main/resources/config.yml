@@ -1,5 +1,5 @@
 # ============================================
-#  EliteMobs v29.16.0 - 配置文件
+#  EliteMobs v29.21.0 - 配置文件
 #  适用 Paper 1.21+ / Paper 26.x
 #  作者: zht
 # ============================================
@@ -37,7 +37,7 @@ general:
   # 高等级精英生成时全服广播提示
   spawn-announce:
     enabled: false          # 普通精英生成广播（false=关闭）
-    boss-alert: true        # Boss 生成/击杀全服广播（独立开关，默认开）
+    boss-alert: true        # Boss 生成/击杀提示开关（独立开关，默认开）
     min-level: 10           # >= 此等级才广播
     announce-range: 100     # -1=全服广播, >0=只通知该范围内(格)的玩家
 
@@ -54,7 +54,7 @@ persistence:
   pending-expire-hours: 72      # 潜伏精英超过该时限（小时）没人接近则删除（0 表示不清理）
 
 # --- Boss 直接在世界远端布署（替代"玩家附近精英晋升"，v29.21.0 起）---
-# 每隔一段时间在世界某玩家周围随机方向/距离布署一个 Boss（数据入库、全服广播坐标，
+# 每隔一段时间在世界某玩家周围随机方向/距离布署一个 Boss（数据入库、按范围广播坐标，
 # 此时无实体）；玩家接近 materialize-distance 格时 Boss 实体现身（落雷登场）。
 # 远距离/未加载区块不再有 Boss 实体，杜绝"走过去 Boss 消失"。
 #
@@ -207,7 +207,7 @@ armor-set-bonus:
   regen-level: 10             # 再生效果阈值（原 4）
 
 # --- Boss 第二阶段 ---
-# 血量低于 hp-ratio 时 Boss 进入第二阶段：全服广播 + 力量I/速度II/抗性I + 血条变紫 + 闪电特效。
+# 血量低于 hp-ratio 时 Boss 进入第二阶段：范围提示 + 力量I/速度II/抗性I + 血条变紫 + 闪电特效。
 boss-phase2:
   enabled: true
   hp-ratio: 0.5              # 血量低于该比例触发（0.5 = 50%）

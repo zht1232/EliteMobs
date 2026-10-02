@@ -21,6 +21,10 @@ softdepend:
   - PlaceholderAPI
   - LuckPerms
 
+# Paper resolves this runtime dependency and adds it to EliteMobs' classpath.
+libraries:
+  - org.xerial:sqlite-jdbc:3.49.1.0
+
 permissions:
   elitemobs.use:
     description: Allows use of /elitemobs base command

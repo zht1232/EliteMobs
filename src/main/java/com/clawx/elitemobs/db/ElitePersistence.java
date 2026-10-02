@@ -24,6 +24,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.scheduler.BukkitTask;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,9 @@ public class ElitePersistence implements Listener {
     private final EliteMobsPlugin plugin;
     private EliteDatabase db;
     private boolean enabled = false;
+    private BukkitTask sweepTask;
+    private BukkitTask materializeTask;
+    private BukkitTask expireTask;
     // 实体 UUID → 记录 ID（内存映射，供快速查找；重启后由 DB 的 entity_uuid 兜底）
     private final Map<UUID, String> entityToRecord = new ConcurrentHashMap<>();
 
@@ -72,16 +76,39 @@ public class ElitePersistence implements Listener {
             enabled = false;
             return false;
         }
-        int interval = Math.max(5, cfg.getPersistenceSaveInterval());
-        // 已挂接记录清理 + 血量回写（每 save-interval 秒）
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::sweepAttached, 100L, interval * 20L);
-        // 潜伏记录物化扫描（每 2 秒，玩家接近即现身）
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::materializeRecords, 40L, 40L);
-        // 过期潜伏记录清理（每小时，防数据库无限膨胀）
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::expirePending, 72000L, 72000L);
+        startTasks(cfg);
         plugin.getLogger().info("  持久化: SQLite 已启用 (" + new File(plugin.getDataFolder(), "elitemobs.db").getName()
                 + ", 记录 " + db.getPending().size() + " 潜伏 / " + db.getAllAttached().size() + " 物化, Boss " + db.countBosses() + ")");
         return true;
+    }
+
+    /** 应用 /em reload 后的任务间隔；持久化开关不在运行中切换。 */
+    public void reloadConfiguration() {
+        if (plugin.getEliteConfig().isPersistenceEnabled() != enabled) {
+            plugin.getLogger().warning("[EliteMobs] persistence.enabled 与当前运行状态不一致；重启服务器以应用该设置。");
+            return;
+        }
+        if (enabled && db != null && db.isOpen()) startTasks(plugin.getEliteConfig());
+    }
+
+    private void startTasks(EliteConfig cfg) {
+        stopTasks();
+        int interval = Math.max(5, cfg.getPersistenceSaveInterval());
+        // 已挂接记录清理 + 血量回写（每 save-interval 秒）
+        sweepTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::sweepAttached, 100L, interval * 20L);
+        // 潜伏记录物化扫描（每 2 秒，玩家接近即现身）
+        materializeTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::materializeRecords, 40L, 40L);
+        // 过期潜伏记录清理（每小时，防数据库无限膨胀）
+        expireTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::expirePending, 72000L, 72000L);
+    }
+
+    private void stopTasks() {
+        if (sweepTask != null) sweepTask.cancel();
+        if (materializeTask != null) materializeTask.cancel();
+        if (expireTask != null) expireTask.cancel();
+        sweepTask = null;
+        materializeTask = null;
+        expireTask = null;
     }
 
     // ==================== 写入入口 ====================
@@ -390,6 +417,7 @@ public class ElitePersistence implements Listener {
 
     /** 停服：全量回写存活实体后关闭连接。 */
     public void saveAllAndClose() {
+        stopTasks();
         if (!enabled || db == null) return;
         for (EliteRecord rec : db.getAllAttached()) {
             if (rec.entityUuid == null) continue;

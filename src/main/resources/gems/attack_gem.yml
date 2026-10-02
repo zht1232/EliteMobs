@@ -8,11 +8,11 @@ id: attack_gem              # 唯一标识
 material: PLAYER_HEAD       # 物品材质（头颅）
 texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzEzODc0ZTgyYmM0NjZhOWM5Zjc5YWFmYmE3MTUxN2UyZWNjMjk0MWM2YmM5Njc5MDYyYTk3YjkxYjJkYWUzOSJ9fX0="
 name: "&c&l攻击宝石"
-# 淬炼效果类型: attack=武器加攻击力(等级²×0.5)
+# 淬炼效果类型: attack=武器加攻击力(每级 +0.5，单颗最多 +5)
 effect: attack
 max-level: 10
 lore:
-  - "&7攻击力 = 等级² × 0.5"
+  - "&7攻击力 = 等级 × 0.5（单颗上限 +5）"
 glow: true                  # 附魔光效
 # 各等级段掉落概率 (0.0-1.0)
 chance:
