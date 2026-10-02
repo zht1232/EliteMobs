@@ -22,6 +22,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.scheduler.BukkitTask;
@@ -458,6 +459,17 @@ public class ElitePersistence implements Listener {
         String rid = entityToRecord.remove(e.getUniqueId());
         if (rid != null) db.delete(rid);
         else db.deleteByEntityUuid(e.getUniqueId()); // 重启后内存映射丢失时的兜底
+    }
+
+    /** A natural despawn should delete an ordinary elite record, matching vanilla despawn.
+     * Boss records remain persistent and are handled by the regular attached/pending lifecycle. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onEliteDespawn(EntityRemoveEvent event) {
+        if (!enabled || db == null || event.getCause() != EntityRemoveEvent.Cause.DESPAWN) return;
+        if (!(event.getEntity() instanceof LivingEntity entity) || !EliteMobManager.isElite(entity)
+                || EliteBossManager.isBoss(entity)) return;
+        forgetEntity(entity.getUniqueId());
+        plugin.getMobManager().handleEliteDeath(entity.getUniqueId());
     }
 
     // ==================== 停服 ====================

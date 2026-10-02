@@ -1,4 +1,4 @@
-维护说明（29.21.1）：只把原版自然刷怪转成精英；数据库计入每区块上限，并限制记录最长寿命。旧装备会在玩家登录时自动迁移，快照保存在 SQLite。飞行由权限/飞行装备决定，普通玩家的残留飞行状态会回收。项目结构见 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)。
+维护说明（29.21.2）：只把原版自然刷怪转成精英；数据库计入每区块上限，自然消失的精英会删除记录。旧装备会在玩家登录时自动迁移，快照保存在 SQLite。项目结构见 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)。
 
 <div align="center">
 
@@ -260,6 +260,9 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.21.2
+- 普通精英按 Paper 的自然 despawn 事件删除数据库记录；区块卸载仍保存，恢复 vanilla despawn 行为。
 
 ### v29.21.1
 - 精英只转换原版 NATURAL 刷怪；每区块上限现在也计算 SQLite 潜伏记录，清理已有超额记录。

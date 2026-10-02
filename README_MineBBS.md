@@ -2,7 +2,7 @@
 
 # ⚔️ EliteMobs
 
-**EliteMobs 29.21.1 · Paper 1.21+ / Paper 26.x · Java 25**
+**EliteMobs 29.21.2 · Paper 1.21+ / Paper 26.x · Java 25**
 
 为生存服务器打造的精英怪系统：等级 / 职业 / Boss / 词缀 AI、铁砧宝石淬炼、符文镶嵌、掉落与经济闭环。
 
@@ -240,7 +240,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 获取 `EliteMobs-29.21.1-flightless.jar`
+1. 获取 `EliteMobs-29.21.2-flightless.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -250,7 +250,10 @@ amount-max: 1
 
 ## 📝 历史更新日志
 
-以下记录包含旧版本功能；二段跳与 SweetFlight 相关条目只描述当时版本，不属于 29.21.1。
+以下记录包含旧版本功能；二段跳与 SweetFlight 相关条目只描述当时版本，不属于 29.21.2。
+
+### v29.21.2
+- 普通精英自然 despawn 时删除 SQLite 记录；区块卸载继续保存并在玩家靠近时恢复。
 
 ### v29.21.1
 - 普通精英只由原版自然刷怪触发；数据库潜伏记录也占用每区块名额，且按初次生成时间过期。

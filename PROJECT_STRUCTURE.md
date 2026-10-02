@@ -1,6 +1,6 @@
 # 项目结构与构建
 
-当前源码版本以 src/main/resources/plugin.yml 为准（29.21.1）。仓库保存插件源码、默认配置和构建脚本；服务器配置、世界存档和运行数据库不在这里。
+当前源码版本以 src/main/resources/plugin.yml 为准（29.21.2）。仓库保存插件源码、默认配置和构建脚本；服务器配置、世界存档和运行数据库不在这里。
 
 ## 目录
 
@@ -33,7 +33,7 @@
 
 JDK 不在脚本推导的位置时，使用 -JavaBin 指定其 bin 目录。脚本编译源码并生成：
 
-    build-output/EliteMobs-29.21.1-flightless.jar
+    build-output/EliteMobs-29.21.2-flightless.jar
 
 构建产物不会自动复制到服务器。部署新 JAR 后应重启服务器；日常配置修改可使用 /em reload。
 重载会重建 AI 与保存间隔任务；修改 persistence.enabled 开关后需要重启服务器。

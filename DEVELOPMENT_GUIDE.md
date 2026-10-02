@@ -1,4 +1,4 @@
-# EliteMobs 开发指南（29.21.1）
+# EliteMobs 开发指南（29.21.2）
 
 ## 项目用途
 
@@ -42,7 +42,7 @@
 
     .\build.ps1 -ServerPath 'G:\Minecraftserver\DaemonData\Servers\1'
 
-默认 Java 路径从服务器目录推导。JDK 在其他位置时增加 -JavaBin 参数。产物写入 build-output/EliteMobs-29.21.1-flightless.jar。
+默认 Java 路径从服务器目录推导。JDK 在其他位置时增加 -JavaBin 参数。产物写入 build-output/EliteMobs-29.21.2-flightless.jar。
 
 构建只生成 JAR，不会自动复制到服务器。部署新 JAR 后重启服务器；修改配置后使用 /em reload。该命令会重建 AI 和保存间隔任务；修改 persistence.enabled 开关仍需重启服务器。
 
