@@ -1,8 +1,8 @@
-# EliteMobs 开发指南（29.21.0）
+# EliteMobs 开发指南（29.21.1）
 
 ## 项目用途
 
-这是给 Paper 服务器使用的自定义 EliteMobs 插件。玩家附近的普通怪物按配置变成精英怪；Boss 由独立任务在远处布署，玩家接近后才生成实体。数据保存在插件自己的 SQLite 文件中。
+这是给 Paper 服务器使用的自定义 EliteMobs 插件。普通精英只从原版自然刷怪事件中抽取；Boss 由独立任务在远处布署，玩家接近后才生成实体。精英、Boss 和已索引的玩家装备快照保存在插件自己的 SQLite 文件中。
 
 ## 主要代码
 
@@ -28,6 +28,7 @@
 - gems/：宝石定义。
 - messages.yml：可自定义的玩家提示。插件启动和 /em reload 不会覆盖已有文件。
 - elitemobs.db：运行时 SQLite 数据库，不要提交到源码仓库。
+- elite_gear_state：记录装备完整 ItemStack 快照、属性/宝石摘要和数据版本。背包和末影箱会自动索引；离线快照可在插件升级时迁移，玩家下次登录自动取回，不需要逐人执行修复命令。尚未登录并建立快照的旧装备，会在该玩家首次登录时自动索引和迁移。
 
 ## 依赖
 
@@ -41,7 +42,7 @@
 
     .\build.ps1 -ServerPath 'G:\Minecraftserver\DaemonData\Servers\1'
 
-默认 Java 路径从服务器目录推导。JDK 在其他位置时增加 -JavaBin 参数。产物写入 build-output/EliteMobs-29.21.0-flightless.jar。
+默认 Java 路径从服务器目录推导。JDK 在其他位置时增加 -JavaBin 参数。产物写入 build-output/EliteMobs-29.21.1-flightless.jar。
 
 构建只生成 JAR，不会自动复制到服务器。部署新 JAR 后重启服务器；修改配置后使用 /em reload。该命令会重建 AI 和保存间隔任务；修改 persistence.enabled 开关仍需重启服务器。
 

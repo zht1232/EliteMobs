@@ -28,7 +28,9 @@ public class EliteSpawnHandler implements Listener {
     public void onCreatureSpawn(CreatureSpawnEvent event) {
         if (!plugin.getEliteConfig().isEnabled()) return;
         CreatureSpawnEvent.SpawnReason reason = event.getSpawnReason();
-        if (reason != CreatureSpawnEvent.SpawnReason.NATURAL && reason != CreatureSpawnEvent.SpawnReason.DEFAULT && reason != CreatureSpawnEvent.SpawnReason.SPAWNER) return;
+        // Only vanilla natural spawns enter the EliteMobs roll. DEFAULT means the caller
+        // supplied no reason and can include plugin-created entities.
+        if (reason != CreatureSpawnEvent.SpawnReason.NATURAL && reason != CreatureSpawnEvent.SpawnReason.SPAWNER) return;
         LivingEntity entity = event.getEntity();
         EliteConfig config = plugin.getEliteConfig();
         if (!config.isWorldEnabled(entity.getWorld().getName())) return;
@@ -37,7 +39,11 @@ public class EliteSpawnHandler implements Listener {
         if (config.isExcludeSpawnerMobs() && reason == CreatureSpawnEvent.SpawnReason.SPAWNER) return;
         if (entity.getLocation().getBlockY() < config.getMinSpawnY()) return;
         Chunk chunk = entity.getLocation().getChunk();
-        if (plugin.getMobManager().countElitesInChunk(chunk) >= config.getMaxElitesPerChunk()) return;
+        int inChunk = plugin.getPersistence() != null && plugin.getPersistence().isEnabled()
+                ? plugin.getPersistence().countElitesInChunk(
+                        chunk.getWorld().getName(), chunk.getX(), chunk.getZ())
+                : plugin.getMobManager().countElitesInChunk(chunk);
+        if (inChunk >= config.getMaxElitesPerChunk()) return;
         // 生成前距离检查：离玩家太近的区块不精英化（保护刷怪塔/铁机/基地）
         double minPlayerDist = config.getSpawnMinPlayerDist();
         if (minPlayerDist > 0) {

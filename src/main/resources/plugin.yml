@@ -1,5 +1,5 @@
 name: EliteMobs
-version: '29.21.0'
+version: '29.21.1'
 main: com.clawx.elitemobs.EliteMobsPlugin
 api-version: '1.21'
 author: zht

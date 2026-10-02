@@ -1,4 +1,4 @@
-维护说明（29.21.0）：Boss 由独立调度器部署；插件不管理玩家飞行，也不含二段跳。项目结构和构建步骤见 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)。
+维护说明（29.21.1）：只把原版自然刷怪转成精英；数据库计入每区块上限，并限制记录最长寿命。旧装备会在玩家登录时自动迁移，快照保存在 SQLite。飞行由权限/飞行装备决定，普通玩家的残留飞行状态会回收。项目结构见 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)。
 
 <div align="center">
 
@@ -36,7 +36,7 @@
 
 ### 💠 宝石系统（铁砧淬炼）
 
-**10 种宝石**（`plugins/EliteMobs/gems/*.yml`，头颅外观、各自独立，Lv.1-10）：
+**9 种宝石**（`plugins/EliteMobs/gems/*.yml`，头颅外观、各自独立，Lv.1-10）：
 
 | 宝石 | 效果 | 适用 |
 |------|------|------|
@@ -82,7 +82,7 @@
 
 ### 🛒 强化菜单 / 商城（`/emmenu`）
 内置多级箱子菜单（`/emmenu`，别名 `/emgem`/`/emrune`/`/emruneshop`），金币 / 点券二选一支付：
-- **宝石商城**：10 种宝石按等级选购（Lv.1-10），价格越高级越贵（Lv.N = 基础价 × (1 + N(N-1)/10)，Lv.10 = 10 倍基础价），每日每人限购可配置
+- **宝石商城**：9 种宝石按等级选购（Lv.1-10），价格越高级越贵（Lv.N = 基础价 × (1 + N(N-1)/10)，Lv.10 = 10 倍基础价），每日每人限购可配置
 - **符文商城**：每日随机上架 3 种（符文 / 保护符，限量，次日刷新）
 - **我的状态 / 使用说明**：余额查看与玩法说明
 - **管理页**：发放物品、生成精英、清除附近、配置设置、**商城价格调整**（游戏内直接调价并即时保存 config.yml）
@@ -158,8 +158,8 @@
 ```yaml
 general:
   enabled: true
-  elite-spawn-chance: 0.01      # 精英生成概率
-  max-elites-per-chunk: 2
+  elite-spawn-chance: 0.005     # 基础概率 0.5%；困难难度额外 ×1.5
+  max-elites-per-chunk: 1       # 含数据库中尚未物化的记录
   enabled-mob-types: []          # 空 = 使用默认生物列表
   target-range: 16              # 精英主动索敌范围（格），应对免疫追击插件
 ```
@@ -251,7 +251,7 @@ amount-max: 1
 
 ## 🚀 安装
 
-1. 使用构建产物 `build-output/EliteMobs-29.21.0-flightless.jar`
+1. 使用构建产物 `build-output/EliteMobs-29.21.1-flightless.jar`
 2. 放入服务器 `plugins/` 文件夹
 3. 重启服务器
 4. 首次启动自动生成 `config.yml`、`mobs.yml`、`messages.yml` 与 `gems/*.yml`
@@ -260,6 +260,12 @@ amount-max: 1
 ---
 
 ## 📝 更新日志
+
+### v29.21.1
+- 精英只转换原版 NATURAL 刷怪；每区块上限现在也计算 SQLite 潜伏记录，清理已有超额记录。
+- 潜伏精英按首次生成时间过期，卸载/重载不再延长寿命。
+- 回收无飞行权限玩家的残留 allowFlight；保留 OP/Essentials 飞行权限和 PJ 飞行装备。
+- 玩家背包和末影箱中的 EliteMobs 装备自动索引到 SQLite；旧攻击加成和已删除的二段跳宝石会在登录/热重载时自动迁移。
 
 ### v29.21.0
 - Boss 改为远端调度部署，玩家接近后再生成实体。

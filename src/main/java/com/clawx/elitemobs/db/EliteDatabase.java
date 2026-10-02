@@ -232,6 +232,21 @@ public class EliteDatabase {
         return 0;
     }
 
+    /** Number of persisted non-Boss elites in a chunk, including unloaded records. */
+    public synchronized int countElitesInChunk(String world, int chunkX, int chunkZ) {
+        if (conn == null) return 0;
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT COUNT(*) FROM elite_mobs WHERE world=? AND chunk_x=? AND chunk_z=? AND is_boss=0")) {
+            ps.setString(1, world);
+            ps.setInt(2, chunkX);
+            ps.setInt(3, chunkZ);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (Exception ignored) {}
+        return 0;
+    }
+
     /** 关闭连接（插件停用时调用）。 */
     public synchronized void close() {
         if (conn != null) {

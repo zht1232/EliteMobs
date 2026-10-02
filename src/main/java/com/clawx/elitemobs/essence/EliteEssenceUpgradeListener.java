@@ -852,6 +852,52 @@ public class EliteEssenceUpgradeListener implements Listener {
         rebuildLore(equip, plugin.getMessages());
     }
 
+    /**
+     * Migrate legacy EliteMobs item data before it is used or stored. Removed jump gems are
+     * discarded, current gem formulas are reapplied to the real attribute component, and Lore
+     * is rebuilt. This is idempotent and safe to run on join or while upgrading a DB snapshot.
+     */
+    public boolean migrateGearItem(ItemStack equip) {
+        if (!isEliteGearItem(equip)) return false;
+        Integer version = equip.getItemMeta().getPersistentDataContainer().get(
+                EliteGemFactory.KEY_ITEM_SCHEMA, PersistentDataType.INTEGER);
+        if (version != null && version >= EliteGemFactory.ITEM_SCHEMA_VERSION) return false;
+
+        String[] gems = EliteGemFactory.getInstalledGems(equip);
+        for (int i = 0; i < gems.length; i++) {
+            if ("double_jump_gem".equalsIgnoreCase(gems[i])) {
+                EliteGemFactory.clearGemSlot(equip, i);
+            }
+        }
+
+        // Rebuilding is required even when the legacy gem is absent: older attack-gem
+        // modifiers used Lv²×0.5 and disagree with the current capped linear formula.
+        applyAllGemEffects(equip);
+        rebuildLore(equip, plugin.getMessages());
+        equip.editMeta(meta -> meta.getPersistentDataContainer().set(
+                EliteGemFactory.KEY_ITEM_SCHEMA, PersistentDataType.INTEGER,
+                EliteGemFactory.ITEM_SCHEMA_VERSION));
+        return true;
+    }
+
+    private boolean hasEliteGearData(ItemStack equip) {
+        var pdc = equip.getItemMeta().getPersistentDataContainer();
+        if (pdc.has(UK, PersistentDataType.BYTE) || pdc.has(AUK, PersistentDataType.BYTE)
+                || pdc.has(EliteGemFactory.KEY_QUALITY, PersistentDataType.INTEGER)
+                || pdc.has(EliteGemFactory.KEY_PROF, PersistentDataType.INTEGER)) return true;
+        for (NamespacedKey key : EliteGemFactory.KEY_GEM_SLOTS) {
+            if (pdc.has(key, PersistentDataType.STRING)) return true;
+        }
+        for (NamespacedKey key : com.clawx.elitemobs.rune.EliteRuneFactory.KEY_SLOTS) {
+            if (pdc.has(key, PersistentDataType.STRING)) return true;
+        }
+        return false;
+    }
+
+    public boolean isEliteGearItem(ItemStack equip) {
+        return equip != null && equip.hasItemMeta() && hasEliteGearData(equip);
+    }
+
     /** 重建装备 Lore：基础属性（品质/淬炼等级/主属性/熟练度）+ 宝石槽 + 符文槽。 */
     private void rebuildLore(ItemStack equip, FileConfiguration msgs) {
         if (equip == null) return;

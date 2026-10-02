@@ -33,6 +33,12 @@ public final class EliteGemFactory {
         new NamespacedKey("elitemobs", "gem_lv_4"),
     };
     public static final int MAX_GEM_SLOTS = 4;
+    /** Stable key used to link an upgraded ItemStack to its SQLite snapshot. */
+    public static final NamespacedKey KEY_ITEM_ID = new NamespacedKey("elitemobs", "gear_item_id");
+    /** Version of EliteMobs-owned item data; bump when adding an item migration. */
+    public static final NamespacedKey KEY_ITEM_SCHEMA = new NamespacedKey("elitemobs", "gear_schema");
+    public static final NamespacedKey KEY_ITEM_REVISION = new NamespacedKey("elitemobs", "gear_revision");
+    public static final int ITEM_SCHEMA_VERSION = 1;
 
     private EliteGemFactory() {}
 
@@ -328,4 +334,3 @@ public final class EliteGemFactory {
         return sb.toString();
     }
 }
-

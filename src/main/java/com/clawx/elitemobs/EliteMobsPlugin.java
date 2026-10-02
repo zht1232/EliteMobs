@@ -12,12 +12,14 @@ import com.clawx.elitemobs.ai.ItemStealAI;
 import com.clawx.elitemobs.ai.EliteClassAI;
 import com.clawx.elitemobs.ai.EliteBossManager;
 import com.clawx.elitemobs.ai.EliteAffixHandler;
+import com.clawx.elitemobs.ai.EliteFlightManager;
 import com.clawx.elitemobs.combat.DamageScaler;
 import com.clawx.elitemobs.combat.WeaponEnhancer;
 import com.clawx.elitemobs.essence.EliteEssenceUpgradeListener;
 import com.clawx.elitemobs.spawn.EliteSpawnHandler;
 import com.clawx.elitemobs.spawn.BossSpawner;
 import com.clawx.elitemobs.db.ElitePersistence;
+import com.clawx.elitemobs.db.EliteGearPersistence;
 import com.clawx.elitemobs.commands.EliteMobsCommand;
 import java.io.File;
 import java.util.Objects;
@@ -38,6 +40,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
     private EliteEssenceUpgradeListener essenceListener;
     private org.bukkit.configuration.file.FileConfiguration messages;
     private ElitePersistence persistence;
+    private EliteGearPersistence gearPersistence;
+    private EliteFlightManager flightManager;
     private BossSpawner bossSpawner;
     private BukkitTask aiTask;
 
@@ -80,6 +84,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
         affixHandler = new EliteAffixHandler(this);
         essenceListener = new EliteEssenceUpgradeListener(this);
         getServer().getPluginManager().registerEvents(essenceListener, this);
+        gearPersistence = new EliteGearPersistence(this, essenceListener);
+        if (!gearPersistence.init()) gearPersistence = null;
         com.clawx.elitemobs.rune.EliteRuneListener runeListener = new com.clawx.elitemobs.rune.EliteRuneListener(this);
         getServer().getPluginManager().registerEvents(runeListener, this);
         runeListener.startRunePotionTask();
@@ -95,6 +101,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(itemStealAI, this);
         getServer().getPluginManager().registerEvents(eliteClassAI, this);
         getServer().getPluginManager().registerEvents(damageScaler, this);
+        flightManager = new EliteFlightManager(this);
+        flightManager.start();
         mobManager.startVanillaNightBoostTask();
         com.clawx.elitemobs.ai.WorldAIListener worldAI = new com.clawx.elitemobs.ai.WorldAIListener(this);
         getServer().getPluginManager().registerEvents(worldAI, this);
@@ -132,6 +140,7 @@ public final class EliteMobsPlugin extends JavaPlugin {
 
     @Override public void onDisable() {
         if (aiTask != null) aiTask.cancel();
+        if (gearPersistence != null) gearPersistence.close();
         // 全量回写存活精英/Boss 数据并关闭 SQLite（避免停服丢失血量/位置）
         if (persistence != null) persistence.saveAllAndClose();
         getLogger().info("EliteMobs 已停用。");
@@ -159,8 +168,8 @@ public final class EliteMobsPlugin extends JavaPlugin {
     }
 
     private void loadMessages() {
-        saveResource("messages.yml", false);
         File file = new File(getDataFolder(), "messages.yml");
+        if (!file.exists()) saveResource("messages.yml", false);
         messages = YamlConfiguration.loadConfiguration(file);
     }
 

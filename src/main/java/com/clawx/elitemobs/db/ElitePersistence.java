@@ -27,6 +27,8 @@ import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.scheduler.BukkitTask;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,6 +77,11 @@ public class ElitePersistence implements Listener {
             db = null;
             enabled = false;
             return false;
+        }
+        expirePending();
+        int pruned = pruneExcessPending();
+        if (pruned > 0) {
+            plugin.getLogger().info("  持久化: 按每区块精英上限清理了 " + pruned + " 条重复潜伏记录");
         }
         startTasks(cfg);
         plugin.getLogger().info("  持久化: SQLite 已启用 (" + new File(plugin.getDataFolder(), "elitemobs.db").getName()
@@ -204,6 +211,11 @@ public class ElitePersistence implements Listener {
     /** 已物化记录数（实体存活中）。 */
     public int countAttached() { return (enabled && db != null) ? db.getAllAttached().size() : 0; }
 
+    /** Includes pending SQLite rows so unloaded elites count toward the chunk cap. */
+    public int countElitesInChunk(String world, int chunkX, int chunkZ) {
+        return enabled && db != null ? db.countElitesInChunk(world, chunkX, chunkZ) : 0;
+    }
+
     public List<EliteRecord> getPendingBosses() {
         return (enabled && db != null) ? db.getPendingBosses() : new ArrayList<>();
     }
@@ -264,12 +276,47 @@ public class ElitePersistence implements Listener {
         long eliteExpireMs = (long) cfg.getPersistencePendingExpireHours() * 3600000L;
         long bossExpireMs = (long) cfg.getBossSpawnExpireHours() * 3600000L;
         long now = System.currentTimeMillis();
+        int removed = 0;
         for (EliteRecord rec : db.getPending()) {
-            long idle = now - rec.updatedAt;
+            // Use the original spawn time. updated_at is refreshed on every unload and
+            // otherwise lets a natural elite live forever by cycling through chunks.
+            long age = now - rec.spawnTime;
             long limit = rec.boss ? bossExpireMs : eliteExpireMs;
-            if (idle > limit) db.delete(rec.recordId);
+            if (age > limit) {
+                db.delete(rec.recordId);
+                removed++;
+            }
         }
+        if (removed > 0) plugin.getLogger().info("  持久化: 按首次生成时间清理了 " + removed + " 条过期记录");
     }
+
+    /** Keep persisted non-Boss records within max-elites-per-chunk. Oldest records survive. */
+    private int pruneExcessPending() {
+        if (!enabled || db == null) return 0;
+        int limit = plugin.getEliteConfig().getMaxElitesPerChunk();
+        Map<ChunkKey, Integer> attached = new HashMap<>();
+        Map<ChunkKey, List<EliteRecord>> pending = new HashMap<>();
+        for (EliteRecord rec : db.getAllAttached()) {
+            if (!rec.boss) attached.merge(new ChunkKey(rec.world, rec.chunkX(), rec.chunkZ()), 1, Integer::sum);
+        }
+        for (EliteRecord rec : db.getPending()) {
+            if (!rec.boss) pending.computeIfAbsent(
+                    new ChunkKey(rec.world, rec.chunkX(), rec.chunkZ()), key -> new ArrayList<>()).add(rec);
+        }
+        int removed = 0;
+        for (Map.Entry<ChunkKey, List<EliteRecord>> entry : pending.entrySet()) {
+            int remaining = Math.max(0, limit - attached.getOrDefault(entry.getKey(), 0));
+            List<EliteRecord> records = entry.getValue();
+            records.sort(Comparator.comparingLong(record -> record.spawnTime));
+            for (int i = remaining; i < records.size(); i++) {
+                db.delete(records.get(i).recordId);
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    private record ChunkKey(String world, int x, int z) {}
 
     /** 扫描潜伏记录：区块已加载且玩家在物化距离内 → 物化实体。 */
     public void materializeRecords() {
